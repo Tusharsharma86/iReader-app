@@ -27,9 +27,12 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-router",
       "expo-web-browser",
       "expo-font"
-    ]
+    ],
+    "updates": {
+      "enabled": false,
+      "checkAutomatically": "NEVER"
+    }
   }
 }

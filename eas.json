@@ -3,14 +3,21 @@
     "version": ">= 16.0.0"
   },
   "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://ireader.onrender.com"
+      }
+    },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk",
         "image": "latest",
-        "env": {
-          "EXPO_PUBLIC_API_URL": "https://ireader.onrender.com"
-        },
         "gradleCommand": ":app:assembleRelease"
       },
       "env": {
