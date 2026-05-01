@@ -33,6 +33,12 @@
     "updates": {
       "enabled": false,
       "checkAutomatically": "NEVER"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "3adb3544-2b70-45ee-a494-ec375aeada7b"
+      }
+    },
+    "owner": "jammer999"
   }
 }
