@@ -10,7 +10,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://ireader.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://ireader.onrender.com",
+        "APP_VARIANT": "development"
       }
     },
     "preview": {
