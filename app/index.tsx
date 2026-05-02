@@ -225,6 +225,7 @@ function groupBySource(stories: Story[]): Section[] {
 }
 
 export default function FeedScreen() {
+  const { activeSources } = useSource();
   const [activeTopic, setActiveTopic] = useState<CategoryTopic>('breaking');
   const [allStories, setAllStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
@@ -239,7 +240,10 @@ export default function FeedScreen() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json() as { stories: Story[] };
     return (data.stories ?? []).filter(
-      s => !DEVANAGARI_RE.test(s.headline) && !BLOCKED_TOPICS_RE.test(s.headline),
+      s =>
+        !DEVANAGARI_RE.test(s.headline) &&
+        !BLOCKED_TOPICS_RE.test(s.headline) &&
+        activeSources[s.sources?.[0]?.name ?? ''] !== false,
     );
   }
 
@@ -288,8 +292,13 @@ export default function FeedScreen() {
     }
   }, [loadingMore, hasMore, page, activeTopic]);
 
-  const allSections = useMemo(() => groupBySource(allStories), [allStories]);
-  const topicGroups = useMemo(() => groupByTopic(allStories), [allStories]);
+  const visibleStories = useMemo(
+    () => allStories.filter(s => activeSources[s.sources?.[0]?.name ?? ''] !== false),
+    [allStories, activeSources],
+  );
+
+  const allSections = useMemo(() => groupBySource(visibleStories), [visibleStories]);
+  const topicGroups = useMemo(() => groupByTopic(visibleStories), [visibleStories]);
 
   const isBreaking = activeTopic === 'breaking';
   const isTech = activeTopic === 'technology';
