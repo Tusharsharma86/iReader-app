@@ -15,6 +15,7 @@ export type FeedStackParamList = {
 
 export type RootTabParamList = {
   Feed: undefined;
+  Saved: undefined;
   Settings: undefined;
 };
 

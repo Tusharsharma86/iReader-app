@@ -3,10 +3,11 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback } from 'react';
+import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 import { FeedStackParamList } from '../types/navigation';
+import { useSaved } from '../contexts/SavedContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = Math.round(SCREEN_WIDTH * 0.82);
@@ -49,24 +50,14 @@ function HeadlineWithEntities({ text, accentColor }: { text: string; accentColor
 
 interface Props {
   story: Story;
-  isSaved?: boolean;
-  onBookmarkToggle?: (id: string, saved: boolean) => void;
+  compact?: boolean;
 }
 
-export function StoryCard({ story, isSaved = false, onBookmarkToggle }: Props) {
+function StoryCardInner({ story, compact }: Props) {
   const navigation = useNavigation<NativeStackNavigationProp<FeedStackParamList, 'FeedHome'>>();
-  const [saved, setSaved] = useState(isSaved);
-  const [imageError, setImageError] = useState(false);
-  const scaleAnim = useRef(new Animated.Value(0.92)).current;
-
-  useEffect(() => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      tension: 50,
-      friction: 6,
-      useNativeDriver: true,
-    }).start();
-  }, []);
+  const { toggleSave, isSaved } = useSaved();
+  const [imageError, setImageError] = React.useState(false);
+  const saved = isSaved(story.id);
 
   const dominant = getArticleColor(story.id || story.headline);
   const accent = lighten(dominant, 0.55);
@@ -74,13 +65,9 @@ export function StoryCard({ story, isSaved = false, onBookmarkToggle }: Props) {
   const source = story.sources?.[0]?.name ?? 'Unknown';
   const articleCount = story.sources?.length ?? 1;
 
-  function handleBookmark() {
-    const next = !saved;
-    setSaved(next);
-    onBookmarkToggle?.(story.id, next);
-  }
+  const handleBookmark = useCallback(() => { toggleSave(story); }, [story, toggleSave]);
 
-  function handlePress() {
+  const handlePress = useCallback(() => {
     navigation.navigate('Article', {
       id: story.id,
       url: story.sources?.[0]?.url ?? '',
@@ -92,35 +79,19 @@ export function StoryCard({ story, isSaved = false, onBookmarkToggle }: Props) {
       dominantColor: dominant,
       sources: JSON.stringify(story.sources ?? []),
     });
-  }
+  }, [story, dominant, navigation]);
 
   return (
-    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
     <Pressable
       style={[styles.outerCard, { shadowColor: dominant, backgroundColor: dominant }]}
       onPress={handlePress}
     >
-      {/* Bleed gradient */}
-      <LinearGradient
-        colors={[dominant + '40', 'transparent', dominant + '28']}
-        locations={[0, 0.5, 1]}
-        style={[StyleSheet.absoluteFill, { borderRadius: 20 }]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        pointerEvents="none"
-      />
-
       <View style={styles.innerCard}>
 
         {/* Image section */}
         <View style={styles.imageSection}>
           {imageError || !story.imageUrl ? (
-            <LinearGradient
-              colors={[lighten(dominant, 0.15), dominant, darken(dominant, 0.3)]}
-              style={StyleSheet.absoluteFill}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: darken(dominant, 0.2) }]} />
           ) : (
             <Image
               source={{ uri: story.imageUrl }}
@@ -129,12 +100,10 @@ export function StoryCard({ story, isSaved = false, onBookmarkToggle }: Props) {
               onError={() => setImageError(true)}
             />
           )}
-          {/* Color tint over image */}
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: dominant + 'AA' }]} />
-          {/* Fade to text section */}
+          {/* Single combined overlay: tint + bottom fade */}
           <LinearGradient
-            colors={['transparent', `${dominant}CC`, dominant]}
-            locations={[0.3, 0.7, 1]}
+            colors={[dominant + '55', dominant + '99', dominant + 'EE']}
+            locations={[0, 0.55, 1]}
             style={StyleSheet.absoluteFill}
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
@@ -162,29 +131,32 @@ export function StoryCard({ story, isSaved = false, onBookmarkToggle }: Props) {
           </View>
         </View>
 
-        {/* Text section */}
-        <View style={[styles.textSection, { backgroundColor: textBg }]}>
-          <HeadlineWithEntities text={story.headline} accentColor={accent} />
-          <Text style={styles.summary} numberOfLines={3}>
-            {story.summary}
-          </Text>
-        </View>
+        {/* Text section — hidden in compact (topic carousel) mode */}
+        {!compact && (
+          <View style={[styles.textSection, { backgroundColor: textBg }]}>
+            <HeadlineWithEntities text={story.headline} accentColor={accent} />
+            <Text style={styles.summary} numberOfLines={3}>
+              {story.summary}
+            </Text>
+          </View>
+        )}
 
       </View>
     </Pressable>
-    </Animated.View>
   );
 }
+
+export const StoryCard = React.memo(StoryCardInner);
 
 const styles = StyleSheet.create({
   outerCard: {
     width: CARD_WIDTH,
     borderRadius: 20,
     alignSelf: 'center',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.8,
-    shadowRadius: 24,
-    elevation: 18,
+    elevation: 4,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
   },
   innerCard: {
     borderRadius: 20,

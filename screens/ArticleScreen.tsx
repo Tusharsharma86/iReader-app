@@ -190,7 +190,7 @@ export default function ArticleScreen() {
   function renderTabContent() {
     switch (activeTab) {
       case 'Long Form':
-        return <LongFormTab loading={paragraphsLoading} paragraphs={paragraphs} error={paragraphsError} summary={params.summary} fontSize={fontSizePx} />;
+        return <LongFormTab loading={paragraphsLoading} paragraphs={paragraphs} error={paragraphsError} summary={params.summary} fontSize={fontSizePx} url={params.url} />;
       case 'Summary':
         return <SummaryTab loading={aiLoading} result={aiResult} error={aiError} accentColor={dominant} />;
       case '5 Ws':
@@ -297,20 +297,45 @@ export default function ArticleScreen() {
   );
 }
 
-function LongFormTab({ loading, paragraphs, error, summary, fontSize }: {
-  loading: boolean; paragraphs: string[]; error: string | null; summary: string; fontSize: number;
+function LongFormTab({ loading, paragraphs, error, summary, fontSize, url }: {
+  loading: boolean; paragraphs: string[]; error: string | null; summary: string; fontSize: number; url?: string;
 }) {
   if (loading) return <Spinner />;
-  if (!paragraphs.length) return (
-    <View>
-      <Text style={styles.errorHint}>⚠ Full article unavailable — showing summary</Text>
-      {summary ? <Text style={[styles.paragraph, { fontSize, lineHeight: fontSize * 1.65 }]}>{summary}</Text> : <ErrorMsg msg="No content available." />}
-    </View>
-  );
+
+  const isBlocked = !!error && /50[0-9]|blocked|unavailable/i.test(error);
+
+  if (!paragraphs.length || isBlocked) {
+    return (
+      <View>
+        <Text style={styles.errorHint}>Full text unavailable from this publisher</Text>
+        {summary ? (
+          <Text style={[styles.paragraph, { fontSize, lineHeight: fontSize * 1.65 }]}>{summary}</Text>
+        ) : (
+          <ErrorMsg msg="No content available." />
+        )}
+        {url ? (
+          <TouchableOpacity
+            style={styles.readFullBtn}
+            onPress={() => WebBrowser.openBrowserAsync(url)}
+          >
+            <Text style={styles.readFullText}>Read Full Article →</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    );
+  }
+
   return (
     <View>
-      {error ? <Text style={styles.errorHint}>⚠ Showing summary — {error}</Text> : null}
       {paragraphs.map((p, i) => <Text key={i} style={[styles.paragraph, { fontSize, lineHeight: fontSize * 1.65 }]}>{p}</Text>)}
+      {url ? (
+        <TouchableOpacity
+          style={styles.readFullBtn}
+          onPress={() => WebBrowser.openBrowserAsync(url)}
+        >
+          <Text style={styles.readFullText}>Read Full Article →</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
@@ -436,4 +461,11 @@ const styles = StyleSheet.create({
   wText: { color: '#DDD', fontSize: 15, lineHeight: 23 },
   eli5Text: { color: '#FFF', fontSize: 20, lineHeight: 32, fontWeight: '500' },
   emptyText: { color: '#444', fontSize: 14, textAlign: 'center', paddingVertical: 40 },
+  readFullBtn: {
+    marginTop: 20, paddingVertical: 14, borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+  },
+  readFullText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
 });

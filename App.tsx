@@ -7,9 +7,12 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import ArticleScreen from './screens/ArticleScreen';
+import SavedScreen from './screens/SavedScreen';
 import FeedScreen from './app/index';
 import SettingsScreen from './screens/SettingsScreen';
 import { SettingsProvider } from './contexts/SettingsContext';
+import { SourceProvider } from './contexts/SourceContext';
+import { SavedProvider } from './contexts/SavedContext';
 import { FeedStackParamList, RootTabParamList } from './types/navigation';
 
 SplashScreen.preventAutoHideAsync();
@@ -33,6 +36,8 @@ export default function App() {
   useEffect(() => { SplashScreen.hideAsync(); }, []);
   return (
     <SettingsProvider>
+    <SourceProvider>
+    <SavedProvider>
     <SafeAreaProvider>
       <StatusBar style="light" />
       <NavigationContainer>
@@ -59,6 +64,16 @@ export default function App() {
             }}
           />
           <Tab.Screen
+            name="Saved"
+            component={SavedScreen}
+            options={{
+              tabBarLabel: 'Saved',
+              tabBarIcon: ({ color, size }) => (
+                <Ionicons name="bookmark-outline" size={size} color={color} />
+              ),
+            }}
+          />
+          <Tab.Screen
             name="Settings"
             component={SettingsScreen}
             options={{
@@ -71,6 +86,8 @@ export default function App() {
         </Tab.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
+    </SavedProvider>
+    </SourceProvider>
     </SettingsProvider>
   );
 }
