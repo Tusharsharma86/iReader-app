@@ -313,36 +313,34 @@ export default function ArticleScreen() {
           ))}
         </View>
 
-        {/* Particle-style bordered content container — FIX 1 */}
-        <View style={[
-          styles.tabBody,
-          {
-            borderColor,
-            shadowColor: dominant,
-            shadowOpacity: 0.6,
-            shadowRadius: 16,
-            shadowOffset: { width: 0, height: 0 },
-            elevation: 10,
-          },
-        ]}>
+        <View style={styles.tabBody}>
           {renderTabContent()}
         </View>
 
-        {/* Referenced Articles section */}
+        {/* Referenced Articles section — Particle-style article rows */}
         {referencedSources.length > 0 && (
-          <View style={[styles.refSection, { borderColor: dominant + '30' }]}>
-            <Text style={[styles.refTitle, { color: accent }]}>ALSO COVERED BY</Text>
+          <View style={styles.refSection}>
+            <Text style={[styles.refTitle, { color: accent }]}>
+              {referencedSources.length + 1} Articles
+            </Text>
             {referencedSources.map((src, i) => (
               <TouchableOpacity
                 key={i}
-                style={[styles.refRow, i > 0 && { borderTopWidth: 1, borderTopColor: dominant + '25' }]}
+                style={styles.refRow}
                 onPress={() => WebBrowser.openBrowserAsync(src.url)}
               >
-                <View style={styles.refLeft}>
-                  <View style={[styles.refDot, { backgroundColor: accent }]} />
-                  <Text style={styles.refSource}>{src.name}</Text>
+                <View style={[styles.refAvatar, { backgroundColor: lighten(dominant, 0.2) }]}>
+                  <Text style={[styles.refAvatarText, { color: accent }]}>
+                    {src.name.charAt(0).toUpperCase()}
+                  </Text>
                 </View>
-                <Ionicons name="open-outline" size={14} color={accent} />
+                <View style={styles.refContent}>
+                  <Text style={[styles.refSource, { color: accent }]}>{src.name.toUpperCase()}</Text>
+                  <Text style={styles.refHeadline} numberOfLines={2}>
+                    {params.headline}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.3)" />
               </TouchableOpacity>
             ))}
           </View>
@@ -437,7 +435,7 @@ function SummaryTab({ loading, result, error, accentColor }: { loading: boolean;
     <View>
       {bullets.map((line, i) => (
         <View key={i} style={styles.bulletRow}>
-          <Text style={[styles.bulletDot, { color: accentColor }]}>•</Text>
+          <View style={[styles.bulletDot, { backgroundColor: accentColor }]} />
           <Text style={styles.bulletText}>{line}</Text>
         </View>
       ))}
@@ -511,37 +509,36 @@ const styles = StyleSheet.create({
   tabLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: '600' },
   tabLabelActive: { color: '#000' },
   tabBody: {
-    marginHorizontal: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
     paddingBottom: 24,
-    borderWidth: 1.5,
-    borderRadius: 16,
-    overflow: 'hidden',
   },
   refSection: {
-    marginHorizontal: 16,
-    marginTop: 20,
-    borderWidth: 1,
-    borderRadius: 14,
-    overflow: 'hidden',
+    marginHorizontal: 20,
+    marginTop: 24,
   },
   refTitle: {
-    fontSize: 10, fontWeight: '800', letterSpacing: 1.5,
-    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10,
+    fontSize: 18, fontWeight: '800', letterSpacing: -0.3,
+    color: '#FFF', marginBottom: 16,
   },
   refRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 12,
+    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)',
   },
-  refLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  refDot: { width: 6, height: 6, borderRadius: 3 },
-  refSource: { color: '#DDD', fontSize: 14, fontWeight: '500' },
+  refAvatar: {
+    width: 44, height: 44, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  refAvatarText: { fontSize: 18, fontWeight: '800' },
+  refContent: { flex: 1 },
+  refSource: { fontSize: 10, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
+  refHeadline: { color: '#DDD', fontSize: 14, fontWeight: '500', lineHeight: 19 },
   center: { alignItems: 'center', justifyContent: 'center', paddingVertical: 48 },
   errorHint: { color: '#FF6B6B', fontSize: 12, marginBottom: 12 },
   paragraph: { color: '#DDD', marginBottom: 16 },
-  bulletRow: { flexDirection: 'row', marginBottom: 14, gap: 10 },
-  bulletDot: { fontSize: 20, lineHeight: 26 },
+  bulletRow: { flexDirection: 'row', marginBottom: 18, gap: 14, alignItems: 'flex-start' },
+  bulletDot: { width: 8, height: 8, borderRadius: 4, marginTop: 7, flexShrink: 0 },
   bulletText: { flex: 1, color: '#DDD', fontSize: 15, lineHeight: 24 },
   wRow: { marginBottom: 20 },
   wLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, marginBottom: 5 },

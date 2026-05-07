@@ -31,7 +31,8 @@ const CARD_GAP = 12;
 function useLayout() {
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
-  const cardWidth = Math.round(width * (isTablet ? 0.46 : 0.82));
+  // 14px margin each side on phone (matches Particle), dual-column on tablet
+  const cardWidth = isTablet ? Math.round(width * 0.46) : width - 28;
   return {
     screenWidth: width,
     cardWidth,

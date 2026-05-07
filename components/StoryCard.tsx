@@ -11,7 +11,7 @@ import { useSaved } from '../contexts/SavedContext';
 import { trackArticleOpen } from '../utils/personalization';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const DEFAULT_CARD_WIDTH = Math.round(SCREEN_WIDTH * (SCREEN_WIDTH >= 768 ? 0.46 : 0.82));
+const DEFAULT_CARD_WIDTH = SCREEN_WIDTH >= 768 ? Math.round(SCREEN_WIDTH * 0.46) : SCREEN_WIDTH - 28;
 const IMAGE_HEIGHT = 220;
 
 export interface Story {
