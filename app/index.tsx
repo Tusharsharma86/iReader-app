@@ -515,6 +515,7 @@ export default function FeedScreen() {
           ref={listRef}
           data={allSections}
           keyExtractor={s => s.title}
+          extraData={cardWidth}
           renderItem={({ item }) => (
             <CarouselSection section={item} cardWidth={cardWidth} snapInterval={snapInterval} hPadding={hPadding} />
           )}
@@ -538,6 +539,7 @@ export default function FeedScreen() {
           ref={listRef}
           data={topicGroups}
           keyExtractor={g => g.id}
+          extraData={cardWidth}
           renderItem={({ item }) => (
             <TopicSection group={item} isBreaking={isBreaking} cardWidth={cardWidth} snapInterval={snapInterval} hPadding={hPadding} />
           )}
