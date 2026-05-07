@@ -87,9 +87,10 @@ const SOURCE_DOMAINS: Record<string, string> = {
   'CNBC TV18': 'cnbctv18.com',
   'The Quint': 'thequint.com',
   'Inc42': 'inc42.com',
-  'News18': 'news18.com',
-  'Firstpost': 'firstpost.com',
   'Scroll.in': 'scroll.in',
+  'NDTV': 'ndtv.com',
+  'India Today': 'indiatoday.in',
+  'The Print': 'theprint.in',
 };
 
 function faviconUrl(sourceName: string): string | null {
