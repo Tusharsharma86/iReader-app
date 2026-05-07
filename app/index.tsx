@@ -524,6 +524,7 @@ export default function FeedScreen() {
       ) : isTech ? (
         /* Technology — virtualized source-grouped carousel */
         <FlatList
+          key={isTablet ? 'tech-tablet' : 'tech-phone'}
           ref={listRef}
           data={allSections}
           keyExtractor={s => s.title}
@@ -548,6 +549,7 @@ export default function FeedScreen() {
       ) : (
         /* Breaking + all other tabs — topic-grouped carousels */
         <FlatList
+          key={isTablet ? 'feed-tablet' : 'feed-phone'}
           ref={listRef}
           data={topicGroups}
           keyExtractor={g => g.id}
