@@ -223,7 +223,7 @@ export default function ArticleScreen() {
         url: params.url,
         paragraphs: paragraphs.slice(0, 15),
         type: TAB_AI_TYPE[activeTab],
-        maxWords: activeTab === 'ELI5' ? 50 : 150,
+        maxWords: activeTab === 'ELI5' ? 100 : 250,
       }),
     })
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
@@ -237,24 +237,53 @@ export default function ArticleScreen() {
   }, [activeTab, paragraphsLoading, hasBeenRead]);
 
   function renderTabContent() {
-    if (activeTab !== 'Long Form' && !hasBeenRead) {
-      return (
+    const longForm = (
+      <LongFormTab
+        loading={paragraphsLoading}
+        paragraphs={paragraphs}
+        error={paragraphsError}
+        summary={params.summary}
+        fontSize={fontSizePx}
+        url={params.url}
+      />
+    );
+
+    if (activeTab === 'Long Form') return longForm;
+
+    // AI tabs: show summary at top, full article pushed below
+    let aiContent: React.ReactNode;
+    if (!hasBeenRead) {
+      aiContent = (
         <View style={styles.center}>
           <ActivityIndicator size="small" color="#555" style={{ marginBottom: 12 }} />
-          <Text style={styles.emptyText}>Keep reading... AI summary generating</Text>
+          <Text style={styles.emptyText}>Keep reading… AI summary generating</Text>
         </View>
       );
+    } else {
+      switch (activeTab) {
+        case 'Summary':
+          aiContent = <SummaryTab loading={aiLoading} result={aiResult} error={aiError} accentColor={dominant} />;
+          break;
+        case '5 Ws':
+          aiContent = <FiveWsTab loading={aiLoading} result={aiResult} error={aiError} accentColor={accent} />;
+          break;
+        case 'ELI5':
+          aiContent = <ELI5Tab loading={aiLoading} result={aiResult} error={aiError} />;
+          break;
+      }
     }
-    switch (activeTab) {
-      case 'Long Form':
-        return <LongFormTab loading={paragraphsLoading} paragraphs={paragraphs} error={paragraphsError} summary={params.summary} fontSize={fontSizePx} url={params.url} />;
-      case 'Summary':
-        return <SummaryTab loading={aiLoading} result={aiResult} error={aiError} accentColor={dominant} />;
-      case '5 Ws':
-        return <FiveWsTab loading={aiLoading} result={aiResult} error={aiError} accentColor={accent} />;
-      case 'ELI5':
-        return <ELI5Tab loading={aiLoading} result={aiResult} error={aiError} />;
-    }
+
+    return (
+      <View>
+        {aiContent}
+        <View style={styles.articleDivider}>
+          <View style={[styles.articleDividerLine, { backgroundColor: borderColor + '40' }]} />
+          <Text style={[styles.articleDividerLabel, { color: accent }]}>FULL ARTICLE</Text>
+          <View style={[styles.articleDividerLine, { backgroundColor: borderColor + '40' }]} />
+        </View>
+        {longForm}
+      </View>
+    );
   }
 
   return (
@@ -552,6 +581,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   readFullText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  articleDivider: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    marginTop: 28, marginBottom: 20,
+  },
+  articleDividerLine: { flex: 1, height: 1 },
+  articleDividerLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5 },
   entitySection: { marginHorizontal: 16, marginTop: 20, gap: 16 },
   entityGroup: {},
   entityHeader: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, marginBottom: 10 },
