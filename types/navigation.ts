@@ -1,5 +1,6 @@
 export type FeedStackParamList = {
   FeedHome: undefined;
+  TopicFeed: { tag: string };
   Article: {
     id: string;
     url: string;

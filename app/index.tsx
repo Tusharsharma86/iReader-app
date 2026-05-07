@@ -16,7 +16,10 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Story, StoryCard } from '../components/StoryCard';
+import { FeedStackParamList } from '../types/navigation';
 import { useSource } from '../contexts/SourceContext';
 import { loadCachedFeed, saveFeedCache } from '../utils/feedCache';
 import { rankStories } from '../utils/personalization';
@@ -579,6 +582,7 @@ const CarouselSection = React.memo(function CarouselSection({
   const [activeIndex, setActiveIndex] = useState(0);
   const favicon = faviconUrl(section.title);
   const keywords = useMemo(() => extractKeywords(section.stories), [section.stories]);
+  const navigation = useNavigation<NativeStackNavigationProp<FeedStackParamList>>();
 
   const onScrollSettle = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const x = e.nativeEvent.contentOffset.x;
@@ -602,15 +606,21 @@ const CarouselSection = React.memo(function CarouselSection({
         <Text style={styles.sectionCount}>{section.stories.length} stories</Text>
       </View>
 
-      {/* Topic hashtags */}
+      {/* Topic hashtags — tappable to navigate to TopicFeed */}
       {keywords.length > 0 && (
         <View style={styles.keywords}>
           {keywords.map((tag, i) => {
             const c = TAG_COLORS[i % TAG_COLORS.length];
             return (
-              <Text key={tag} style={[styles.keywordTag, { color: c.text, backgroundColor: c.bg }]}>
-                {tag}
-              </Text>
+              <Pressable
+                key={tag}
+                onPress={() => navigation.navigate('TopicFeed', { tag })}
+                hitSlop={6}
+              >
+                <Text style={[styles.keywordTag, { color: c.text, backgroundColor: c.bg }]}>
+                  {tag}
+                </Text>
+              </Pressable>
             );
           })}
         </View>

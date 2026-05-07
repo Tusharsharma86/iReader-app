@@ -7,6 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import ArticleScreen from './screens/ArticleScreen';
+import TopicFeedScreen from './screens/TopicFeedScreen';
 import SavedScreen from './screens/SavedScreen';
 import FeedScreen from './app/index';
 import SettingsScreen from './screens/SettingsScreen';
@@ -27,6 +28,7 @@ function FeedNavigator() {
       screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#0A0A0A' } }}
     >
       <FeedStack.Screen name="FeedHome" component={FeedScreen} />
+      <FeedStack.Screen name="TopicFeed" component={TopicFeedScreen} />
       <FeedStack.Screen name="Article" component={ArticleScreen} />
     </FeedStack.Navigator>
   );
