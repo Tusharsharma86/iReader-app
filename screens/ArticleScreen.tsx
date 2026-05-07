@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -146,7 +146,20 @@ export default function ArticleScreen() {
   const [paragraphsLoading, setParagraphsLoading] = useState(true);
   const [paragraphsError, setParagraphsError] = useState<string | null>(null);
   const [entities, setEntities] = useState<{ people: string[]; companies: string[] }>({ people: [], companies: [] });
-  const [relatedStories, setRelatedStories] = useState<any[]>([]);
+
+  const allStories = useMemo(() => {
+    try { return params.allStories ? JSON.parse(params.allStories) : []; }
+    catch { return []; }
+  }, [params.allStories]);
+
+  const related = useMemo(() => {
+    if (!allStories.length) return [];
+    const chips = extractChips((params.headline ?? '') + ' ' + (params.summary ?? ''));
+    return allStories
+      .filter((s: any) => s.id !== params.id)
+      .filter((s: any) => extractChips(s.headline ?? '').some((c: string) => chips.includes(c)))
+      .slice(0, 8);
+  }, [allStories, params.id, params.headline, params.summary]);
 
   const aiCache = useRef<Partial<Record<Tab, AiResult>>>({});
   const [aiResult, setAiResult] = useState<AiResult | null>(null);
@@ -193,37 +206,6 @@ export default function ArticleScreen() {
       })
       .finally(() => setParagraphsLoading(false));
   }, [params.url]);
-
-  useEffect(() => {
-    if (paragraphsLoading) return;
-    const chips = extractChips(params.headline + ' ' + (params.summary || ''));
-    if (chips.length === 0) return;
-    const keywords = chips.map(c => c.toLowerCase());
-    const FEED_TOPICS = ['breaking', 'technology', 'india-politics', 'geopolitics', 'markets', 'business'];
-    Promise.allSettled(
-      FEED_TOPICS.map(t =>
-        fetch(`${API}/feed?topic=${t}&limit=15`)
-          .then(r => r.json())
-          .then((d: { stories: any[] }) => d.stories ?? []),
-      ),
-    ).then(results => {
-      const all: any[] = [];
-      for (const r of results) {
-        if (r.status === 'fulfilled') all.push(...r.value);
-      }
-      const seen = new Set<string>();
-      const related = all.filter(s => {
-        if (s.id === params.id || seen.has(s.id)) return false;
-        const text = (s.headline + ' ' + (s.summary || '')).toLowerCase();
-        if (keywords.some(kw => text.includes(kw))) {
-          seen.add(s.id);
-          return true;
-        }
-        return false;
-      }).slice(0, 8);
-      setRelatedStories(related);
-    }).catch(() => {});
-  }, [paragraphsLoading]);
 
   useEffect(() => {
     const aiType = TAB_AI_TYPE[activeTab];
@@ -438,7 +420,7 @@ export default function ArticleScreen() {
         )}
 
         {/* Related Stories */}
-        {relatedStories.length > 0 && (
+        {related.length > 0 && (
           <View style={styles.relatedSection}>
             <Text style={styles.relatedTitle}>Related Stories</Text>
             <ScrollView
@@ -446,12 +428,12 @@ export default function ArticleScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.relatedScroll}
             >
-              {relatedStories.map(s => {
+              {related.map((s: any) => {
                 const color = getArticleColor(s.id || s.headline);
                 return (
                   <Pressable
                     key={s.id}
-                    onPress={() => navigation.navigate('Article', {
+                    onPress={() => navigation.replace('Article', {
                       id: s.id,
                       url: s.sources?.[0]?.url ?? '',
                       image: s.imageUrl ?? '',
@@ -461,6 +443,7 @@ export default function ArticleScreen() {
                       publishedAt: s.publishedAt,
                       dominantColor: color,
                       sources: JSON.stringify(s.sources ?? []),
+                      allStories: params.allStories,
                     })}
                     style={styles.relatedCard}
                   >

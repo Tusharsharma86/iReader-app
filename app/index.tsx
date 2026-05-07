@@ -530,7 +530,7 @@ export default function FeedScreen() {
           keyExtractor={s => s.title}
           extraData={cardWidth}
           renderItem={({ item }) => (
-            <CarouselSection section={item} cardWidth={cardWidth} snapInterval={snapInterval} hPadding={hPadding} />
+            <CarouselSection section={item} cardWidth={cardWidth} snapInterval={snapInterval} hPadding={hPadding} allStories={visibleStories} />
           )}
           showsVerticalScrollIndicator={false}
           removeClippedSubviews
@@ -555,7 +555,7 @@ export default function FeedScreen() {
           keyExtractor={g => g.id}
           extraData={cardWidth}
           renderItem={({ item }) => (
-            <TopicSection group={item} isBreaking={isBreaking} cardWidth={cardWidth} snapInterval={snapInterval} hPadding={hPadding} />
+            <TopicSection group={item} isBreaking={isBreaking} cardWidth={cardWidth} snapInterval={snapInterval} hPadding={hPadding} allStories={visibleStories} />
           )}
           showsVerticalScrollIndicator={false}
           removeClippedSubviews
@@ -594,7 +594,8 @@ const CarouselSection = React.memo(function CarouselSection({
   cardWidth,
   snapInterval,
   hPadding,
-}: { section: Section } & LayoutProps) {
+  allStories,
+}: { section: Section; allStories?: Story[] } & LayoutProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const favicon = faviconUrl(section.title);
   const keywords = useMemo(() => extractKeywords(section.stories), [section.stories]);
@@ -655,7 +656,7 @@ const CarouselSection = React.memo(function CarouselSection({
       >
         {section.stories.map((story, i) => (
           <View key={story.id} style={i < section.stories.length - 1 ? { marginRight: CARD_GAP } : undefined}>
-            <StoryCard story={story} cardWidth={cardWidth} />
+            <StoryCard story={story} cardWidth={cardWidth} allStories={allStories} />
           </View>
         ))}
       </ScrollView>
@@ -678,9 +679,11 @@ const TopicSection = React.memo(function TopicSection({
   cardWidth,
   snapInterval,
   hPadding,
+  allStories,
 }: {
   group: TopicGroup;
   isBreaking: boolean;
+  allStories?: Story[];
 } & LayoutProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const sourceCount = group.sources.length;
@@ -705,7 +708,7 @@ const TopicSection = React.memo(function TopicSection({
     // Single article — no header, full card with its own headline/summary
     return (
       <View style={[styles.section, { alignItems: 'center' }]}>
-        <StoryCard story={stories[0]} cardWidth={cardWidth} />
+        <StoryCard story={stories[0]} cardWidth={cardWidth} allStories={allStories} />
       </View>
     );
   }
@@ -734,7 +737,7 @@ const TopicSection = React.memo(function TopicSection({
       >
         {stories.map((story, i) => (
           <View key={story.id} style={i < stories.length - 1 ? { marginRight: CARD_GAP } : undefined}>
-            <StoryCard story={story} compact cardWidth={cardWidth} />
+            <StoryCard story={story} compact cardWidth={cardWidth} allStories={allStories} />
           </View>
         ))}
       </ScrollView>

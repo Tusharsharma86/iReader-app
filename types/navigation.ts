@@ -11,6 +11,7 @@ export type FeedStackParamList = {
     publishedAt: string;
     dominantColor: string;
     sources?: string; // JSON-stringified array of { name, url, imageUrl?, publishedAt }
+    allStories?: string; // JSON-stringified Story[] slice for related stories
   };
 };
 

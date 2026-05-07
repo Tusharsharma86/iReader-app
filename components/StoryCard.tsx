@@ -4,13 +4,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Dimensions, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 import { FeedStackParamList } from '../types/navigation';
 import { useSaved } from '../contexts/SavedContext';
 import { trackArticleOpen } from '../utils/personalization';
 
-const IMAGE_HEIGHT = 220;
+const CARD_HEIGHT = 420;
 
 export interface Story {
   id: string;
@@ -70,13 +70,27 @@ function HeadlineWithEntities({ text, accentColor }: { text: string; accentColor
   );
 }
 
+function getSourceDomain(name: string): string {
+  const domains: Record<string, string> = {
+    'TechCrunch': 'techcrunch.com', 'The Verge': 'theverge.com',
+    'Ars Technica': 'arstechnica.com', 'Wired': 'wired.com',
+    'NDTV': 'ndtv.com', 'Times of India': 'timesofindia.com',
+    'Zee News': 'zeenews.com', 'India Today': 'indiatoday.in',
+    'Republic': 'republicworld.com', 'Economic Times': 'economictimes.com',
+    'The Hindu': 'thehindu.com', 'Indian Express': 'indianexpress.com',
+    'BBC': 'bbc.com', 'Reuters': 'reuters.com', 'AP': 'apnews.com',
+  };
+  return domains[name] || 'google.com';
+}
+
 interface Props {
   story: Story;
   compact?: boolean;
   cardWidth?: number;
+  allStories?: Story[];
 }
 
-function StoryCardInner({ story, compact, cardWidth: cardWidthProp }: Props) {
+function StoryCardInner({ story, compact, cardWidth: cardWidthProp, allStories }: Props) {
   const { width: hookWidth } = useWindowDimensions();
   const [dimWidth, setDimWidth] = useState(() => Dimensions.get('window').width);
   useEffect(() => {
@@ -87,13 +101,10 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp }: Props) {
   // If parent passes explicit cardWidth, use it; otherwise compute reactively from current window width
   const cardWidth = cardWidthProp ?? (width >= 768 ? Math.round(width * 0.46) : width - 28);
   const navigation = useNavigation<NativeStackNavigationProp<FeedStackParamList, 'FeedHome'>>();
-  const { toggleSave, isSaved } = useSaved();
   const [imageError, setImageError] = React.useState(false);
-  const saved = isSaved(story.id);
 
   const dominant = getArticleColor(story.id || story.headline);
   const accent = lighten(dominant, 0.55);
-  const textBg = darken(dominant, 0.3);
   const source = story.sources?.[0]?.name ?? 'Unknown';
   const sourceCount = story.sources?.length ?? 1;
   const ageMs = Date.now() - new Date(story.publishedAt).getTime();
@@ -105,8 +116,6 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp }: Props) {
     () => extractChips(story.headline + ' ' + (story.summary || '')),
     [story.headline, story.summary],
   );
-
-  const handleBookmark = useCallback(() => { toggleSave(story); }, [story, toggleSave]);
 
   const handlePress = useCallback(() => {
     trackArticleOpen(story);
@@ -120,102 +129,103 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp }: Props) {
       publishedAt: story.publishedAt,
       dominantColor: dominant,
       sources: JSON.stringify(story.sources ?? []),
+      allStories: JSON.stringify((allStories ?? []).slice(0, 30)),
     });
-  }, [story, dominant, navigation]);
+  }, [story, dominant, navigation, allStories]);
 
   return (
     <Pressable
-      style={[styles.outerCard, { width: cardWidth, shadowColor: dominant, backgroundColor: dominant }]}
+      style={[styles.outerCard, { width: cardWidth, shadowColor: dominant }]}
       onPress={handlePress}
     >
       <View style={styles.innerCard}>
 
-        {/* Image section */}
-        <View style={styles.imageSection}>
-          {imageError || !story.imageUrl ? (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: darken(dominant, 0.2) }]} />
-          ) : (
-            <Image
-              source={{ uri: story.imageUrl }}
-              style={StyleSheet.absoluteFill}
-              contentFit="cover"
-              onError={() => setImageError(true)}
-            />
-          )}
-          {/* Single combined overlay: tint + bottom fade */}
-          <LinearGradient
-            colors={[dominant + '55', dominant + '99', dominant + 'EE']}
-            locations={[0, 0.55, 1]}
+        {/* Full-bleed image */}
+        {imageError || !story.imageUrl ? (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: darken(dominant, 0.2) }]} />
+        ) : (
+          <Image
+            source={{ uri: story.imageUrl }}
             style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
+            contentFit="cover"
+            onError={() => setImageError(true)}
           />
+        )}
 
-          {/* Source pill — FIX 2: bigger, bolder */}
-          <View style={[styles.sourcePill, { backgroundColor: dominant + '88', shadowColor: dominant }]}>
-            <Text style={styles.sourcePillText}>{source.toUpperCase()}</Text>
-          </View>
+        {/* Gradient overlay — bottom 70% */}
+        <LinearGradient
+          colors={['transparent', dominant + '88', dominant]}
+          locations={[0, 0.45, 1]}
+          style={styles.gradientOverlay}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+        />
 
-          {/* Bookmark */}
-          <Pressable style={styles.bookmarkBtn} onPress={handleBookmark} hitSlop={10}>
-            <Ionicons
-              name={saved ? 'bookmark' : 'bookmark-outline'}
-              size={17}
-              color={saved ? accent : '#FFFFFF'}
-            />
-          </Pressable>
-
-          {/* Cluster bar */}
-          <View style={styles.imageOverlayBottom}>
-            <View style={styles.clusterBar}>
-              {/* Overlapping source initial avatars */}
-              <View style={styles.avatarStack}>
-                {story.sources.slice(0, 4).map((s, i) => (
-                  <View key={i} style={[styles.avatar, { left: i * 16, backgroundColor: lighten(dominant, 0.2 + i * 0.05) }]}>
-                    <Text style={styles.avatarText}>{s.name.charAt(0).toUpperCase()}</Text>
-                  </View>
-                ))}
-              </View>
-
-              {/* Metadata + badges */}
-              <View style={styles.clusterMeta}>
-                <Text style={styles.metaText}>
-                  {'⚡ '}{timeAgo(story.publishedAt)}{'  ·  '}{sourceCount}{' '}{sourceCount === 1 ? 'SOURCE' : 'SOURCES'}
-                </Text>
-                <View style={styles.badgeRow}>
-                  {isBreakingBadge && <Text style={styles.breakingBadge}>🔴 Breaking</Text>}
-                  {isTrending && !isBreakingBadge && <Text style={styles.trendingBadge}>🔥 Trending</Text>}
-                  {isOngoing && <Text style={styles.developingBadge}>📍 Developing</Text>}
-                </View>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Text section — hidden in compact (topic carousel) mode */}
-        {!compact && (
-          <View style={[styles.textSection, { backgroundColor: textBg }]}>
-            <HeadlineWithEntities text={story.headline} accentColor={accent} />
-            {chips.length > 0 && (
-              <View style={styles.chipsRow}>
-                {chips.map(chip => (
-                  <Pressable
-                    key={chip}
-                    onPress={() => navigation.navigate('TopicFeed', { tag: chip })}
-                    style={[styles.chip, { backgroundColor: dominant + '33' }]}
-                  >
-                    <Text style={[styles.chipText, { color: lighten(dominant, 0.6) }]}>
-                      #{chip}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            )}
-            <Text style={styles.summary} numberOfLines={3}>
-              {story.summary}
-            </Text>
+        {/* Topic chips — top-left */}
+        {chips.length > 0 && (
+          <View style={styles.chipsTopLeft}>
+            {chips.map(chip => (
+              <Pressable
+                key={chip}
+                onPress={() => navigation.navigate('TopicFeed', { tag: chip })}
+                style={styles.chip}
+              >
+                <Text style={styles.chipText}>{chip}</Text>
+              </Pressable>
+            ))}
           </View>
         )}
+
+        {/* Source favicon circles — top-right */}
+        <View style={styles.sourceCircles}>
+          {story.sources.slice(0, 3).map((src, i) => (
+            <View
+              key={i}
+              style={[styles.sourceCircle, { backgroundColor: dominant, marginLeft: i > 0 ? -8 : 0 }]}
+            >
+              <Image
+                source={{ uri: `https://www.google.com/s2/favicons?domain=${getSourceDomain(src.name)}&sz=64` }}
+                style={StyleSheet.absoluteFill}
+                contentFit="cover"
+              />
+            </View>
+          ))}
+        </View>
+
+        {/* Content overlay — bottom */}
+        <View style={styles.contentOverlay}>
+
+          {/* Source · time · badges */}
+          <View style={styles.metaRow}>
+            <View style={styles.faviconCircle}>
+              <Text style={styles.faviconText}>{source.charAt(0).toUpperCase()}</Text>
+            </View>
+            <Text style={styles.metaLabel}>{source.toUpperCase()}</Text>
+            <Text style={styles.metaDot}>·</Text>
+            <Text style={styles.metaLabel}>{timeAgo(story.publishedAt)}</Text>
+            {isBreakingBadge && (
+              <View style={styles.breakingPill}>
+                <View style={styles.breakingDot} />
+                <Text style={styles.breakingText}>BREAKING</Text>
+              </View>
+            )}
+            {isTrending && !isBreakingBadge && (
+              <Text style={styles.trendingIcon}>🔥</Text>
+            )}
+            {isOngoing && (
+              <Text style={styles.trendingIcon}>📍</Text>
+            )}
+          </View>
+
+          {/* Headline */}
+          <HeadlineWithEntities text={story.headline} accentColor={accent} />
+
+          {/* Summary — hidden in compact mode */}
+          {!compact && (
+            <Text style={styles.summary} numberOfLines={2}>{story.summary}</Text>
+          )}
+
+        </View>
 
       </View>
     </Pressable>
@@ -232,132 +242,118 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.4,
     shadowRadius: 6,
+    height: CARD_HEIGHT,
   },
   innerCard: {
     borderRadius: 20,
     overflow: 'hidden',
+    flex: 1,
   },
-  imageSection: {
-    width: '100%',
-    height: IMAGE_HEIGHT,
+  gradientOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '70%',
   },
-  sourcePill: {
+  chipsTopLeft: {
     position: 'absolute',
     top: 12,
     left: 12,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  sourcePillText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.7,
-  },
-  bookmarkBtn: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    borderRadius: 18,
-    padding: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-  },
-  imageOverlayBottom: {
-    position: 'absolute',
-    bottom: 10,
-    left: 12,
-    right: 12,
-  },
-  clusterBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  avatarStack: {
-    position: 'relative',
-    width: 52,
-    height: 24,
-    flexShrink: 0,
-  },
-  avatar: {
-    position: 'absolute',
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  avatarText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: '800',
-  },
-  clusterMeta: {
-    flex: 1,
-  },
-  metaText: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.7,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    gap: 6,
-    marginTop: 3,
-  },
-  breakingBadge: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FF4444',
-  },
-  trendingBadge: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FFD700',
-  },
-  developingBadge: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FF9F43',
-  },
-  textSection: {
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 14,
-  },
-  chipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginBottom: 8,
+    maxWidth: '70%',
   },
   chip: {
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  chipText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  sourceCircles: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    flexDirection: 'row',
+  },
+  sourceCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#000',
+    overflow: 'hidden',
+  },
+  contentOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 14,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  faviconCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  faviconText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  metaLabel: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  metaDot: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 11,
+  },
+  breakingPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(255,0,0,0.2)',
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
-  chipText: {
+  breakingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FF0000',
+  },
+  breakingText: {
+    color: '#FF4444',
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: '700',
+  },
+  trendingIcon: {
+    fontSize: 12,
   },
   headline: {
     fontSize: 20,
     fontWeight: '800',
     lineHeight: 27,
     letterSpacing: -0.2,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   summary: {
     color: 'rgba(255,255,255,0.65)',
