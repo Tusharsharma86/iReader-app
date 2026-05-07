@@ -3,22 +3,26 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 
 export const SOURCE_CATEGORIES = [
   {
-    label: 'India Politics',
-    sources: ['NDTV', 'Times of India', 'The Hindu', 'Indian Express', 'The Quint', 'ANI News', 'Hindustan Times'],
+    label: 'India',
+    sources: ['NDTV', 'Times of India', 'The Hindu', 'Indian Express', 'The Quint', 'ANI News', 'Hindustan Times'] as const,
+  },
+  {
+    label: 'World',
+    sources: ['BBC World', 'AP News', 'AP International', 'Al Jazeera', 'NYT World', 'Indian Express World', 'The Hindu International'] as const,
   },
   {
     label: 'Markets',
-    sources: ['Economic Times', 'MoneyControl', 'NDTV Profit', 'Livemint'],
+    sources: ['Economic Times', 'MoneyControl', 'NDTV Profit', 'Livemint', 'Business Standard', 'CNBC TV18'] as const,
   },
   {
-    label: 'Geopolitics',
-    sources: ['BBC World', 'NYT World', 'Al Jazeera', 'Reuters'],
+    label: 'Business',
+    sources: ['Mint', 'Business Standard', 'Economic Times', 'MoneyControl', 'Inc42', 'Hindustan Times'] as const,
   },
   {
     label: 'Technology',
-    sources: ['TechCrunch', 'The Verge', 'Ars Technica', 'Wired', '9to5Google', '9to5Mac', 'Engadget', 'VentureBeat', 'The Next Web', 'Hacker News', 'MIT Tech Review', 'The Quint Tech', 'Indian Express Tech', 'The Hindu Tech'],
+    sources: ['TechCrunch', 'The Verge', 'Ars Technica', 'Wired', '9to5Google', '9to5Mac', 'Engadget', 'VentureBeat', 'The Next Web', 'Hacker News', 'MIT Tech Review', 'The Quint Tech', 'Indian Express Tech', 'The Hindu Tech'] as const,
   },
-] as const;
+];
 
 const ALL_SOURCES = SOURCE_CATEGORIES.flatMap(c => c.sources);
 const DEFAULT_SOURCES: Record<string, boolean> = Object.fromEntries(ALL_SOURCES.map(s => [s, true]));

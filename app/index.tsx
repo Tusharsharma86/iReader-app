@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
+  AppStateStatus,
   Dimensions,
   FlatList,
   NativeScrollEvent,
@@ -16,12 +18,26 @@ import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Story, StoryCard } from '../components/StoryCard';
 import { useSource } from '../contexts/SourceContext';
+import { loadCachedFeed, saveFeedCache } from '../utils/feedCache';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = Math.round(SCREEN_WIDTH * 0.82);
 const CARD_GAP = 12;
-const SNAP_INTERVAL = CARD_WIDTH + CARD_GAP;
-const H_PADDING = Math.round((SCREEN_WIDTH - CARD_WIDTH) / 2);
+
+function useLayout() {
+  const [dims, setDims] = useState(Dimensions.get('window'));
+  useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window }) => setDims(window));
+    return () => sub.remove();
+  }, []);
+  const isTablet = dims.width >= 768;
+  const cardWidth = Math.round(dims.width * (isTablet ? 0.46 : 0.82));
+  return {
+    screenWidth: dims.width,
+    cardWidth,
+    snapInterval: cardWidth + CARD_GAP,
+    hPadding: Math.round((dims.width - cardWidth) / 2),
+    isTablet,
+  };
+}
 
 const API_BASE = 'https://ireader.onrender.com/api/news/feed';
 
@@ -49,25 +65,33 @@ const SOURCE_DOMAINS: Record<string, string> = {
   'MIT Tech Review': 'technologyreview.com',
   'Engadget': 'engadget.com',
   'VentureBeat': 'venturebeat.com',
+  'The Next Web': 'thenextweb.com',
   'NDTV': 'ndtv.com',
+  'NDTV Profit': 'ndtvprofit.com',
   'Times of India': 'timesofindia.indiatimes.com',
   'The Hindu': 'thehindu.com',
+  'The Hindu International': 'thehindu.com',
+  'The Hindu Tech': 'thehindu.com',
   'Indian Express': 'indianexpress.com',
+  'Indian Express World': 'indianexpress.com',
+  'Indian Express Tech': 'indianexpress.com',
   'BBC World': 'bbc.co.uk',
   'NYT World': 'nytimes.com',
-  'Foreign Policy': 'foreignpolicy.com',
+  'AP News': 'apnews.com',
+  'AP International': 'apnews.com',
   'Al Jazeera': 'aljazeera.com',
-  'Bloomberg': 'bloomberg.com',
-  'CNBC': 'cnbc.com',
-  'Reuters': 'reuters.com',
   'Economic Times': 'economictimes.indiatimes.com',
-  'Forbes': 'forbes.com',
-  'Entrepreneur': 'entrepreneur.com',
-  'HBR': 'hbr.org',
-  'Republic World': 'republicworld.com',
+  'MoneyControl': 'moneycontrol.com',
+  'Livemint': 'livemint.com',
+  'Mint': 'livemint.com',
+  'Business Standard': 'business-standard.com',
+  'CNBC TV18': 'cnbctv18.com',
+  'Hindustan Times': 'hindustantimes.com',
   'ANI News': 'aninews.in',
-  'Zee News': 'zeenews.india.com',
-  'India Today': 'indiatoday.in',
+  'The Quint': 'thequint.com',
+  'The Quint Tech': 'thequint.com',
+  'Inc42': 'inc42.com',
+  'Republic World': 'republicworld.com',
 };
 
 function faviconUrl(sourceName: string): string | null {
@@ -102,9 +126,6 @@ function formattedDate(): string {
     weekday: 'long', month: 'long', day: 'numeric',
   });
 }
-
-const cardMargin = (i: number, total: number) =>
-  i < total - 1 ? { marginRight: CARD_GAP } : undefined;
 
 const DEVANAGARI_RE = /[ऀ-ॿ]/;
 const BLOCKED_TOPICS_RE = /\b(cricket|ipl|bcci|test match|odi|t20i?|football|fifa|tennis|wimbledon|formula[- ]1|f1 race|chess|olympics|hockey|badminton|icc|world cup|bollywood|movie|film|actor|actress|celebrity|box office|trailer|oscar|grammy|award show|web series|ott platform)\b/i;
@@ -224,22 +245,28 @@ function groupBySource(stories: Story[]): Section[] {
   return ordered.map(src => ({ title: src, stories: map.get(src)! }));
 }
 
+const BG_REFRESH_THRESHOLD_MS = 10 * 60 * 1000; // 10 min inactive → silently refresh
+
 export default function FeedScreen() {
   const { activeSources } = useSource();
+  const layout = useLayout();
   const [activeTopic, setActiveTopic] = useState<CategoryTopic>('breaking');
   const [allStories, setAllStories] = useState<Story[]>([]);
+  const [pendingStories, setPendingStories] = useState<Story[] | null>(null);
+  const [newCount, setNewCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const listRef = useRef<FlatList>(null);
+  const lastFetchRef = useRef<number>(0);
+  const activeTopicRef = useRef(activeTopic);
+  useEffect(() => { activeTopicRef.current = activeTopic; }, [activeTopic]);
 
-  async function fetchPage(topic: CategoryTopic, pageNum: number): Promise<Story[]> {
-    const res = await fetch(`${API_BASE}?topic=${topic}&page=${pageNum}&limit=20`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json() as { stories: Story[] };
-    return (data.stories ?? []).filter(
+  function filterStories(raw: Story[]): Story[] {
+    return raw.filter(
       s =>
         !DEVANAGARI_RE.test(s.headline) &&
         !BLOCKED_TOPICS_RE.test(s.headline) &&
@@ -247,30 +274,111 @@ export default function FeedScreen() {
     );
   }
 
-  async function loadFeed(topic: CategoryTopic) {
+  async function fetchPage(topic: CategoryTopic, pageNum: number): Promise<Story[]> {
+    const res = await fetch(`${API_BASE}?topic=${topic}&page=${pageNum}&limit=20`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json() as { stories: Story[] };
+    return filterStories(data.stories ?? []);
+  }
+
+  // Silent background refresh — detects truly new articles vs already shown
+  async function backgroundRefresh(topic: CategoryTopic, current: Story[]) {
     try {
-      const stories = await fetchPage(topic, 1);
-      setAllStories(stories);
-      setPage(1);
-      setHasMore(stories.length >= 20);
-      setError(null);
-    } catch (e: any) {
-      setError(e.message);
+      const fresh = await fetchPage(topic, 1);
+      const currentIds = new Set(current.map(s => s.id));
+      const brandNew = fresh.filter(s => !currentIds.has(s.id));
+      lastFetchRef.current = Date.now();
+      await saveFeedCache(topic, fresh);
+      if (brandNew.length > 0) {
+        setPendingStories(fresh);
+        setNewCount(brandNew.length);
+      } else {
+        // Same stories, just update in-place silently
+        setAllStories(fresh);
+      }
+    } catch {
+      // silent — user still sees last known good state
     }
   }
 
+  // Topic change: serve cache instantly, then revalidate
   useEffect(() => {
     setLoading(true);
     setAllStories([]);
+    setPendingStories(null);
+    setNewCount(0);
     setHasMore(true);
-    loadFeed(activeTopic).finally(() => setLoading(false));
+    setPage(1);
+
+    loadCachedFeed(activeTopic).then(async cached => {
+      if (cached && cached.stories.length > 0) {
+        const visible = filterStories(cached.stories);
+        setAllStories(visible);
+        setLoading(false);
+        if (cached.isStale) {
+          backgroundRefresh(activeTopic, visible);
+        }
+      } else {
+        // Cold start — must wait for network
+        try {
+          const stories = await fetchPage(activeTopic, 1);
+          setAllStories(stories);
+          setHasMore(stories.length >= 20);
+          lastFetchRef.current = Date.now();
+          saveFeedCache(activeTopic, stories);
+        } catch (e: any) {
+          setError(e.message);
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTopic]);
+
+  // AppState: refresh when returning from background after threshold
+  useEffect(() => {
+    let lastState: AppStateStatus = AppState.currentState;
+    const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
+      const wasBackground = lastState === 'background' || lastState === 'inactive';
+      lastState = next;
+      if (next !== 'active' || !wasBackground) return;
+      const elapsed = Date.now() - lastFetchRef.current;
+      if (elapsed > BG_REFRESH_THRESHOLD_MS) {
+        backgroundRefresh(activeTopicRef.current, allStories);
+      }
+    });
+    return () => sub.remove();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allStories]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadFeed(activeTopic);
-    setRefreshing(false);
+    setPendingStories(null);
+    setNewCount(0);
+    try {
+      const stories = await fetchPage(activeTopic, 1);
+      setAllStories(stories);
+      setPage(1);
+      setHasMore(stories.length >= 20);
+      lastFetchRef.current = Date.now();
+      saveFeedCache(activeTopic, stories);
+    } catch {
+      // keep existing
+    } finally {
+      setRefreshing(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTopic]);
+
+  const applyPending = useCallback(() => {
+    if (!pendingStories) return;
+    setAllStories(pendingStories);
+    setPendingStories(null);
+    setNewCount(0);
+    setPage(1);
+    listRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, [pendingStories]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
@@ -290,6 +398,7 @@ export default function FeedScreen() {
     } finally {
       setLoadingMore(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingMore, hasMore, page, activeTopic]);
 
   const visibleStories = useMemo(
@@ -302,6 +411,8 @@ export default function FeedScreen() {
 
   const isBreaking = activeTopic === 'breaking';
   const isTech = activeTopic === 'technology';
+
+  const { cardWidth, snapInterval, hPadding } = layout;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -362,6 +473,15 @@ export default function FeedScreen() {
         </ScrollView>
       </View>
 
+      {/* New stories banner */}
+      {newCount > 0 && (
+        <Pressable onPress={applyPending} style={styles.newBanner}>
+          <Text style={styles.newBannerText}>
+            ↑ {newCount} new {newCount === 1 ? 'story' : 'stories'} — tap to refresh
+          </Text>
+        </Pressable>
+      )}
+
       {/* Feed */}
       {loading ? (
         <View style={styles.center}>
@@ -375,9 +495,12 @@ export default function FeedScreen() {
       ) : isTech ? (
         /* Technology — virtualized source-grouped carousel */
         <FlatList
+          ref={listRef}
           data={allSections}
           keyExtractor={s => s.title}
-          renderItem={({ item }) => <CarouselSection section={item} />}
+          renderItem={({ item }) => (
+            <CarouselSection section={item} cardWidth={cardWidth} snapInterval={snapInterval} hPadding={hPadding} />
+          )}
           showsVerticalScrollIndicator={false}
           removeClippedSubviews
           maxToRenderPerBatch={3}
@@ -395,10 +518,11 @@ export default function FeedScreen() {
       ) : (
         /* Breaking + all other tabs — topic-grouped carousels */
         <FlatList
+          ref={listRef}
           data={topicGroups}
           keyExtractor={g => g.id}
           renderItem={({ item }) => (
-            <TopicSection group={item} isBreaking={isBreaking} />
+            <TopicSection group={item} isBreaking={isBreaking} cardWidth={cardWidth} snapInterval={snapInterval} hPadding={hPadding} />
           )}
           showsVerticalScrollIndicator={false}
           removeClippedSubviews
@@ -425,17 +549,28 @@ export default function FeedScreen() {
   );
 }
 
+interface LayoutProps {
+  cardWidth: number;
+  snapInterval: number;
+  hPadding: number;
+}
+
 // ── Carousel Section (Technology only) ───────────────────────────────────────
-const CarouselSection = React.memo(function CarouselSection({ section }: { section: Section }) {
+const CarouselSection = React.memo(function CarouselSection({
+  section,
+  cardWidth,
+  snapInterval,
+  hPadding,
+}: { section: Section } & LayoutProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const favicon = faviconUrl(section.title);
   const keywords = useMemo(() => extractKeywords(section.stories), [section.stories]);
 
   const onScrollSettle = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const x = e.nativeEvent.contentOffset.x;
-    const idx = Math.round(x / SNAP_INTERVAL);
+    const idx = Math.round(x / snapInterval);
     setActiveIndex(Math.max(0, Math.min(idx, section.stories.length - 1)));
-  }, [section.stories.length]);
+  }, [snapInterval, section.stories.length]);
 
   return (
     <View style={styles.section}>
@@ -470,17 +605,17 @@ const CarouselSection = React.memo(function CarouselSection({ section }: { secti
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        snapToInterval={SNAP_INTERVAL}
+        snapToInterval={snapInterval}
         decelerationRate="fast"
-        contentContainerStyle={[styles.carouselContent, { paddingLeft: H_PADDING, paddingRight: 16 }]}
+        contentContainerStyle={[styles.carouselContent, { paddingLeft: hPadding, paddingRight: 16 }]}
         onMomentumScrollEnd={onScrollSettle}
         onScrollEndDrag={onScrollSettle}
         scrollEventThrottle={200}
         removeClippedSubviews
       >
         {section.stories.map((story, i) => (
-          <View key={story.id} style={cardMargin(i, section.stories.length)}>
-            <StoryCard story={story} />
+          <View key={story.id} style={i < section.stories.length - 1 ? { marginRight: CARD_GAP } : undefined}>
+            <StoryCard story={story} cardWidth={cardWidth} />
           </View>
         ))}
       </ScrollView>
@@ -500,18 +635,21 @@ const CarouselSection = React.memo(function CarouselSection({ section }: { secti
 const TopicSection = React.memo(function TopicSection({
   group,
   isBreaking,
+  cardWidth,
+  snapInterval,
+  hPadding,
 }: {
   group: TopicGroup;
   isBreaking: boolean;
-}) {
+} & LayoutProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const sourceCount = group.sources.length;
 
   const onScrollSettle = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const x = e.nativeEvent.contentOffset.x;
-    const idx = Math.round(x / SNAP_INTERVAL);
+    const idx = Math.round(x / snapInterval);
     setActiveIndex(Math.max(0, Math.min(idx, sourceCount - 1)));
-  }, [sourceCount]);
+  }, [snapInterval, sourceCount]);
 
   // Build one StoryCard-compatible story per source in the group
   const stories: Story[] = group.sources.map((src, i) => ({
@@ -527,7 +665,7 @@ const TopicSection = React.memo(function TopicSection({
     // Single article — no header, full card with its own headline/summary
     return (
       <View style={[styles.section, { alignItems: 'center' }]}>
-        <StoryCard story={stories[0]} />
+        <StoryCard story={stories[0]} cardWidth={cardWidth} />
       </View>
     );
   }
@@ -546,17 +684,17 @@ const TopicSection = React.memo(function TopicSection({
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        snapToInterval={SNAP_INTERVAL}
+        snapToInterval={snapInterval}
         decelerationRate="fast"
-        contentContainerStyle={[styles.carouselContent, { paddingLeft: H_PADDING, paddingRight: 16 }]}
+        contentContainerStyle={[styles.carouselContent, { paddingLeft: hPadding, paddingRight: 16 }]}
         onMomentumScrollEnd={onScrollSettle}
         onScrollEndDrag={onScrollSettle}
         scrollEventThrottle={200}
         removeClippedSubviews
       >
         {stories.map((story, i) => (
-          <View key={story.id} style={cardMargin(i, stories.length)}>
-            <StoryCard story={story} compact />
+          <View key={story.id} style={i < stories.length - 1 ? { marginRight: CARD_GAP } : undefined}>
+            <StoryCard story={story} compact cardWidth={cardWidth} />
           </View>
         ))}
       </ScrollView>
@@ -589,7 +727,7 @@ const styles = StyleSheet.create({
   breakingItem: { marginBottom: 20, alignItems: 'center', width: '100%' },
   breakingMeta: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    width: CARD_WIDTH, marginBottom: 8,
+    width: '82%', marginBottom: 8,
   },
   breakingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF3333' },
   breakingTime: { color: '#FF3333', fontSize: 12, fontWeight: '700', letterSpacing: 0.3 },
@@ -617,4 +755,16 @@ const styles = StyleSheet.create({
 
   errorText: { color: '#FFF', fontSize: 16, fontWeight: '600', marginBottom: 6 },
   errorDetail: { color: '#555', fontSize: 13 },
+
+  // New stories banner
+  newBanner: {
+    marginHorizontal: 20,
+    marginBottom: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: '#1A3A5C',
+    alignItems: 'center',
+  },
+  newBannerText: { color: '#4A90D9', fontSize: 13, fontWeight: '700', letterSpacing: 0.2 },
 });

@@ -10,7 +10,7 @@ import { FeedStackParamList } from '../types/navigation';
 import { useSaved } from '../contexts/SavedContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = Math.round(SCREEN_WIDTH * 0.82);
+const DEFAULT_CARD_WIDTH = Math.round(SCREEN_WIDTH * (SCREEN_WIDTH >= 768 ? 0.46 : 0.82));
 const IMAGE_HEIGHT = 220;
 
 export interface Story {
@@ -51,9 +51,10 @@ function HeadlineWithEntities({ text, accentColor }: { text: string; accentColor
 interface Props {
   story: Story;
   compact?: boolean;
+  cardWidth?: number;
 }
 
-function StoryCardInner({ story, compact }: Props) {
+function StoryCardInner({ story, compact, cardWidth = DEFAULT_CARD_WIDTH }: Props) {
   const navigation = useNavigation<NativeStackNavigationProp<FeedStackParamList, 'FeedHome'>>();
   const { toggleSave, isSaved } = useSaved();
   const [imageError, setImageError] = React.useState(false);
@@ -83,7 +84,7 @@ function StoryCardInner({ story, compact }: Props) {
 
   return (
     <Pressable
-      style={[styles.outerCard, { shadowColor: dominant, backgroundColor: dominant }]}
+      style={[styles.outerCard, { width: cardWidth, shadowColor: dominant, backgroundColor: dominant }]}
       onPress={handlePress}
     >
       <View style={styles.innerCard}>
@@ -150,7 +151,6 @@ export const StoryCard = React.memo(StoryCardInner);
 
 const styles = StyleSheet.create({
   outerCard: {
-    width: CARD_WIDTH,
     borderRadius: 20,
     alignSelf: 'center',
     elevation: 4,
