@@ -86,6 +86,8 @@ const SOURCE_DOMAINS: Record<string, string> = {
   'The Quint': 'thequint.com',
   'The Quint Tech': 'thequint.com',
   'Inc42': 'inc42.com',
+  'News18': 'news18.com',
+  'Firstpost': 'firstpost.com',
   'Republic World': 'republicworld.com',
 };
 

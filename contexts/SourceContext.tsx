@@ -4,23 +4,23 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 export const SOURCE_CATEGORIES = [
   {
     label: 'India',
-    sources: ['NDTV', 'Times of India', 'Indian Express', 'The Quint', 'ANI News', 'Hindustan Times'] as const,
+    sources: ['NDTV', 'Times of India', 'Indian Express', 'The Quint', 'ANI News', 'Hindustan Times', 'News18', 'Firstpost'] as const,
   },
   {
     label: 'World',
-    sources: ['BBC World', 'The Guardian', 'Al Jazeera', 'NYT World', 'Indian Express World', 'NPR World'] as const,
+    sources: ['BBC World', 'The Guardian', 'Al Jazeera', 'NYT World', 'Indian Express World', 'NPR World', 'News18', 'Firstpost'] as const,
   },
   {
     label: 'Markets',
-    sources: ['Economic Times', 'MoneyControl', 'NDTV Profit', 'Livemint', 'Business Standard', 'CNBC TV18'] as const,
+    sources: ['Economic Times', 'MoneyControl', 'NDTV Profit', 'Livemint', 'Business Standard', 'CNBC TV18', 'News18', 'Firstpost'] as const,
   },
   {
     label: 'Business',
-    sources: ['Mint', 'Business Standard', 'Economic Times', 'MoneyControl', 'Inc42', 'Hindustan Times'] as const,
+    sources: ['Mint', 'Business Standard', 'Economic Times', 'MoneyControl', 'Inc42', 'Hindustan Times', 'News18', 'Firstpost'] as const,
   },
   {
     label: 'Technology',
-    sources: ['TechCrunch', 'The Verge', 'Ars Technica', 'Wired', '9to5Google', '9to5Mac', 'Engadget', 'VentureBeat', 'The Next Web', 'Hacker News', 'MIT Tech Review', 'The Quint Tech', 'Indian Express Tech'] as const,
+    sources: ['TechCrunch', 'The Verge', 'Ars Technica', 'Wired', '9to5Google', '9to5Mac', 'Engadget', 'VentureBeat', 'The Next Web', 'Hacker News', 'MIT Tech Review', 'The Quint Tech', 'Indian Express Tech', 'News18', 'Firstpost'] as const,
   },
 ];
 
