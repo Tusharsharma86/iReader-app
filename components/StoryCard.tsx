@@ -3,8 +3,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useCallback } from 'react';
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Dimensions, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 import { FeedStackParamList } from '../types/navigation';
 import { useSaved } from '../contexts/SavedContext';
@@ -57,7 +57,13 @@ interface Props {
 }
 
 function StoryCardInner({ story, compact, cardWidth: cardWidthProp }: Props) {
-  const { width } = useWindowDimensions();
+  const { width: hookWidth } = useWindowDimensions();
+  const [dimWidth, setDimWidth] = useState(() => Dimensions.get('window').width);
+  useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window }) => setDimWidth(window.width));
+    return () => sub.remove();
+  }, []);
+  const width = Math.abs(hookWidth - dimWidth) < 1 ? hookWidth : dimWidth;
   // If parent passes explicit cardWidth, use it; otherwise compute reactively from current window width
   const cardWidth = cardWidthProp ?? (width >= 768 ? Math.round(width * 0.46) : width - 28);
   const navigation = useNavigation<NativeStackNavigationProp<FeedStackParamList, 'FeedHome'>>();

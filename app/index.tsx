@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   AppState,
   AppStateStatus,
+  Dimensions,
   FlatList,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -26,12 +27,23 @@ import { rankStories } from '../utils/personalization';
 
 const CARD_GAP = 12;
 
-// useWindowDimensions re-renders on every dimension change including fold/unfold
-// and orientation flip — more reliable than Dimensions.addEventListener on foldables.
+// useWindowDimensions fires on fold-open but Samsung foldables sometimes skip
+// the event on fold-close (app is briefly backgrounded). Dimensions.addEventListener
+// catches it as a fallback so cardWidth always reflects the actual screen size.
 function useLayout() {
-  const { width } = useWindowDimensions();
+  const { width: hookWidth } = useWindowDimensions();
+  const [dimWidth, setDimWidth] = useState(() => Dimensions.get('window').width);
+
+  useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window }) => {
+      setDimWidth(window.width);
+    });
+    return () => sub.remove();
+  }, []);
+
+  // Use whichever source gave the most recent value
+  const width = Math.abs(hookWidth - dimWidth) < 1 ? hookWidth : dimWidth;
   const isTablet = width >= 768;
-  // 14px margin each side on phone (matches Particle), dual-column on tablet
   const cardWidth = isTablet ? Math.round(width * 0.46) : width - 28;
   return {
     screenWidth: width,
