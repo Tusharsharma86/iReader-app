@@ -260,7 +260,9 @@ export default function FeedScreen() {
   const listRef = useRef<FlatList>(null);
   const lastFetchRef = useRef<number>(0);
   const activeTopicRef = useRef(activeTopic);
+  const pageRef = useRef(1); // always current — avoids stale closure in loadMore
   useEffect(() => { activeTopicRef.current = activeTopic; }, [activeTopic]);
+  useEffect(() => { pageRef.current = page; }, [page]);
 
   function filterStories(raw: Story[]): Story[] {
     return raw.filter(
@@ -271,34 +273,43 @@ export default function FeedScreen() {
     );
   }
 
-  async function fetchPage(topic: CategoryTopic, pageNum: number): Promise<Story[]> {
+  // Returns filtered stories AND whether the server has more pages.
+  // hasMore is based on the RAW server count before frontend filtering so
+  // a page where the Hindi/sports filter removes some items doesn't falsely
+  // signal "end of feed".
+  async function fetchPage(
+    topic: CategoryTopic,
+    pageNum: number,
+  ): Promise<{ stories: Story[]; serverHasMore: boolean }> {
     const res = await fetch(`${API_BASE}?topic=${topic}&page=${pageNum}&limit=20`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json() as { stories: Story[] };
-    return filterStories(data.stories ?? []);
+    const data = await res.json() as { stories: Story[]; total?: number };
+    const raw = data.stories ?? [];
+    // Server has more data if this page was full (returned the full limit)
+    const serverHasMore = raw.length >= 20;
+    return { stories: filterStories(raw), serverHasMore };
   }
 
-  // Silent background refresh — detects truly new articles vs already shown
+  // Silent background refresh — only shows new-stories banner, never resets
+  // the currently visible list (which would break scroll position & pagination).
   async function backgroundRefresh(topic: CategoryTopic, current: Story[]) {
     try {
-      const fresh = await fetchPage(topic, 1);
-      const currentIds = new Set(current.map(s => s.id));
-      const brandNew = fresh.filter(s => !currentIds.has(s.id));
+      const { stories: fresh } = await fetchPage(topic, 1);
       lastFetchRef.current = Date.now();
       await saveFeedCache(topic, fresh);
+      const currentIds = new Set(current.map(s => s.id));
+      const brandNew = fresh.filter(s => !currentIds.has(s.id));
       if (brandNew.length > 0) {
         setPendingStories(fresh);
         setNewCount(brandNew.length);
-      } else {
-        // Same stories, just update in-place silently
-        setAllStories(fresh);
       }
+      // No new stories → cache updated silently, visible list untouched
     } catch {
       // silent — user still sees last known good state
     }
   }
 
-  // Topic change: serve cache instantly, then revalidate
+  // Topic change: serve cache instantly, then revalidate in background
   useEffect(() => {
     setLoading(true);
     setAllStories([]);
@@ -306,21 +317,22 @@ export default function FeedScreen() {
     setNewCount(0);
     setHasMore(true);
     setPage(1);
+    pageRef.current = 1;
 
     loadCachedFeed(activeTopic).then(async cached => {
       if (cached && cached.stories.length > 0) {
-        const visible = filterStories(cached.stories);
-        setAllStories(visible);
+        setAllStories(filterStories(cached.stories));
+        setHasMore(true); // corrected on first loadMore call
         setLoading(false);
         if (cached.isStale) {
-          backgroundRefresh(activeTopic, visible);
+          backgroundRefresh(activeTopic, filterStories(cached.stories));
         }
       } else {
         // Cold start — must wait for network
         try {
-          const stories = await fetchPage(activeTopic, 1);
+          const { stories, serverHasMore } = await fetchPage(activeTopic, 1);
           setAllStories(stories);
-          setHasMore(stories.length >= 20);
+          setHasMore(serverHasMore);
           lastFetchRef.current = Date.now();
           saveFeedCache(activeTopic, stories);
         } catch (e: any) {
@@ -354,10 +366,11 @@ export default function FeedScreen() {
     setPendingStories(null);
     setNewCount(0);
     try {
-      const stories = await fetchPage(activeTopic, 1);
+      const { stories, serverHasMore } = await fetchPage(activeTopic, 1);
       setAllStories(stories);
       setPage(1);
-      setHasMore(stories.length >= 20);
+      pageRef.current = 1;
+      setHasMore(serverHasMore);
       lastFetchRef.current = Date.now();
       saveFeedCache(activeTopic, stories);
     } catch {
@@ -374,29 +387,32 @@ export default function FeedScreen() {
     setPendingStories(null);
     setNewCount(0);
     setPage(1);
+    pageRef.current = 1;
+    setHasMore(true);
     listRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, [pendingStories]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
+    const nextPage = pageRef.current + 1;
     try {
-      const nextPage = page + 1;
-      const more = await fetchPage(activeTopic, nextPage);
+      const { stories: more, serverHasMore } = await fetchPage(activeTopic, nextPage);
       setAllStories(prev => {
         const existingIds = new Set(prev.map(s => s.id));
         const newOnes = more.filter(s => !existingIds.has(s.id));
-        if (newOnes.length === 0) setHasMore(false);
         return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
       });
-      if (more.length > 0) setPage(nextPage);
+      setHasMore(serverHasMore);
+      pageRef.current = nextPage;
+      setPage(nextPage);
     } catch {
-      // silently ignore loadMore errors
+      // silently ignore — hasMore stays true so next scroll retries
     } finally {
       setLoadingMore(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadingMore, hasMore, page, activeTopic]);
+  }, [loadingMore, hasMore, activeTopic]); // page removed — using pageRef instead
 
   const visibleStories = useMemo(
     () => allStories.filter(s => activeSources[s.sources?.[0]?.name ?? ''] !== false),
