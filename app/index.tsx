@@ -439,7 +439,6 @@ export default function FeedScreen() {
   const topicGroups = useMemo(() => groupByTopic(visibleStories), [visibleStories]);
 
   const isBreaking = activeTopic === 'breaking';
-  const isTech = activeTopic === 'technology';
 
   const { cardWidth, snapInterval, hPadding, isTablet } = layout;
 
@@ -521,33 +520,8 @@ export default function FeedScreen() {
           <Text style={styles.errorText}>Failed to load</Text>
           <Text style={styles.errorDetail}>{error}</Text>
         </View>
-      ) : isTech ? (
-        /* Technology — virtualized source-grouped carousel */
-        <FlatList
-          key={isTablet ? 'tech-tablet' : 'tech-phone'}
-          ref={listRef}
-          data={allSections}
-          keyExtractor={s => s.title}
-          extraData={cardWidth}
-          renderItem={({ item }) => (
-            <CarouselSection section={item} cardWidth={cardWidth} snapInterval={snapInterval} hPadding={hPadding} allStories={visibleStories} />
-          )}
-          showsVerticalScrollIndicator={false}
-          removeClippedSubviews
-          maxToRenderPerBatch={3}
-          windowSize={5}
-          initialNumToRender={3}
-          onEndReached={loadMore}
-          onEndReachedThreshold={0.3}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4A90D9" />}
-          ListFooterComponent={
-            loadingMore
-              ? <ActivityIndicator color="#FFFFFF" style={{ marginVertical: 24 }} />
-              : <View style={{ height: 40 }} />
-          }
-        />
       ) : (
-        /* Breaking + all other tabs — topic-grouped carousels */
+        /* All tabs — topic-grouped carousels */
         <FlatList
           key={isTablet ? 'feed-tablet' : 'feed-phone'}
           ref={listRef}
