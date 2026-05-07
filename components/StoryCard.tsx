@@ -8,6 +8,7 @@ import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 import { FeedStackParamList } from '../types/navigation';
 import { useSaved } from '../contexts/SavedContext';
+import { trackArticleOpen } from '../utils/personalization';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DEFAULT_CARD_WIDTH = Math.round(SCREEN_WIDTH * (SCREEN_WIDTH >= 768 ? 0.46 : 0.82));
@@ -69,6 +70,7 @@ function StoryCardInner({ story, compact, cardWidth = DEFAULT_CARD_WIDTH }: Prop
   const handleBookmark = useCallback(() => { toggleSave(story); }, [story, toggleSave]);
 
   const handlePress = useCallback(() => {
+    trackArticleOpen(story);
     navigation.navigate('Article', {
       id: story.id,
       url: story.sources?.[0]?.url ?? '',

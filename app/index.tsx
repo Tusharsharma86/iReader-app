@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Story, StoryCard } from '../components/StoryCard';
 import { useSource } from '../contexts/SourceContext';
 import { loadCachedFeed, saveFeedCache } from '../utils/feedCache';
+import { rankStories } from '../utils/personalization';
 
 const CARD_GAP = 12;
 
@@ -415,7 +416,7 @@ export default function FeedScreen() {
   }, [loadingMore, hasMore, activeTopic]); // page removed — using pageRef instead
 
   const visibleStories = useMemo(
-    () => allStories.filter(s => activeSources[s.sources?.[0]?.name ?? ''] !== false),
+    () => rankStories(allStories.filter(s => activeSources[s.sources?.[0]?.name ?? ''] !== false)),
     [allStories, activeSources],
   );
 
