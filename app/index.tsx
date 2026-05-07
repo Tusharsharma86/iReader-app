@@ -441,7 +441,7 @@ export default function FeedScreen() {
   const isBreaking = activeTopic === 'breaking';
   const isTech = activeTopic === 'technology';
 
-  const { cardWidth, snapInterval, hPadding } = layout;
+  const { cardWidth, snapInterval, hPadding, isTablet } = layout;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
