@@ -22,6 +22,9 @@ export interface Story {
   imageUrl: string;
   sources: { name: string; url: string; imageUrl?: string; publishedAt: string }[];
   summaries?: { fiveWs?: string[]; eli5?: string; keyHighlights?: string };
+  isTrending?: boolean;
+  isBreaking?: boolean;
+  isDeveloping?: boolean;
 }
 
 function timeAgo(iso: string): string {
@@ -65,7 +68,12 @@ function StoryCardInner({ story, compact, cardWidth = DEFAULT_CARD_WIDTH }: Prop
   const accent = lighten(dominant, 0.55);
   const textBg = darken(dominant, 0.3);
   const source = story.sources?.[0]?.name ?? 'Unknown';
-  const articleCount = story.sources?.length ?? 1;
+  const sourceCount = story.sources?.length ?? 1;
+  const ageMs = Date.now() - new Date(story.publishedAt).getTime();
+  // Prefer server-computed flags; fall back to local computation
+  const isTrending = story.isTrending ?? sourceCount >= 3;
+  const isBreakingBadge = story.isBreaking ?? (sourceCount >= 2 && ageMs < 2 * 60 * 60 * 1000);
+  const isOngoing = story.isDeveloping ?? (sourceCount >= 4 && ageMs < 6 * 60 * 60 * 1000);
 
   const handleBookmark = useCallback(() => { toggleSave(story); }, [story, toggleSave]);
 
@@ -126,11 +134,30 @@ function StoryCardInner({ story, compact, cardWidth = DEFAULT_CARD_WIDTH }: Prop
             />
           </Pressable>
 
-          {/* Meta */}
+          {/* Cluster bar */}
           <View style={styles.imageOverlayBottom}>
-            <Text style={styles.metaText}>
-              {'⚡ '}{timeAgo(story.publishedAt)}{'  ·  '}{articleCount}{' '}{articleCount === 1 ? 'ARTICLE' : 'ARTICLES'}
-            </Text>
+            <View style={styles.clusterBar}>
+              {/* Overlapping source initial avatars */}
+              <View style={styles.avatarStack}>
+                {story.sources.slice(0, 4).map((s, i) => (
+                  <View key={i} style={[styles.avatar, { left: i * 16, backgroundColor: lighten(dominant, 0.2 + i * 0.05) }]}>
+                    <Text style={styles.avatarText}>{s.name.charAt(0).toUpperCase()}</Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* Metadata + badges */}
+              <View style={styles.clusterMeta}>
+                <Text style={styles.metaText}>
+                  {'⚡ '}{timeAgo(story.publishedAt)}{'  ·  '}{sourceCount}{' '}{sourceCount === 1 ? 'SOURCE' : 'SOURCES'}
+                </Text>
+                <View style={styles.badgeRow}>
+                  {isBreakingBadge && <Text style={styles.breakingBadge}>🔴 Breaking</Text>}
+                  {isTrending && !isBreakingBadge && <Text style={styles.trendingBadge}>🔥 Trending</Text>}
+                  {isOngoing && <Text style={styles.developingBadge}>📍 Developing</Text>}
+                </View>
+              </View>
+            </View>
           </View>
         </View>
 
@@ -204,11 +231,60 @@ const styles = StyleSheet.create({
     left: 12,
     right: 12,
   },
+  clusterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  avatarStack: {
+    position: 'relative',
+    width: 52,
+    height: 24,
+    flexShrink: 0,
+  },
+  avatar: {
+    position: 'absolute',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  avatarText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  clusterMeta: {
+    flex: 1,
+  },
   metaText: {
     color: 'rgba(255,255,255,0.85)',
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 0.7,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 3,
+  },
+  breakingBadge: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FF4444',
+  },
+  trendingBadge: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFD700',
+  },
+  developingBadge: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FF9F43',
   },
   textSection: {
     paddingHorizontal: 14,

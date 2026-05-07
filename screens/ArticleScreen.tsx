@@ -18,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { darken, lighten } from '../utils/colors';
 import { RootStackParamList } from '../types/navigation';
 import { useSettings } from '../contexts/SettingsContext';
+import { getCached, setCached, TTL } from '../utils/cache';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const HERO_HEIGHT = 280;
@@ -106,6 +107,28 @@ const siStyles = StyleSheet.create({
   sourceNames: { marginLeft: 10, fontSize: 12, fontWeight: '600', flexShrink: 1 },
 });
 
+function extractEntities(text: string): { people: string[]; companies: string[] } {
+  const people: string[] = [];
+  const companies: string[] = [];
+  const words = text.split(/\s+/);
+  words.forEach((word, i) => {
+    const clean = word.replace(/[^a-zA-Z]/g, '');
+    if (!clean || clean.length < 2) return;
+    if (/^[A-Z]{2,}$/.test(clean)) {
+      if (!companies.includes(clean)) companies.push(clean);
+    }
+    if (
+      i > 0 &&
+      /^[A-Z][a-z]+$/.test(clean) &&
+      /^[A-Z][a-z]+$/.test(words[i - 1]?.replace(/[^a-zA-Z]/g, ''))
+    ) {
+      const person = words[i - 1].replace(/[^a-zA-Z]/g, '') + ' ' + clean;
+      if (!people.includes(person)) people.push(person);
+    }
+  });
+  return { people: people.slice(0, 5), companies: companies.slice(0, 5) };
+}
+
 export default function ArticleScreen() {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RootStackParamList, 'Article'>>();
@@ -122,11 +145,19 @@ export default function ArticleScreen() {
   const [paragraphs, setParagraphs] = useState<string[]>([]);
   const [paragraphsLoading, setParagraphsLoading] = useState(true);
   const [paragraphsError, setParagraphsError] = useState<string | null>(null);
+  const [entities, setEntities] = useState<{ people: string[]; companies: string[] }>({ people: [], companies: [] });
 
   const aiCache = useRef<Partial<Record<Tab, AiResult>>>({});
   const [aiResult, setAiResult] = useState<AiResult | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+
+  // Lazy AI: only generate after user has been reading for 5 seconds
+  const [hasBeenRead, setHasBeenRead] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setHasBeenRead(true), 5000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Parse sources from params
   const allSources: SourceEntry[] = (() => {
@@ -151,7 +182,9 @@ export default function ArticleScreen() {
           data.paragraphs ?? data.originalParagraphs ??
           (data.text ? data.text.split('\n\n').filter(Boolean) : null) ??
           (params.summary ? [params.summary] : []);
-        setParagraphs(paras.filter(Boolean));
+        const filtered = paras.filter(Boolean);
+        setParagraphs(filtered);
+        setEntities(extractEntities(filtered.join(' ')));
       })
       .catch(e => {
         setParagraphsError(e.message);
@@ -163,9 +196,21 @@ export default function ArticleScreen() {
   useEffect(() => {
     const aiType = TAB_AI_TYPE[activeTab];
     if (!aiType) return;
+    // Gate: don't start AI until user has read for 5 seconds
+    if (!hasBeenRead) return;
+    // Session-level tab cache hit
     if (aiCache.current[activeTab]) { setAiResult(aiCache.current[activeTab]!); return; }
     if (paragraphsLoading) return;
     if (paragraphs.length === 0) { setAiError('No article text available to summarize.'); return; }
+
+    // Persistent memory cache (24-hour TTL — never recompute same article)
+    const cacheKey = `summary_${params.id ?? params.url}_${aiType}`;
+    const cached = getCached(cacheKey, TTL.AI_SUMMARY);
+    if (cached) {
+      aiCache.current[activeTab] = cached;
+      setAiResult(cached);
+      return;
+    }
 
     setAiLoading(true);
     setAiError(null);
@@ -182,12 +227,24 @@ export default function ArticleScreen() {
       }),
     })
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then(data => { aiCache.current[activeTab] = data; setAiResult(data); })
+      .then(data => {
+        aiCache.current[activeTab] = data;
+        setCached(cacheKey, data);
+        setAiResult(data);
+      })
       .catch(e => setAiError(e.message))
       .finally(() => setAiLoading(false));
-  }, [activeTab, paragraphsLoading]);
+  }, [activeTab, paragraphsLoading, hasBeenRead]);
 
   function renderTabContent() {
+    if (activeTab !== 'Long Form' && !hasBeenRead) {
+      return (
+        <View style={styles.center}>
+          <ActivityIndicator size="small" color="#555" style={{ marginBottom: 12 }} />
+          <Text style={styles.emptyText}>Keep reading... AI summary generating</Text>
+        </View>
+      );
+    }
     switch (activeTab) {
       case 'Long Form':
         return <LongFormTab loading={paragraphsLoading} paragraphs={paragraphs} error={paragraphsError} summary={params.summary} fontSize={fontSizePx} url={params.url} />;
@@ -288,6 +345,36 @@ export default function ArticleScreen() {
                 <Ionicons name="open-outline" size={14} color={accent} />
               </TouchableOpacity>
             ))}
+          </View>
+        )}
+
+        {/* Key People & Companies */}
+        {(entities.people.length > 0 || entities.companies.length > 0) && (
+          <View style={styles.entitySection}>
+            {entities.people.length > 0 && (
+              <View style={styles.entityGroup}>
+                <Text style={[styles.entityHeader, { color: accent }]}>KEY PEOPLE</Text>
+                <View style={styles.entityChips}>
+                  {entities.people.map(p => (
+                    <View key={p} style={[styles.entityChip, { borderColor: accent + '55' }]}>
+                      <Text style={styles.entityText}>👤 {p}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+            {entities.companies.length > 0 && (
+              <View style={styles.entityGroup}>
+                <Text style={[styles.entityHeader, { color: accent }]}>KEY COMPANIES</Text>
+                <View style={styles.entityChips}>
+                  {entities.companies.map(c => (
+                    <View key={c} style={[styles.entityChip, { borderColor: accent + '55' }]}>
+                      <Text style={styles.entityText}>🏢 {c}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
           </View>
         )}
 
@@ -468,4 +555,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   readFullText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  entitySection: { marginHorizontal: 16, marginTop: 20, gap: 16 },
+  entityGroup: {},
+  entityHeader: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, marginBottom: 10 },
+  entityChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  entityChip: {
+    paddingHorizontal: 12, paddingVertical: 7,
+    borderRadius: 20, borderWidth: 1,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  entityText: { color: '#DDD', fontSize: 13, fontWeight: '500' },
 });
