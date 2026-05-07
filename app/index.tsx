@@ -58,6 +58,7 @@ type CategoryTopic = typeof CATEGORIES[number]['topic'];
 const PREFERRED_SOURCES = ['TechCrunch', 'The Verge', 'Ars Technica', 'Wired'];
 
 const SOURCE_DOMAINS: Record<string, string> = {
+  // Tech
   'TechCrunch': 'techcrunch.com',
   'The Verge': 'theverge.com',
   'Ars Technica': 'arstechnica.com',
@@ -69,31 +70,26 @@ const SOURCE_DOMAINS: Record<string, string> = {
   'Engadget': 'engadget.com',
   'VentureBeat': 'venturebeat.com',
   'The Next Web': 'thenextweb.com',
-  'NDTV': 'ndtv.com',
-  'NDTV Profit': 'ndtvprofit.com',
-  'Times of India': 'timesofindia.indiatimes.com',
-  'Indian Express': 'indianexpress.com',
-  'Indian Express World': 'indianexpress.com',
-  'Indian Express Tech': 'indianexpress.com',
+  // World
   'BBC World': 'bbc.co.uk',
   'NYT World': 'nytimes.com',
   'The Guardian': 'theguardian.com',
   'NPR World': 'npr.org',
   'Al Jazeera': 'aljazeera.com',
+  // Indian
+  'Indian Express': 'indianexpress.com',
+  'Indian Express World': 'indianexpress.com',
+  'Indian Express Tech': 'indianexpress.com',
   'Economic Times': 'economictimes.indiatimes.com',
   'MoneyControl': 'moneycontrol.com',
   'Livemint': 'livemint.com',
   'Mint': 'livemint.com',
-  'Business Standard': 'business-standard.com',
   'CNBC TV18': 'cnbctv18.com',
-  'Hindustan Times': 'hindustantimes.com',
-  'ANI News': 'aninews.in',
   'The Quint': 'thequint.com',
-  'The Quint Tech': 'thequint.com',
   'Inc42': 'inc42.com',
   'News18': 'news18.com',
   'Firstpost': 'firstpost.com',
-  'Republic World': 'republicworld.com',
+  'Scroll.in': 'scroll.in',
 };
 
 function faviconUrl(sourceName: string): string | null {
@@ -288,10 +284,12 @@ export default function FeedScreen() {
   ): Promise<{ stories: Story[]; serverHasMore: boolean }> {
     const res = await fetch(`${API_BASE}?topic=${topic}&page=${pageNum}&limit=20`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json() as { stories: Story[]; total?: number };
+    const data = await res.json() as { stories: Story[]; total?: number; page?: number; limit?: number };
     const raw = data.stories ?? [];
-    // Server has more data if this page was full (returned the full limit)
-    const serverHasMore = raw.length >= 20;
+    const total = data.total ?? 0;
+    // Use server-provided total to know if there are more pages
+    const fetched = (pageNum - 1) * 20 + raw.length;
+    const serverHasMore = total > 0 ? fetched < total : raw.length >= 20;
     return { stories: filterStories(raw), serverHasMore };
   }
 
