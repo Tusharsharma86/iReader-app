@@ -1,14 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Dimensions, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StoryCard } from '../components/StoryCard';
 import { useSaved } from '../contexts/SavedContext';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = Math.round(SCREEN_WIDTH * 0.82);
-
 export default function SavedScreen() {
+  const { width } = useWindowDimensions();
+  const cardWidth = width >= 768 ? Math.round(width * 0.46) : width - 28;
   const { savedStories } = useSaved();
 
   return (
@@ -29,7 +28,7 @@ export default function SavedScreen() {
           <Text style={styles.count}>{savedStories.length} saved</Text>
           {savedStories.map(story => (
             <View key={story.id} style={styles.item}>
-              <StoryCard story={story} />
+              <StoryCard story={story} cardWidth={cardWidth} />
             </View>
           ))}
           <View style={{ height: 40 }} />

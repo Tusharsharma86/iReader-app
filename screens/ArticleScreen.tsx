@@ -5,7 +5,6 @@ import * as WebBrowser from 'expo-web-browser';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Dimensions,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,7 +19,6 @@ import { RootStackParamList } from '../types/navigation';
 import { useSettings } from '../contexts/SettingsContext';
 import { getCached, setCached, TTL } from '../utils/cache';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const HERO_HEIGHT = 280;
 
 const API = 'https://ireader.onrender.com/api/news';

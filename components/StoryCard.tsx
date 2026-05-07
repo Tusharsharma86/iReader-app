@@ -4,14 +4,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback } from 'react';
-import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 import { FeedStackParamList } from '../types/navigation';
 import { useSaved } from '../contexts/SavedContext';
 import { trackArticleOpen } from '../utils/personalization';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const DEFAULT_CARD_WIDTH = SCREEN_WIDTH >= 768 ? Math.round(SCREEN_WIDTH * 0.46) : SCREEN_WIDTH - 28;
 const IMAGE_HEIGHT = 220;
 
 export interface Story {
@@ -58,7 +56,10 @@ interface Props {
   cardWidth?: number;
 }
 
-function StoryCardInner({ story, compact, cardWidth = DEFAULT_CARD_WIDTH }: Props) {
+function StoryCardInner({ story, compact, cardWidth: cardWidthProp }: Props) {
+  const { width } = useWindowDimensions();
+  // If parent passes explicit cardWidth, use it; otherwise compute reactively from current window width
+  const cardWidth = cardWidthProp ?? (width >= 768 ? Math.round(width * 0.46) : width - 28);
   const navigation = useNavigation<NativeStackNavigationProp<FeedStackParamList, 'FeedHome'>>();
   const { toggleSave, isSaved } = useSaved();
   const [imageError, setImageError] = React.useState(false);
