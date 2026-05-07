@@ -13,11 +13,13 @@ import {
   View,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { darken, lighten } from '../utils/colors';
+import { darken, lighten, getArticleColor } from '../utils/colors';
 import { RootStackParamList } from '../types/navigation';
 import { useSettings } from '../contexts/SettingsContext';
 import { getCached, setCached, TTL } from '../utils/cache';
+import { extractChips } from '../components/StoryCard';
 
 const HERO_HEIGHT = 280;
 
@@ -128,7 +130,7 @@ function extractEntities(text: string): { people: string[]; companies: string[] 
 }
 
 export default function ArticleScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'Article'>>();
   const params = route.params;
 
@@ -144,6 +146,7 @@ export default function ArticleScreen() {
   const [paragraphsLoading, setParagraphsLoading] = useState(true);
   const [paragraphsError, setParagraphsError] = useState<string | null>(null);
   const [entities, setEntities] = useState<{ people: string[]; companies: string[] }>({ people: [], companies: [] });
+  const [relatedStories, setRelatedStories] = useState<any[]>([]);
 
   const aiCache = useRef<Partial<Record<Tab, AiResult>>>({});
   const [aiResult, setAiResult] = useState<AiResult | null>(null);
@@ -190,6 +193,37 @@ export default function ArticleScreen() {
       })
       .finally(() => setParagraphsLoading(false));
   }, [params.url]);
+
+  useEffect(() => {
+    if (paragraphsLoading) return;
+    const chips = extractChips(params.headline + ' ' + (params.summary || ''));
+    if (chips.length === 0) return;
+    const keywords = chips.map(c => c.toLowerCase());
+    const FEED_TOPICS = ['breaking', 'technology', 'india-politics', 'geopolitics', 'markets', 'business'];
+    Promise.allSettled(
+      FEED_TOPICS.map(t =>
+        fetch(`${API}/feed?topic=${t}&limit=15`)
+          .then(r => r.json())
+          .then((d: { stories: any[] }) => d.stories ?? []),
+      ),
+    ).then(results => {
+      const all: any[] = [];
+      for (const r of results) {
+        if (r.status === 'fulfilled') all.push(...r.value);
+      }
+      const seen = new Set<string>();
+      const related = all.filter(s => {
+        if (s.id === params.id || seen.has(s.id)) return false;
+        const text = (s.headline + ' ' + (s.summary || '')).toLowerCase();
+        if (keywords.some(kw => text.includes(kw))) {
+          seen.add(s.id);
+          return true;
+        }
+        return false;
+      }).slice(0, 8);
+      setRelatedStories(related);
+    }).catch(() => {});
+  }, [paragraphsLoading]);
 
   useEffect(() => {
     const aiType = TAB_AI_TYPE[activeTab];
@@ -403,6 +437,49 @@ export default function ArticleScreen() {
           </View>
         )}
 
+        {/* Related Stories */}
+        {relatedStories.length > 0 && (
+          <View style={styles.relatedSection}>
+            <Text style={styles.relatedTitle}>Related Stories</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.relatedScroll}
+            >
+              {relatedStories.map(s => {
+                const color = getArticleColor(s.id || s.headline);
+                return (
+                  <Pressable
+                    key={s.id}
+                    onPress={() => navigation.navigate('Article', {
+                      id: s.id,
+                      url: s.sources?.[0]?.url ?? '',
+                      image: s.imageUrl ?? '',
+                      headline: s.headline,
+                      summary: s.summary ?? '',
+                      source: s.sources?.[0]?.name ?? '',
+                      publishedAt: s.publishedAt,
+                      dominantColor: color,
+                      sources: JSON.stringify(s.sources ?? []),
+                    })}
+                    style={styles.relatedCard}
+                  >
+                    {s.imageUrl ? (
+                      <Image source={{ uri: s.imageUrl }} style={styles.relatedImage} contentFit="cover" />
+                    ) : (
+                      <View style={[styles.relatedImage, { backgroundColor: color }]} />
+                    )}
+                    <View style={styles.relatedCardBody}>
+                      <Text style={styles.relatedCardSource}>{s.sources?.[0]?.name}</Text>
+                      <Text style={styles.relatedCardHeadline} numberOfLines={3}>{s.headline}</Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+
         <View style={{ height: 60 }} />
       </ScrollView>
     </View>
@@ -595,4 +672,23 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.06)',
   },
   entityText: { color: '#DDD', fontSize: 13, fontWeight: '500' },
+  relatedSection: { marginTop: 24 },
+  relatedTitle: {
+    color: '#FFFFFF', fontSize: 16, fontWeight: '700',
+    marginBottom: 12, paddingHorizontal: 16,
+  },
+  relatedScroll: { paddingHorizontal: 16, gap: 10 },
+  relatedCard: {
+    width: 200, backgroundColor: '#111111',
+    borderRadius: 12, overflow: 'hidden',
+  },
+  relatedImage: { width: 200, height: 110 },
+  relatedCardBody: { padding: 10 },
+  relatedCardSource: {
+    color: 'rgba(255,255,255,0.5)', fontSize: 10,
+    fontWeight: '700', letterSpacing: 0.5, marginBottom: 4,
+  },
+  relatedCardHeadline: {
+    color: '#FFFFFF', fontSize: 12, fontWeight: '600', lineHeight: 17,
+  },
 });

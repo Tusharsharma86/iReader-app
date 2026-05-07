@@ -3,7 +3,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Dimensions, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 import { FeedStackParamList } from '../types/navigation';
@@ -23,6 +23,26 @@ export interface Story {
   isTrending?: boolean;
   isBreaking?: boolean;
   isDeveloping?: boolean;
+}
+
+export function extractChips(text: string): string[] {
+  const stopWords = new Set([
+    'the','a','an','is','are','was','were','be','been',
+    'has','have','had','will','would','could','should',
+    'this','that','with','from','for','and','but','or',
+    'in','on','at','to','of','its','it','as','by','says',
+    'said','after','over','new','more','than','into','out',
+  ]);
+  const wordCount: Record<string, number> = {};
+  text.toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .split(' ')
+    .filter(w => w.length > 3 && !stopWords.has(w))
+    .forEach(w => { wordCount[w] = (wordCount[w] || 0) + 1; });
+  return Object.entries(wordCount)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([w]) => w.charAt(0).toUpperCase() + w.slice(1));
 }
 
 function timeAgo(iso: string): string {
@@ -81,6 +101,10 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp }: Props) {
   const isTrending = story.isTrending ?? sourceCount >= 3;
   const isBreakingBadge = story.isBreaking ?? (sourceCount >= 2 && ageMs < 2 * 60 * 60 * 1000);
   const isOngoing = story.isDeveloping ?? (sourceCount >= 4 && ageMs < 6 * 60 * 60 * 1000);
+  const chips = useMemo(
+    () => extractChips(story.headline + ' ' + (story.summary || '')),
+    [story.headline, story.summary],
+  );
 
   const handleBookmark = useCallback(() => { toggleSave(story); }, [story, toggleSave]);
 
@@ -172,6 +196,21 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp }: Props) {
         {!compact && (
           <View style={[styles.textSection, { backgroundColor: textBg }]}>
             <HeadlineWithEntities text={story.headline} accentColor={accent} />
+            {chips.length > 0 && (
+              <View style={styles.chipsRow}>
+                {chips.map(chip => (
+                  <Pressable
+                    key={chip}
+                    onPress={() => navigation.navigate('TopicFeed', { tag: chip })}
+                    style={[styles.chip, { backgroundColor: dominant + '33' }]}
+                  >
+                    <Text style={[styles.chipText, { color: lighten(dominant, 0.6) }]}>
+                      #{chip}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
             <Text style={styles.summary} numberOfLines={3}>
               {story.summary}
             </Text>
@@ -297,6 +336,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 12,
     paddingBottom: 14,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  chip: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  chipText: {
+    fontSize: 10,
+    fontWeight: '600',
   },
   headline: {
     fontSize: 20,
