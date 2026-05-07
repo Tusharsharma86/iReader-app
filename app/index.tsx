@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   AppState,
   AppStateStatus,
-  Dimensions,
   FlatList,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -13,6 +12,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,19 +22,17 @@ import { loadCachedFeed, saveFeedCache } from '../utils/feedCache';
 
 const CARD_GAP = 12;
 
+// useWindowDimensions re-renders on every dimension change including fold/unfold
+// and orientation flip — more reliable than Dimensions.addEventListener on foldables.
 function useLayout() {
-  const [dims, setDims] = useState(Dimensions.get('window'));
-  useEffect(() => {
-    const sub = Dimensions.addEventListener('change', ({ window }) => setDims(window));
-    return () => sub.remove();
-  }, []);
-  const isTablet = dims.width >= 768;
-  const cardWidth = Math.round(dims.width * (isTablet ? 0.46 : 0.82));
+  const { width } = useWindowDimensions();
+  const isTablet = width >= 768;
+  const cardWidth = Math.round(width * (isTablet ? 0.46 : 0.82));
   return {
-    screenWidth: dims.width,
+    screenWidth: width,
     cardWidth,
     snapInterval: cardWidth + CARD_GAP,
-    hPadding: Math.round((dims.width - cardWidth) / 2),
+    hPadding: Math.round((width - cardWidth) / 2),
     isTablet,
   };
 }
@@ -69,16 +67,13 @@ const SOURCE_DOMAINS: Record<string, string> = {
   'NDTV': 'ndtv.com',
   'NDTV Profit': 'ndtvprofit.com',
   'Times of India': 'timesofindia.indiatimes.com',
-  'The Hindu': 'thehindu.com',
-  'The Hindu International': 'thehindu.com',
-  'The Hindu Tech': 'thehindu.com',
   'Indian Express': 'indianexpress.com',
   'Indian Express World': 'indianexpress.com',
   'Indian Express Tech': 'indianexpress.com',
   'BBC World': 'bbc.co.uk',
   'NYT World': 'nytimes.com',
-  'AP News': 'apnews.com',
-  'AP International': 'apnews.com',
+  'The Guardian': 'theguardian.com',
+  'NPR World': 'npr.org',
   'Al Jazeera': 'aljazeera.com',
   'Economic Times': 'economictimes.indiatimes.com',
   'MoneyControl': 'moneycontrol.com',
