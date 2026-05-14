@@ -13,36 +13,35 @@ import {
   StyleSheet,
   Text,
   View,
-  useWindowDimensions,
+  ViewToken,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Story, StoryCard } from '../components/StoryCard';
 import { FeedStackParamList } from '../types/navigation';
 import { useSource } from '../contexts/SourceContext';
 import { loadCachedFeed, saveFeedCache } from '../utils/feedCache';
-import { rankStories } from '../utils/personalization';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { rankStories, loadProfile } from '../utils/personalization';
+import { requestNotificationPermission, sendLocalNotification } from '../utils/notifications';
+import { useSettings } from '../contexts/SettingsContext';
+import { TOPIC_SUBTOPICS, storyMatchesSubTopic } from '../utils/topics';
 
 const CARD_GAP = 12;
 
-// useWindowDimensions fires on fold-open but Samsung foldables sometimes skip
-// the event on fold-close (app is briefly backgrounded). Dimensions.addEventListener
-// catches it as a fallback so cardWidth always reflects the actual screen size.
 function useLayout() {
-  const { width: hookWidth } = useWindowDimensions();
-  const [dimWidth, setDimWidth] = useState(() => Dimensions.get('window').width);
+  const [width, setWidth] = useState(() => Dimensions.get('window').width);
 
-  useEffect(() => {
-    const sub = Dimensions.addEventListener('change', ({ window }) => {
-      setDimWidth(window.width);
-    });
-    return () => sub.remove();
+  // onLayout is the only reliable signal on Samsung foldables — Android
+  // re-lays out the entire tree on fold/unfold, firing onLayout synchronously
+  // with the new dimensions regardless of background/foreground timing.
+  const onLayout = useCallback((e: { nativeEvent: { layout: { width: number } } }) => {
+    const w = e.nativeEvent.layout.width;
+    if (w > 0) setWidth(w);
   }, []);
 
-  // Use whichever source gave the most recent value
-  const width = Math.abs(hookWidth - dimWidth) < 1 ? hookWidth : dimWidth;
   const isTablet = width >= 768;
   const cardWidth = isTablet ? Math.round(width * 0.46) : width - 28;
   return {
@@ -51,6 +50,7 @@ function useLayout() {
     snapInterval: cardWidth + CARD_GAP,
     hPadding: Math.round((width - cardWidth) / 2),
     isTablet,
+    onLayout,
   };
 }
 
@@ -70,7 +70,7 @@ type CategoryTopic = typeof CATEGORIES[number]['topic'];
 const PREFERRED_SOURCES = ['TechCrunch', 'The Verge', 'Ars Technica', 'Wired'];
 
 const SOURCE_DOMAINS: Record<string, string> = {
-  // Tech
+  // Technology
   'TechCrunch': 'techcrunch.com',
   'The Verge': 'theverge.com',
   'Ars Technica': 'arstechnica.com',
@@ -82,27 +82,24 @@ const SOURCE_DOMAINS: Record<string, string> = {
   'Engadget': 'engadget.com',
   'VentureBeat': 'venturebeat.com',
   'The Next Web': 'thenextweb.com',
-  // World
+  // World / Geopolitics
   'BBC World': 'bbc.co.uk',
   'NYT World': 'nytimes.com',
   'The Guardian': 'theguardian.com',
   'NPR World': 'npr.org',
   'Al Jazeera': 'aljazeera.com',
-  // Indian
-  'Indian Express': 'indianexpress.com',
-  'Indian Express World': 'indianexpress.com',
-  'Indian Express Tech': 'indianexpress.com',
-  'Economic Times': 'economictimes.indiatimes.com',
-  'MoneyControl': 'moneycontrol.com',
-  'Livemint': 'livemint.com',
-  'Mint': 'livemint.com',
-  'CNBC TV18': 'cnbctv18.com',
-  'The Quint': 'thequint.com',
-  'Inc42': 'inc42.com',
-  'Scroll.in': 'scroll.in',
+  // India / Markets / Business
   'NDTV': 'ndtv.com',
   'India Today': 'indiatoday.in',
   'The Print': 'theprint.in',
+  'The Quint': 'thequint.com',
+  'CNBC TV18': 'cnbctv18.com',
+  'Scroll.in': 'scroll.in',
+  'Economic Times': 'economictimes.indiatimes.com',
+  'Livemint': 'livemint.com',
+  'Mint': 'livemint.com',
+  'Inc42': 'inc42.com',
+  'Financial Express': 'financialexpress.com',
 };
 
 function faviconUrl(sourceName: string): string | null {
@@ -258,33 +255,154 @@ function groupBySource(stories: Story[]): Section[] {
 
 const BG_REFRESH_THRESHOLD_MS = 10 * 60 * 1000; // 10 min inactive → silently refresh
 
+const NOTIF_POLL_MS = 15 * 60 * 1000; // 15 min
+
 export default function FeedScreen() {
   const { activeSources } = useSource();
+  const { notifBreaking, notifTech, activeTopics, activeSubTopics } = useSettings();
   const layout = useLayout();
   const [activeTopic, setActiveTopic] = useState<CategoryTopic>('breaking');
+  const [topicRestored, setTopicRestored] = useState(false);
   const [allStories, setAllStories] = useState<Story[]>([]);
   const [pendingStories, setPendingStories] = useState<Story[] | null>(null);
   const [newCount, setNewCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [techSourceFilter, setTechSourceFilter] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const listRef = useRef<FlatList>(null);
+  useScrollToTop(listRef); // tapping the Feed tab scrolls back to top
   const lastFetchRef = useRef<number>(0);
+  const visibleIndexRef = useRef<number>(0);
+  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 10 });
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    if (viewableItems.length > 0 && viewableItems[0].index != null) {
+      visibleIndexRef.current = viewableItems[0].index;
+    }
+  });
   const activeTopicRef = useRef(activeTopic);
-  const pageRef = useRef(1); // always current — avoids stale closure in loadMore
+  const pageRef = useRef(1);
+  const loadingMoreRef = useRef(false);
+  const seenIdsRef = useRef<Set<string>>(new Set());
+  const notifBreakingRef = useRef(notifBreaking);
+  const notifTechRef = useRef(notifTech);
+
+  useEffect(() => { notifBreakingRef.current = notifBreaking; }, [notifBreaking]);
+  useEffect(() => { notifTechRef.current = notifTech; }, [notifTech]);
+
+  useEffect(() => { loadProfile(); }, []);
+  useEffect(() => { requestNotificationPermission(); }, []);
+
+  // Restore last active tab on mount (survives fold-state activity recreation)
+  useEffect(() => {
+    AsyncStorage.getItem('@ireader_active_topic').then(saved => {
+      if (saved && CATEGORIES.find(c => c.topic === saved)) {
+        const topic = saved as CategoryTopic;
+        // If the saved topic is now disabled, fall back to first enabled category
+        if (activeTopics[topic as keyof typeof activeTopics] !== false) {
+          setActiveTopic(topic);
+        } else {
+          const first = CATEGORIES.find(c => activeTopics[c.topic as keyof typeof activeTopics] !== false);
+          if (first) setActiveTopic(first.topic);
+        }
+      }
+    }).finally(() => setTopicRestored(true));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist active tab whenever it changes
+  useEffect(() => {
+    if (!topicRestored) return;
+    AsyncStorage.setItem('@ireader_active_topic', activeTopic).catch(() => {});
+  }, [activeTopic, topicRestored]);
+
+  // Save first-visible item index per topic when app backgrounds (fold/home/switch)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background' || state === 'inactive') {
+        AsyncStorage.setItem(
+          `@ireader_scroll_${activeTopicRef.current}`,
+          String(visibleIndexRef.current)
+        ).catch(() => {});
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  // Restore first-visible item after topic restored + stories loaded
+  useEffect(() => {
+    if (!topicRestored || loading) return;
+    AsyncStorage.getItem(`@ireader_scroll_${activeTopic}`).then(saved => {
+      const index = saved ? parseInt(saved, 10) : 0;
+      if (index > 0 && topicGroups.length > 0 && index < topicGroups.length) {
+        setTimeout(() => {
+          listRef.current?.scrollToIndex({
+            index,
+            animated: false,
+            viewPosition: 0,
+          });
+        }, 200);
+      }
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topicRestored, loading]);
   useEffect(() => { activeTopicRef.current = activeTopic; }, [activeTopic]);
   useEffect(() => { pageRef.current = page; }, [page]);
 
-  function filterStories(raw: Story[]): Story[] {
-    return raw.filter(
-      s =>
-        !DEVANAGARI_RE.test(s.headline) &&
-        !BLOCKED_TOPICS_RE.test(s.headline) &&
-        activeSources[s.sources?.[0]?.name ?? ''] !== false,
-    );
+  // Background poll for breaking + tech notifications regardless of active tab
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        if (notifBreakingRef.current) {
+          const res = await fetch(`${API_BASE}?topic=breaking&page=1&limit=5`);
+          const data = await res.json() as { stories: Story[] };
+          const fresh = (data.stories ?? []).filter(s => !seenIdsRef.current.has(s.id));
+          if (fresh.length > 0 && seenIdsRef.current.size > 0) {
+            sendLocalNotification(
+              `${fresh.length} Breaking ${fresh.length === 1 ? 'Story' : 'Stories'}`,
+              fresh[0]?.headline ?? 'New breaking news'
+            );
+          }
+          fresh.forEach(s => seenIdsRef.current.add(s.id));
+        }
+        if (notifTechRef.current) {
+          const res = await fetch(`${API_BASE}?topic=technology&page=1&limit=5`);
+          const data = await res.json() as { stories: Story[] };
+          const fresh = (data.stories ?? []).filter(s => !seenIdsRef.current.has(s.id));
+          if (fresh.length > 0 && seenIdsRef.current.size > 0) {
+            sendLocalNotification(
+              `${fresh.length} New Tech ${fresh.length === 1 ? 'Story' : 'Stories'}`,
+              fresh[0]?.headline ?? 'New tech news'
+            );
+          }
+          fresh.forEach(s => seenIdsRef.current.add(s.id));
+        }
+      } catch {}
+    };
+    const id = setInterval(poll, NOTIF_POLL_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  function filterStories(raw: Story[], topic?: CategoryTopic): Story[] {
+    const subs = topic ? (TOPIC_SUBTOPICS[topic] ?? []) : [];
+    const disabledSubs = subs.filter(s => activeSubTopics[`${topic}:${s}`] === false);
+
+    return raw.filter(s => {
+      if (DEVANAGARI_RE.test(s.headline)) return false;
+      if (BLOCKED_TOPICS_RE.test(s.headline)) return false;
+      if (activeSources[s.sources?.[0]?.name ?? ''] === false) return false;
+      // Sub-topic filter: only applied when at least one sub-topic is disabled
+      if (disabledSubs.length > 0) {
+        const matchesDisabled = disabledSubs.some(sub =>
+          storyMatchesSubTopic(s.headline, s.summary ?? '', sub)
+        );
+        if (matchesDisabled) return false;
+      }
+      return true;
+    });
   }
 
   // Returns filtered stories AND whether the server has more pages.
@@ -294,16 +412,17 @@ export default function FeedScreen() {
   async function fetchPage(
     topic: CategoryTopic,
     pageNum: number,
-  ): Promise<{ stories: Story[]; serverHasMore: boolean }> {
-    const res = await fetch(`${API_BASE}?topic=${topic}&page=${pageNum}&limit=20`);
+    forceRefresh = false,
+  ): Promise<{ stories: Story[]; serverHasMore: boolean; stale?: boolean }> {
+    const suffix = forceRefresh ? '&refresh=1' : '';
+    const res = await fetch(`${API_BASE}?topic=${topic}&page=${pageNum}&limit=20${suffix}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json() as { stories: Story[]; total?: number; page?: number; limit?: number };
+    const data = await res.json() as { stories: Story[]; total?: number; page?: number; limit?: number; stale?: boolean };
     const raw = data.stories ?? [];
     const total = data.total ?? 0;
-    // Use server-provided total to know if there are more pages
     const fetched = (pageNum - 1) * 20 + raw.length;
     const serverHasMore = total > 0 ? fetched < total : raw.length >= 20;
-    return { stories: filterStories(raw), serverHasMore };
+    return { stories: filterStories(raw, topic), serverHasMore, stale: !!data.stale };
   }
 
   // Silent background refresh — only shows new-stories banner, never resets
@@ -325,6 +444,9 @@ export default function FeedScreen() {
     }
   }
 
+  // Reset source filter on tab change
+  useEffect(() => { setTechSourceFilter(null); }, [activeTopic]);
+
   // Topic change: serve cache instantly, then revalidate in background
   useEffect(() => {
     setLoading(true);
@@ -337,11 +459,11 @@ export default function FeedScreen() {
 
     loadCachedFeed(activeTopic).then(async cached => {
       if (cached && cached.stories.length > 0) {
-        setAllStories(filterStories(cached.stories));
+        setAllStories(filterStories(cached.stories, activeTopic));
         setHasMore(true); // corrected on first loadMore call
         setLoading(false);
         if (cached.isStale) {
-          backgroundRefresh(activeTopic, filterStories(cached.stories));
+          backgroundRefresh(activeTopic, filterStories(cached.stories, activeTopic));
         }
       } else {
         // Cold start — must wait for network
@@ -382,15 +504,32 @@ export default function FeedScreen() {
     setPendingStories(null);
     setNewCount(0);
     try {
-      const { stories, serverHasMore } = await fetchPage(activeTopic, 1);
-      setAllStories(stories);
+      // Step 1: signal server to rebuild; it returns current (possibly stale) data immediately
+      const { stories: immediate, serverHasMore, stale } = await fetchPage(activeTopic, 1, true);
+      setAllStories(immediate);
       setPage(1);
       pageRef.current = 1;
       setHasMore(serverHasMore);
       lastFetchRef.current = Date.now();
-      saveFeedCache(activeTopic, stories);
+      saveFeedCache(activeTopic, immediate);
+
+      if (stale) {
+        // Step 2: server is rebuilding in background — wait then pick up fresh data
+        await new Promise(r => setTimeout(r, 4500));
+        const { stories: fresh } = await fetchPage(activeTopic, 1);
+        if (fresh.length > 0) {
+          const immediateIds = new Set(immediate.map(s => s.id));
+          const brandNew = fresh.filter(s => !immediateIds.has(s.id));
+          if (brandNew.length > 0) {
+            setAllStories(fresh);
+            saveFeedCache(activeTopic, fresh);
+          }
+        }
+      }
+      // Background-sync all other categories so the whole app stays fresh
+      setTimeout(() => backgroundSyncAllCategories(activeTopic), 2000);
     } catch {
-      // keep existing
+      // keep existing stories on failure
     } finally {
       setRefreshing(false);
     }
@@ -409,7 +548,13 @@ export default function FeedScreen() {
   }, [pendingStories]);
 
   const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore) return;
+    // Use a ref for the in-flight guard so stale closures can't bypass it.
+    // State-based guard (loadingMore) is unreliable here: FlatList fires
+    // onEndReached multiple times per render cycle, and the state update
+    // from setLoadingMore(true) hasn't propagated yet when the second call
+    // arrives, so the old closure still sees loadingMore=false and lets it through.
+    if (loadingMoreRef.current || !hasMore) return;
+    loadingMoreRef.current = true;
     setLoadingMore(true);
     const nextPage = pageRef.current + 1;
     try {
@@ -425,29 +570,78 @@ export default function FeedScreen() {
     } catch {
       // silently ignore — hasMore stays true so next scroll retries
     } finally {
+      loadingMoreRef.current = false;
       setLoadingMore(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadingMore, hasMore, activeTopic]); // page removed — using pageRef instead
+  }, [hasMore, activeTopic]); // loadingMore removed — ref is the guard now
 
   const visibleStories = useMemo(
-    () => rankStories(allStories.filter(s => activeSources[s.sources?.[0]?.name ?? ''] !== false)),
-    [allStories, activeSources],
+    () => rankStories(filterStories(allStories, activeTopic)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allStories, activeSources, activeTopic, activeSubTopics],
   );
 
   const allSections = useMemo(() => groupBySource(visibleStories), [visibleStories]);
   const topicGroups = useMemo(() => groupByTopic(visibleStories), [visibleStories]);
 
+  // Tech tab: unique sources from current stories, preferred first
+  const techSources = useMemo(() => {
+    if (activeTopic !== 'technology') return [];
+    const seen = new Map<string, string>(); // name -> favicon
+    for (const s of visibleStories) {
+      const name = s.sources?.[0]?.name;
+      if (name && !seen.has(name)) {
+        const fav = faviconUrl(name);
+        if (fav) seen.set(name, fav);
+      }
+    }
+    const result: { name: string; favicon: string }[] = [];
+    for (const pref of PREFERRED_SOURCES) {
+      if (seen.has(pref)) result.push({ name: pref, favicon: seen.get(pref)! });
+    }
+    for (const [name, favicon] of seen) {
+      if (!PREFERRED_SOURCES.includes(name)) result.push({ name, favicon });
+    }
+    return result;
+  }, [visibleStories, activeTopic]);
+
+  // Filter groups by selected tech source
+  const filteredGroups = useMemo(() => {
+    if (activeTopic !== 'technology' || !techSourceFilter) return topicGroups;
+    return topicGroups.filter(g => g.sources.some(s => s.name === techSourceFilter));
+  }, [topicGroups, activeTopic, techSourceFilter]);
+
+  // Silently prefetch + cache all other categories after a refresh
+  const backgroundSyncAllCategories = useCallback(async (currentTopic: CategoryTopic) => {
+    for (const cat of CATEGORIES) {
+      if (cat.topic === currentTopic) continue;
+      try {
+        const { stories } = await fetchPage(cat.topic, 1);
+        if (stories.length > 0) saveFeedCache(cat.topic, stories);
+      } catch { /* silent */ }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const visibleCategories = useMemo(
+    () => CATEGORIES.filter(c => activeTopics[c.topic as keyof typeof activeTopics] !== false),
+    [activeTopics],
+  );
+
   const isBreaking = activeTopic === 'breaking';
+  const { cardWidth, snapInterval, hPadding } = layout;
 
-  const { cardWidth, snapInterval, hPadding, isTablet } = layout;
-
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
+  const feedHeader = useMemo(() => (
+    <>
+      {/* Header — scrolls with feed */}
       <View style={styles.header}>
         <View style={styles.headerRow}>
-          <Image source={require('../assets/icon.png')} style={styles.appIcon} contentFit="cover" />
+          <Image
+            source={require('../assets/iReaderIcon.png')}
+            style={{ width: 42, height: 42, borderRadius: 10 }}
+            contentFit="contain"
+          />
           <View>
             <Text style={styles.greeting}>{greeting()}</Text>
             <Text style={styles.date}>{formattedDate()}</Text>
@@ -460,39 +654,30 @@ export default function FeedScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingHorizontal: 16,
-            flexDirection: 'row',
-            alignItems: 'center',
-            height: 72,
-          }}
+          contentContainerStyle={{ paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', height: 72 }}
           style={{ flex: 1 }}
         >
-          {CATEGORIES.map((cat, idx) => {
+          {visibleCategories.map((cat, idx) => {
             const active = cat.topic === activeTopic;
             return (
               <Pressable
                 key={cat.topic}
-                onPress={() => setActiveTopic(cat.topic)}
+                onPress={() => {
+                  if (cat.topic === activeTopic) {
+                    onRefresh();
+                  } else {
+                    setActiveTopic(cat.topic);
+                  }
+                }}
                 style={{
-                  paddingHorizontal: 14,
-                  paddingVertical: 8,
-                  borderRadius: 16,
+                  paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16,
                   backgroundColor: active ? '#FFFFFF' : 'rgba(255,255,255,0.1)',
-                  marginRight: idx < CATEGORIES.length - 1 ? 8 : 0,
-                  alignItems: 'center',
-                  minWidth: 58,
+                  marginRight: idx < visibleCategories.length - 1 ? 8 : 0,
+                  alignItems: 'center', minWidth: 58,
                 }}
               >
                 <Text style={{ fontSize: 18, lineHeight: 22 }}>{cat.icon}</Text>
-                <Text
-                  style={{
-                    color: active ? '#000000' : '#AAAAAA',
-                    fontSize: 11,
-                    fontWeight: '700',
-                    marginTop: 2,
-                  }}
-                >
+                <Text style={{ color: active ? '#000000' : '#AAAAAA', fontSize: 11, fontWeight: '700', marginTop: 2 }}>
                   {cat.label}
                 </Text>
               </Pressable>
@@ -501,57 +686,101 @@ export default function FeedScreen() {
         </ScrollView>
       </View>
 
+      {/* Tech source filter bar */}
+      {activeTopic === 'technology' && techSources.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 10, gap: 10, flexDirection: 'row', alignItems: 'center' }}
+        >
+          <Pressable
+            onPress={() => setTechSourceFilter(null)}
+            style={{
+              paddingHorizontal: 12, paddingVertical: 6, borderRadius: 99,
+              backgroundColor: !techSourceFilter ? '#FFFFFF' : 'rgba(255,255,255,0.1)',
+            }}
+          >
+            <Text style={{ color: !techSourceFilter ? '#000' : '#888', fontSize: 12, fontWeight: '700' }}>All</Text>
+          </Pressable>
+          {techSources.map(src => {
+            const active = techSourceFilter === src.name;
+            return (
+              <Pressable
+                key={src.name}
+                onPress={() => setTechSourceFilter(active ? null : src.name)}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 6,
+                  paddingHorizontal: 10, paddingVertical: 6, borderRadius: 99,
+                  backgroundColor: active ? '#FFFFFF' : 'rgba(255,255,255,0.1)',
+                }}
+              >
+                <Image source={{ uri: src.favicon }} style={{ width: 16, height: 16, borderRadius: 4 }} />
+                <Text style={{ color: active ? '#000' : '#AAA', fontSize: 12, fontWeight: '600' }}>{src.name}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
+
       {/* New stories banner */}
       {newCount > 0 && (
         <Pressable onPress={applyPending} style={styles.newBanner}>
-          <Text style={styles.newBannerText}>
-            ↑ {newCount} new {newCount === 1 ? 'story' : 'stories'} — tap to refresh
-          </Text>
+          <Text style={styles.newBannerText}>↑ {newCount} new {newCount === 1 ? 'story' : 'stories'} — tap to refresh</Text>
         </Pressable>
       )}
+    </>
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [activeTopic, visibleCategories, techSources, techSourceFilter, newCount, onRefresh, applyPending]);
 
-      {/* Feed */}
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color="#4A90D9" />
-        </View>
-      ) : error ? (
-        <View style={styles.center}>
-          <Text style={styles.errorText}>Failed to load</Text>
-          <Text style={styles.errorDetail}>{error}</Text>
-        </View>
-      ) : (
-        /* All tabs — topic-grouped carousels */
-        <FlatList
-          key={isTablet ? 'feed-tablet' : 'feed-phone'}
-          ref={listRef}
-          data={topicGroups}
-          keyExtractor={g => g.id}
-          extraData={cardWidth}
-          renderItem={({ item }) => (
-            <TopicSection group={item} isBreaking={isBreaking} cardWidth={cardWidth} snapInterval={snapInterval} hPadding={hPadding} allStories={visibleStories} />
-          )}
-          showsVerticalScrollIndicator={false}
-          removeClippedSubviews
-          maxToRenderPerBatch={3}
-          windowSize={5}
-          initialNumToRender={3}
-          onEndReached={loadMore}
-          onEndReachedThreshold={0.3}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={isBreaking ? '#FF3333' : '#AAAAAA'}
-            />
-          }
-          ListFooterComponent={
-            loadingMore
-              ? <ActivityIndicator color="#FFFFFF" style={{ marginVertical: 24 }} />
-              : <View style={{ height: 40 }} />
-          }
-        />
-      )}
+  return (
+    <SafeAreaView style={styles.container} edges={['top']} onLayout={layout.onLayout}>
+      <FlatList
+        ref={listRef}
+        data={loading || error ? [] : filteredGroups}
+        keyExtractor={g => g.id}
+        extraData={cardWidth}
+        renderItem={({ item }) => (
+          <TopicSection group={item} isBreaking={isBreaking} cardWidth={cardWidth} snapInterval={snapInterval} hPadding={hPadding} allStories={visibleStories} />
+        )}
+        ListHeaderComponent={feedHeader}
+        ListEmptyComponent={
+          loading ? (
+            <View style={styles.center}><ActivityIndicator size="large" color="#4A90D9" /></View>
+          ) : error ? (
+            <View style={styles.center}>
+              <Text style={styles.errorText}>Failed to load</Text>
+              <Text style={styles.errorDetail}>{error}</Text>
+            </View>
+          ) : null
+        }
+        showsVerticalScrollIndicator={false}
+        removeClippedSubviews
+        maxToRenderPerBatch={3}
+        windowSize={5}
+        initialNumToRender={3}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.3}
+        onViewableItemsChanged={onViewableItemsChanged.current}
+        viewabilityConfig={viewabilityConfig.current}
+        onScrollToIndexFailed={(info) => {
+          listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
+          setTimeout(() => {
+            listRef.current?.scrollToIndex({ index: info.index, animated: false, viewPosition: 0 });
+          }, 200);
+        }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={isBreaking ? '#FF3333' : '#AAAAAA'}
+          />
+        }
+        ListFooterComponent={
+          loadingMore
+            ? <ActivityIndicator color="#FFFFFF" style={{ marginVertical: 24 }} />
+            : <View style={{ height: 40 }} />
+        }
+      />
     </SafeAreaView>
   );
 }
