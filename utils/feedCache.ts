@@ -1,42 +1,36 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Story } from '../components/StoryCard';
 
-const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes — stale threshold
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-interface CacheEntry {
-  stories: Story[];
-  cachedAt: number;
-}
-
+// v3: bumped to evict old cache entries that may contain filtered-out content
 function cacheKey(topic: string): string {
-  return `@feed_v1_${topic}`;
+  return `@feed_v3_${topic}`;
 }
 
-export interface CachedFeed {
-  stories: Story[];
+export interface CachedFeed<T = unknown> {
+  feed: T[];
   isStale: boolean;
   cachedAt: number;
 }
 
-export async function loadCachedFeed(topic: string): Promise<CachedFeed | null> {
+export async function loadCachedFeed<T = unknown>(topic: string): Promise<CachedFeed<T> | null> {
   try {
     const raw = await AsyncStorage.getItem(cacheKey(topic));
     if (!raw) return null;
-    const entry = JSON.parse(raw) as CacheEntry;
-    if (!Array.isArray(entry.stories)) return null;
+    const entry = JSON.parse(raw) as { feed: T[]; cachedAt: number };
+    if (!Array.isArray(entry.feed)) return null;
     const isStale = Date.now() - entry.cachedAt > CACHE_TTL_MS;
-    return { stories: entry.stories, isStale, cachedAt: entry.cachedAt };
+    return { feed: entry.feed, isStale, cachedAt: entry.cachedAt };
   } catch {
     return null;
   }
 }
 
-export async function saveFeedCache(topic: string, stories: Story[]): Promise<void> {
+export async function saveFeedCache<T = unknown>(topic: string, feed: T[]): Promise<void> {
   try {
-    const entry: CacheEntry = { stories, cachedAt: Date.now() };
-    await AsyncStorage.setItem(cacheKey(topic), JSON.stringify(entry));
+    await AsyncStorage.setItem(cacheKey(topic), JSON.stringify({ feed, cachedAt: Date.now() }));
   } catch {
-    // best-effort; ignore storage errors
+    // best-effort
   }
 }
 

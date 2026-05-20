@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
   ActivityIndicator,
   AppState,
   AppStateStatus,
@@ -10,21 +11,29 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
+  TouchableOpacity,
   StyleSheet,
   Text,
   View,
   ViewToken,
+  useWindowDimensions,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Story, StoryCard } from '../components/StoryCard';
 import { FeedStackParamList } from '../types/navigation';
 import { useSource } from '../contexts/SourceContext';
+import { useSettings } from '../contexts/SettingsContext';
 import { loadCachedFeed, saveFeedCache } from '../utils/feedCache';
-import { rankStories } from '../utils/personalization';
+import { fireBreakingNotif, fireFavSourceNotif } from '../utils/notifications';
+import { tabBarTranslateY } from '../utils/tabBarAnim';
+import { loadProfile, rankStories, rankStoriesStandard } from '../utils/personalization';
+import { scoreClusterInterest } from '../utils/interestTopics';
+import { TOPIC_SUBTOPICS, storyMatchesSubTopic } from '../utils/topics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const CARD_GAP = 12;
@@ -54,8 +63,66 @@ function useLayout() {
 
 const API_BASE = 'https://ireader.onrender.com/api/news/feed';
 const CLUSTER_LABELS_API = 'https://ireader.onrender.com/api/news/cluster-labels';
+const AI_SUMMARY_API = 'https://ireader.onrender.com/api/news/ai-summary';
+
+// Module-level memory cache — survives re-renders, cleared on app restart
+const clusterAICache = new Map<string, { headline: string; summary: string }>();
+
+function useClusterAI(cluster: Cluster) {
+  const key = cluster.stories.slice(0, 4).map(s => s.id).join('_');
+  const storageKey = `@ai_cluster_${key}`;
+
+  const [ai, setAi] = useState<{ headline: string; summary: string } | null>(
+    () => clusterAICache.get(key) ?? null,
+  );
+
+  useEffect(() => {
+    if (cluster.stories.length < 2) return;
+    if (clusterAICache.has(key)) return;
+
+    // Check persisted cache first, then call API
+    AsyncStorage.getItem(storageKey)
+      .then(raw => {
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          clusterAICache.set(key, parsed);
+          setAi(parsed);
+          return;
+        }
+
+        const paragraphs = cluster.stories
+          .slice(0, 6)
+          .map(s => `${s.headline}. ${(s.summary ?? '').slice(0, 150)}`)
+          .filter(Boolean);
+
+        return fetch(AI_SUMMARY_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paragraphs, type: 'summary', maxWords: 160 }),
+        })
+          .then(r => r.ok ? r.json() : null)
+          .then((data: { bullets?: string[]; summary?: string } | null) => {
+            if (!data) return;
+            const bullets: string[] = data.bullets ?? (data.summary ? [data.summary] : []);
+            if (!bullets.length) return;
+            const result = {
+              headline: bullets[0],
+              summary: bullets.slice(1).join('  ') || '',
+            };
+            clusterAICache.set(key, result);
+            setAi(result);
+            AsyncStorage.setItem(storageKey, JSON.stringify(result)).catch(() => {});
+          });
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  return ai;
+}
 
 const CATEGORIES = [
+  { topic: 'myspace',        label: 'MySpace',  icon: '✨', color: '#FF6B9D' },
   { topic: 'breaking',       label: 'Breaking', icon: '🔴', color: '#FF5555' },
   { topic: 'technology',     label: 'Tech',     icon: '💻', color: '#4A90D9' },
   { topic: 'india-politics', label: 'India',    icon: '🇮🇳', color: '#FF9500' },
@@ -63,6 +130,8 @@ const CATEGORIES = [
   { topic: 'markets',        label: 'Markets',  icon: '📈', color: '#22C55E' },
   { topic: 'business',       label: 'Business', icon: '💼', color: '#A29BFE' },
 ] as const;
+
+const REAL_TOPICS = CATEGORIES.filter(c => c.topic !== 'myspace').map(c => c.topic);
 
 type CategoryTopic = typeof CATEGORIES[number]['topic'];
 
@@ -138,7 +207,12 @@ function formattedDate(): string {
 }
 
 const DEVANAGARI_RE = /[ऀ-ॿ]/;
-const BLOCKED_TOPICS_RE = /\b(cricket|ipl|bcci|test match|odi|t20i?|football|fifa|tennis|wimbledon|formula[- ]1|f1 race|chess|olympics|hockey|badminton|icc|world cup|bollywood|movie|film|actor|actress|celebrity|box office|trailer|oscar|grammy|award show|web series|ott platform)\b/i;
+// Always-blocked: deals, promo codes, phone prices
+const BLOCKED_ALWAYS_RE = /\b(promo.?codes?|coupons?|discount.?codes?|cashback|voucher|sale.?offer|deal.?alert|exclusive.?deal|special.?offer|affiliate|referral.?codes?|invite.?codes?|offer.?codes?|redeem.?codes?|flat \d+%|flash sale|best deals?|top deals?|today.{0,8}deals?|today.{0,8}offers?|limited.{0,8}offer|get \d+% off|save \d+%|\d+%\s*off|phone price|smartphone price|price drops?|price cut|price hike|lowest price|best price|launched at|starts at rs|starts at \$|goes on sale|specs leak|hands.?on review|camera test|(?:cpu|gpu|phone|device|gaming|graphics|processor)\s+benchmark|unboxing|vs comparison|budget phone|flagship phone|gadget deal|record low price|all.?time low|exchange offer)\b/i;
+// Sports — blocked unless user enables in settings
+const BLOCKED_SPORTS_RE = /\b(cricket|ipl|bcci|test match|odi|t20i?|football|fifa|tennis|wimbledon|formula[- ]1|f1 race|chess|olympics|hockey|badminton|icc|world cup|fantasy cricket|dream11|match report|scorecard|batting|bowling|wicket|wickets|run chase|penalty kick|goal scored|transfer window)\b/i;
+// Entertainment/Bollywood — blocked unless user enables in settings
+const BLOCKED_ENTERTAINMENT_RE = /\b(bollywood|tollywood|kollywood|movie|film|actor|actress|celebrity|box office|trailer|oscar|grammy|award show|web series|ott platform|music video|item song|album launch|concert tour|celebrity gossip|entertainment news|celebrity wedding|star spotted)\b/i;
 
 const TAG_COLORS = [
   { bg: 'rgba(255,107,107,0.18)', text: '#FF6B6B' },
@@ -175,15 +249,39 @@ function extractKeywords(stories: Story[]): string[] {
     .map(([w]) => '#' + w.charAt(0).toUpperCase() + w.slice(1));
 }
 
+// ── Feed types ─────────────────────────────────────────────────────────────────
+// Shape returned by the server's /api/news/feed endpoint.
+type ApiFeedItem =
+  | { type: 'cluster'; topicTitle: string; topicSummary: string; articles: Story[]; _category?: string }
+  | (Story & { type: 'article'; _category?: string });
+
+function normalizeStory(a: Record<string, unknown>): Story {
+  return { ...(a as unknown as Story), imageUrl: (a.imageUrl as string | null | undefined) ?? '' };
+}
+
+function normalizeFeedItems(raw: unknown[]): ApiFeedItem[] {
+  return (raw as Array<Record<string, unknown>>).map(item => {
+    if (item.type === 'cluster') {
+      const articles = Array.isArray(item.articles)
+        ? (item.articles as Array<Record<string, unknown>>).map(normalizeStory)
+        : [];
+      return { type: 'cluster', topicTitle: String(item.topicTitle ?? ''), topicSummary: String(item.topicSummary ?? ''), articles } as ApiFeedItem;
+    }
+    return { ...normalizeStory(item), type: 'article' } as ApiFeedItem;
+  });
+}
+
 // ── Cluster types ─────────────────────────────────────────────────────────────
 interface Cluster {
   id: string;
   headline: string;
+  topicLabel: string;
   summary: string;
   imageUrl: string;
   publishedAt: string;
-  keyTerms: string[];   // shared topic hashtags for display
-  stories: Story[];     // all articles in this cluster
+  stories: Story[];
+  isBreaking?: boolean;
+  _category?: string;
 }
 
 interface TermData { terms: Set<string>; entities: Set<string> }
@@ -211,8 +309,8 @@ function extractTermData(text: string): TermData {
     const lower = w.toLowerCase();
     if (STOP_WORDS.has(lower)) continue;
     terms.add(lower);
-    // Named entity: capitalised word not at the very start of input
-    if (i > 0 && /^[A-Z]/.test(w)) entities.add(lower);
+    // Named entity: capitalised word, not at sentence start, not a generic term
+    if (i > 0 && /^[A-Z]/.test(w) && !ENTITY_STOP.has(lower)) entities.add(lower);
   }
   return { terms, entities };
 }
@@ -235,8 +333,24 @@ function storySimilarity(a: TermData, b: TermData): number {
   return unionW > 0 ? intersection / unionW : 0;
 }
 
-const CLUSTER_THRESHOLD = 0.15;
+const CLUSTER_THRESHOLD = 0.33;
 const MAX_CLUSTER_SIZE = 8;
+
+// Generic words that appear in nearly every headline — excluding these prevents
+// "India" + "Government" from force-clustering unrelated stories together.
+const ENTITY_STOP = new Set([
+  'india','indian','world','government','minister','president','party','court',
+  'budget','market','stock','bank','delhi','mumbai','police','army','election',
+  'official','leader','people','state','national','report','news','today',
+  'says','said','told','amid','after','before','over','during','monday',
+  'tuesday','wednesday','thursday','friday','saturday','sunday','january',
+  'february','march','april','june','july','august','september','october',
+  'november','december',
+  // common Indian political terms — too generic to cluster on
+  'modi','bjp','congress','rahul','gandhi','pm','cm','mla','mp','lok','sabha',
+  'rajya','union','centre','central','federal','department','ministry','scheme',
+  'opposition','ruling','coalition','alliance','government','regime',
+]);
 
 function clusterStories(stories: Story[]): Cluster[] {
   const deduped = dedupeByHeadline(stories);
@@ -298,27 +412,15 @@ function clusterStories(stories: Story[]): Cluster[] {
     }
     const rep = members[repIdx];
 
-    // Shared key terms: cross-story entities first, then high-freq terms
-    const termFreq = new Map<string, number>();
-    const entitySet = new Set<string>();
-    for (const i of capped) {
-      for (const e of termData[i].entities) { entitySet.add(e); termFreq.set(e, (termFreq.get(e) ?? 0) + 1); }
-      for (const t of termData[i].terms)    { termFreq.set(t, (termFreq.get(t) ?? 0) + 1); }
-    }
-    const keyTerms = [...termFreq.entries()]
-      .filter(([t, c]) => c >= Math.min(2, members.length) || entitySet.has(t))
-      .sort((a, b) => ((entitySet.has(b[0]) ? 3 : 0) + b[1]) - ((entitySet.has(a[0]) ? 3 : 0) + a[1]))
-      .slice(0, 4)
-      .map(([t]) => '#' + t.charAt(0).toUpperCase() + t.slice(1));
-
     clusters.push({
       id: rep.id,
       headline: rep.headline,
+      topicLabel: generateClusterLabel(members),
       summary: rep.summary,
       imageUrl: rep.imageUrl,
       publishedAt: rep.publishedAt,
-      keyTerms,
       stories: members,
+      isBreaking: members.some(s => s.isBreaking || (Date.now() - new Date(s.publishedAt).getTime()) < 60 * 60 * 1000),
     });
   }
 
@@ -331,7 +433,7 @@ function clusterStories(stories: Story[]): Cluster[] {
 
 async function fetchAILabels(topic: string, stories: Story[]): Promise<Map<string, string>> {
   try {
-    const headlines = stories.slice(0, 40).map(s => ({ id: s.id, text: s.headline }));
+    const headlines = stories.slice(0, 80).map(s => ({ id: s.id, text: s.headline }));
     const res = await fetch(CLUSTER_LABELS_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -369,6 +471,61 @@ function generateTopicLabel(headline: string): string {
   return picked.join(' ') || headline.slice(0, 28).trim();
 }
 
+// Picks words that appear across MULTIPLE stories so the label reflects the shared
+// theme rather than just one story's headline.
+function generateClusterLabel(stories: Story[]): string {
+  if (stories.length === 1) return generateTopicLabel(stories[0].headline);
+  const freq: Record<string, number> = {};
+  for (const story of stories) {
+    const seen = new Set<string>();
+    for (const w of story.headline.split(/[\s,;:–—\-'"()[\]]+/)) {
+      const clean = w.replace(/[^a-zA-Z0-9]/g, '');
+      const lower = clean.toLowerCase();
+      if (clean.length > 2 && !LABEL_SKIP.has(lower) && !seen.has(lower)) {
+        seen.add(lower);
+        freq[clean] = (freq[clean] ?? 0) + 1;
+      }
+    }
+  }
+  const shared = Object.entries(freq)
+    .filter(([, c]) => c >= 2)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([w]) => w);
+  return shared.length > 0 ? shared.join(' ') : generateTopicLabel(stories[0].headline);
+}
+
+function feedToClusterGroups(feed: ApiFeedItem[]): Cluster[] {
+  return feed.flatMap((item): Cluster[] => {
+    if (item.type === 'cluster') {
+      const rep = item.articles[0];
+      if (!rep) return [];
+      return [{
+        id: `cluster-${rep.id}`,
+        headline: item.topicTitle,
+        topicLabel: item.topicTitle,
+        summary: item.topicSummary || rep.summary,
+        imageUrl: rep.imageUrl ?? '',
+        publishedAt: rep.publishedAt,
+        stories: item.articles,
+        isBreaking: item.articles.some(s => s.isBreaking || (Date.now() - new Date(s.publishedAt).getTime()) < 60 * 60 * 1000),
+        _category: item._category,
+      }];
+    }
+    return [{
+      id: item.id,
+      headline: item.headline,
+      topicLabel: generateTopicLabel(item.headline),
+      summary: item.summary,
+      imageUrl: item.imageUrl ?? '',
+      publishedAt: item.publishedAt,
+      stories: [item as Story],
+      isBreaking: (item as Story).isBreaking || (Date.now() - new Date(item.publishedAt).getTime()) < 60 * 60 * 1000,
+      _category: item._category,
+    }];
+  });
+}
+
 function groupBySource(stories: Story[]): Section[] {
   const map = new Map<string, Story[]>();
   for (const story of stories) {
@@ -388,39 +545,96 @@ const BG_REFRESH_THRESHOLD_MS = 10 * 60 * 1000; // 10 min inactive → silently 
 
 export default function FeedScreen() {
   const { activeSources } = useSource();
+  const { notifBreaking, notifSources, favSources, favTopics, showSports, showEntertainment, activeSubTopics, topicInterests } = useSettings();
   const layout = useLayout();
+  const insets = useSafeAreaInsets();
   const [activeTopic, setActiveTopic] = useState<CategoryTopic>('breaking');
   const [topicRestored, setTopicRestored] = useState(false);
-  const [allStories, setAllStories] = useState<Story[]>([]);
-  const [pendingStories, setPendingStories] = useState<Story[] | null>(null);
+  const [allFeed, setAllFeed] = useState<ApiFeedItem[]>([]);
+  const [pendingFeed, setPendingFeed] = useState<ApiFeedItem[] | null>(null);
   const [newCount, setNewCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [techSourceFilter, setTechSourceFilter] = useState<string | null>(null);
-  const [aiLabels, setAiLabels] = useState<Map<string, string>>(new Map());
-  const aiLabelKeyRef = useRef<string>('');
   const listRef = useRef<FlatList>(null);
-  useScrollToTop(listRef); // tapping the Feed tab icon scrolls back to top
+  // useScrollToTop tries scrollToIndex first (crashes when item 0 is off-screen).
+  // Wrapping in a ref that only exposes scrollToTop forces it down the safe path.
+  const scrollTopRef = useRef({ scrollToTop: () => listRef.current?.scrollToOffset({ offset: 0, animated: true }) });
+  useScrollToTop(scrollTopRef as never);
   const lastFetchRef = useRef<number>(0);
   const visibleIndexRef = useRef<number>(0);
-  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 10 });
+  const scrollSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50, minimumViewTime: 100 });
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     if (viewableItems.length > 0 && viewableItems[0].index != null) {
       visibleIndexRef.current = viewableItems[0].index;
+      // Persist continuously so fold/unfold can restore even if app never backgrounded
+      if (scrollSaveTimerRef.current) clearTimeout(scrollSaveTimerRef.current);
+      scrollSaveTimerRef.current = setTimeout(() => {
+        AsyncStorage.setItem(
+          `@ireader_scroll_${activeTopicRef.current}`,
+          String(visibleIndexRef.current),
+        ).catch(() => {});
+      }, 500);
     }
   });
   const activeTopicRef = useRef(activeTopic);
-  const pageRef = useRef(1);
-  const loadingMoreRef = useRef(false); // ref guard — state update lags, ref is immediate
+  const prevScrollYRef = useRef(0);
+  const tabBarVisibleRef = useRef(true);
+  const carouselRefs = useRef<Record<string, ScrollView | null>>({});
+  const carouselOffsets = useRef<Record<string, number>>({});
+  const feedOpacity = useRef(new Animated.Value(1)).current;
   useEffect(() => { activeTopicRef.current = activeTopic; }, [activeTopic]);
-  useEffect(() => { pageRef.current = page; }, [page]);
+
+  // Fold/unfold: width changes → instant jump to same article, no animation
+  const { width } = useWindowDimensions();
+  const prevWidthRef = useRef(width);
+  useEffect(() => {
+    if (prevWidthRef.current === width) return;
+    prevWidthRef.current = width;
+    const index = visibleIndexRef.current;
+    if (!index || index <= 0) return;
+    const ITEM_HEIGHT = 420 + 16;
+    feedOpacity.setValue(0);
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToOffset({ offset: index * ITEM_HEIGHT, animated: false });
+      setTimeout(() => {
+        Animated.timing(feedOpacity, { toValue: 1, duration: 120, useNativeDriver: true }).start();
+      }, 100);
+    });
+  }, [width, feedOpacity]);
+
+
+  // Restore tab bar when navigating away from Feed (e.g. to Saved/Settings)
+  useFocusEffect(useCallback(() => {
+    return () => {
+      if (!tabBarVisibleRef.current) {
+        tabBarVisibleRef.current = true;
+        Animated.timing(tabBarTranslateY, { toValue: 0, duration: 200, useNativeDriver: true }).start();
+      }
+    };
+  }, []));
+
+  const handleFeedScroll = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
+    const y = e.nativeEvent.contentOffset.y;
+    const dy = y - prevScrollYRef.current;
+    prevScrollYRef.current = y;
+    if (y < 80 && !tabBarVisibleRef.current) {
+      tabBarVisibleRef.current = true;
+      Animated.timing(tabBarTranslateY, { toValue: 0, duration: 250, useNativeDriver: true }).start();
+    } else if (dy > 10 && tabBarVisibleRef.current) {
+      tabBarVisibleRef.current = false;
+      Animated.timing(tabBarTranslateY, { toValue: 160, duration: 200, useNativeDriver: true }).start();
+    } else if (dy < -8 && !tabBarVisibleRef.current) {
+      tabBarVisibleRef.current = true;
+      Animated.timing(tabBarTranslateY, { toValue: 0, duration: 250, useNativeDriver: true }).start();
+    }
+  }, []);
 
   // Restore the last active tab on mount — survives fold/unfold activity recreation
   useEffect(() => {
+    loadProfile();
     AsyncStorage.getItem('@ireader_active_topic').then(saved => {
       if (saved && CATEGORIES.find(c => c.topic === saved)) {
         setActiveTopic(saved as CategoryTopic);
@@ -453,98 +667,130 @@ export default function FeedScreen() {
     if (activeTopic !== 'technology') setTechSourceFilter(null);
   }, [activeTopic]);
 
-  function filterStories(raw: Story[]): Story[] {
-    return raw.filter(
-      s =>
-        !DEVANAGARI_RE.test(s.headline) &&
-        !BLOCKED_TOPICS_RE.test(s.headline) &&
-        activeSources[s.sources?.[0]?.name ?? ''] !== false,
-    );
+  function isBlocked(headline: string, source?: string): boolean {
+    if (DEVANAGARI_RE.test(headline)) return true;
+    if (BLOCKED_ALWAYS_RE.test(headline)) return true;
+    if (!showSports && BLOCKED_SPORTS_RE.test(headline)) return true;
+    if (!showEntertainment && BLOCKED_ENTERTAINMENT_RE.test(headline)) return true;
+    if (source === 'India Today' && /\bdiscount\b/i.test(headline)) return true;
+    return false;
   }
 
-  // Returns filtered stories AND whether the server has more pages.
-  // hasMore is based on the RAW server count before frontend filtering so
-  // a page where the Hindi/sports filter removes some items doesn't falsely
-  // signal "end of feed".
-  async function fetchPage(
-    topic: CategoryTopic,
-    pageNum: number,
-    force = false,
-  ): Promise<{ stories: Story[]; serverHasMore: boolean }> {
+  function filterFeedItems(feed: ApiFeedItem[]): ApiFeedItem[] {
+    const topicSubs = (TOPIC_SUBTOPICS as Record<string, string[]>)[activeTopic] ?? [];
+    const disabledSubs = topicSubs.filter(s => activeSubTopics[`${activeTopic}:${s}`] === false);
+
+    function blockedBySubTopic(headline: string, summary: string): boolean {
+      if (disabledSubs.length === 0) return false;
+      return disabledSubs.some(sub => storyMatchesSubTopic(headline, summary, sub));
+    }
+
+    const out: ApiFeedItem[] = [];
+    for (const item of feed) {
+      if (item.type === 'cluster') {
+        const filtered = item.articles.filter(a =>
+          !isBlocked(a.headline, a.sources?.[0]?.name) &&
+          activeSources[a.sources?.[0]?.name ?? ''] !== false &&
+          !blockedBySubTopic(a.headline, a.summary ?? ''),
+        );
+        if (filtered.length > 0) out.push(filtered.length !== item.articles.length ? { ...item, articles: filtered } : item);
+      } else {
+        if (isBlocked(item.headline, item.sources?.[0]?.name)) continue;
+        if (activeSources[item.sources?.[0]?.name ?? ''] === false) continue;
+        if (blockedBySubTopic(item.headline, item.summary ?? '')) continue;
+        out.push(item);
+      }
+    }
+    return out;
+  }
+
+  async function fetchFeed(topic: CategoryTopic, force = false): Promise<ApiFeedItem[]> {
+    if (topic === 'myspace') {
+      const forceParam = force ? '&force=1' : '';
+      const results = await Promise.all(
+        REAL_TOPICS.map(t =>
+          fetch(`${API_BASE}?topic=${t}${forceParam}`)
+            .then(r => r.ok ? r.json() : { feed: [] })
+            .then((d: { feed?: unknown[] }) =>
+              normalizeFeedItems(d.feed ?? []).map(item => ({ ...item, _category: t }))
+            )
+            .catch(() => [] as ApiFeedItem[])
+        )
+      );
+      return results.flat();
+    }
     const forceParam = force ? '&force=1' : '';
-    const res = await fetch(`${API_BASE}?topic=${topic}&page=${pageNum}&limit=100${forceParam}`);
+    const res = await fetch(`${API_BASE}?topic=${topic}${forceParam}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json() as { stories: Story[]; total?: number; page?: number; limit?: number };
-    const raw = data.stories ?? [];
-    const total = data.total ?? 0;
-    // Use server-provided total to know if there are more pages
-    const fetched = (pageNum - 1) * 100 + raw.length;
-    const serverHasMore = total > 0 ? fetched < total : raw.length >= 100;
-    return { stories: filterStories(raw), serverHasMore };
+    const data = await res.json() as { feed?: unknown[] };
+    return normalizeFeedItems(data.feed ?? []);
   }
 
-  // Silent background refresh — only shows new-stories banner, never resets
-  // the currently visible list (which would break scroll position & pagination).
-  async function backgroundRefresh(topic: CategoryTopic, current: Story[]) {
+  function feedItemId(item: ApiFeedItem): string {
+    return item.type === 'cluster' ? (item.articles[0]?.id ?? '') : item.id;
+  }
+
+  async function backgroundRefresh(topic: CategoryTopic, current: ApiFeedItem[]) {
     try {
-      const { stories: fresh } = await fetchPage(topic, 1);
+      const fresh = await fetchFeed(topic);
       lastFetchRef.current = Date.now();
       await saveFeedCache(topic, fresh);
-      const currentIds = new Set(current.map(s => s.id));
-      const brandNew = fresh.filter(s => !currentIds.has(s.id));
+      const currentIds = new Set(current.map(feedItemId));
+      const brandNew = fresh.filter(item => !currentIds.has(feedItemId(item)));
+
+      // Fire local notifications for new breaking news and fav source articles.
+      const newArticles = brandNew.flatMap(item =>
+        item.type === 'cluster' ? item.articles : [item as Story],
+      );
+      for (const a of newArticles) {
+        const sourceName = a.sources?.[0]?.name ?? '';
+        const isBreakingArticle = a.isBreaking ?? false;
+        const isFavSource = favSources.includes(sourceName);
+        const isFavTopic = favTopics.includes(topic);
+        if (notifBreaking && isBreakingArticle) {
+          fireBreakingNotif(a.id, a.headline).catch(() => {});
+        } else if (notifSources && (isFavSource || isFavTopic)) {
+          fireFavSourceNotif(a.id, sourceName || 'iReader', a.headline).catch(() => {});
+        }
+      }
+
       if (brandNew.length > 0) {
-        setPendingStories(fresh);
+        setPendingFeed(fresh);
         setNewCount(brandNew.length);
       }
-      // No new stories → cache updated silently, visible list untouched
     } catch {
       // silent — user still sees last known good state
     }
   }
 
-  // Topic change: serve cache instantly, always revalidate in background on tab switch
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
-    setAllStories([]);
-    setPendingStories(null);
+    setAllFeed([]);
+    setPendingFeed(null);
     setNewCount(0);
-    setHasMore(true);
-    setPage(1);
-    pageRef.current = 1;
-    setAiLabels(new Map());
-    aiLabelKeyRef.current = '';
 
-    loadCachedFeed(activeTopic).then(async cached => {
-      if (cached && cached.stories.length > 0) {
-        setAllStories(filterStories(cached.stories));
-        setHasMore(true); // corrected on first loadMore call
+    loadCachedFeed<ApiFeedItem>(activeTopic).then(async cached => {
+      if (cancelled) return;
+      if (cached && cached.feed.length > 0) {
+        setAllFeed(cached.feed);
         setLoading(false);
-        // Restore scroll position saved before fold/unfold/background
-        AsyncStorage.getItem(`@ireader_scroll_${activeTopic}`).then(saved => {
-          const index = saved ? parseInt(saved, 10) : 0;
-          if (index > 0) {
-            setTimeout(() => {
-              listRef.current?.scrollToIndex({ index, animated: false, viewPosition: 0 });
-            }, 150);
-          }
-        }).catch(() => {});
-        // Always revalidate on tab switch so every tab shows fresh stories quickly.
-        backgroundRefresh(activeTopic, filterStories(cached.stories));
+        backgroundRefresh(activeTopic, cached.feed);
       } else {
-        // Cold start — must wait for network
         try {
-          const { stories, serverHasMore } = await fetchPage(activeTopic, 1);
-          setAllStories(stories);
-          setHasMore(serverHasMore);
+          const fresh = await fetchFeed(activeTopic);
+          if (cancelled) return;
+          setAllFeed(fresh);
           lastFetchRef.current = Date.now();
-          saveFeedCache(activeTopic, stories);
+          saveFeedCache(activeTopic, fresh).catch(() => {});
         } catch (e: any) {
-          setError(e.message);
+          if (!cancelled) setError(e.message);
         } finally {
-          setLoading(false);
+          if (!cancelled) setLoading(false);
         }
       }
     });
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTopic]);
 
@@ -557,51 +803,32 @@ export default function FeedScreen() {
       if (next !== 'active' || !wasBackground) return;
       const elapsed = Date.now() - lastFetchRef.current;
       if (elapsed > BG_REFRESH_THRESHOLD_MS) {
-        backgroundRefresh(activeTopicRef.current, allStories);
+        backgroundRefresh(activeTopicRef.current, allFeed);
       }
     });
     return () => sub.remove();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allStories]);
+  }, [allFeed]);
 
-  // Background AI cluster-label fetch. Fires when stories change (new topic load
-  // or pull-to-refresh). Keyed by first story ID so loadMore doesn't re-trigger.
-  // Deterministic labels are shown immediately; AI labels update cluster headers
-  // once the server responds (cached on server for 30 min, ~1-2s on cold call).
-  useEffect(() => {
-    if (allStories.length < 3) return;
-    const key = `${activeTopic}:${allStories[0]?.id ?? ''}`;
-    if (aiLabelKeyRef.current === key) return;
-    aiLabelKeyRef.current = key;
-    fetchAILabels(activeTopic, allStories).then(labels => {
-      if (labels.size > 0) setAiLabels(labels);
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allStories, activeTopic]);
 
   // Fire-and-forget prewarm for all other topics so every tab stays fresh
   function prewarmOtherTopics(exclude: CategoryTopic) {
-    CATEGORIES.forEach(cat => {
-      if (cat.topic !== exclude) {
-        fetch(`${API_BASE}?topic=${cat.topic}&page=1&limit=20&force=1`).catch(() => {});
+    REAL_TOPICS.forEach(t => {
+      if (t !== exclude) {
+        fetch(`${API_BASE}?topic=${t}`).catch(() => {});
       }
     });
   }
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    setPendingStories(null);
+    setPendingFeed(null);
     setNewCount(0);
     try {
-      // force=1 tells the server to do a synchronous rebuild — guaranteed fresh data
-      const { stories, serverHasMore } = await fetchPage(activeTopic, 1, true);
-      setAllStories(stories);
-      setPage(1);
-      pageRef.current = 1;
-      setHasMore(serverHasMore);
+      const fresh = await fetchFeed(activeTopic, true);
+      setAllFeed(fresh);
       lastFetchRef.current = Date.now();
-      saveFeedCache(activeTopic, stories);
-      // Keep other tabs fresh in the background
+      saveFeedCache(activeTopic, fresh).catch(() => {});
       prewarmOtherTopics(activeTopic);
     } catch {
       // keep existing
@@ -612,109 +839,188 @@ export default function FeedScreen() {
   }, [activeTopic]);
 
   const applyPending = useCallback(() => {
-    if (!pendingStories) return;
-    setAllStories(pendingStories);
-    setPendingStories(null);
+    if (!pendingFeed) return;
+    setAllFeed(pendingFeed);
+    setPendingFeed(null);
     setNewCount(0);
-    setPage(1);
-    pageRef.current = 1;
-    setHasMore(true);
     listRef.current?.scrollToOffset({ offset: 0, animated: true });
-  }, [pendingStories]);
+  }, [pendingFeed]);
 
-  const loadMore = useCallback(async () => {
-    if (loadingMoreRef.current || !hasMore) return;
-    loadingMoreRef.current = true;
-    setLoadingMore(true);
-    const nextPage = pageRef.current + 1;
-    try {
-      const { stories: more, serverHasMore } = await fetchPage(activeTopic, nextPage);
-      setAllStories(prev => {
-        const existingIds = new Set(prev.map(s => s.id));
-        const newOnes = more.filter(s => !existingIds.has(s.id));
-        return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
-      });
-      setHasMore(serverHasMore);
-      pageRef.current = nextPage;
-      // Delay clearing the guard: FlatList re-measures after setAllStories commits
-      // and re-fires onEndReached if scroll is still near the bottom. Keeping the
-      // ref true for ~400 ms lets the layout settle before the next fetch is allowed.
-      setTimeout(() => { loadingMoreRef.current = false; }, 400);
-    } catch {
-      // Reset immediately on error so the next scroll can retry
-      loadingMoreRef.current = false;
-    } finally {
-      setLoadingMore(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasMore, activeTopic]);
 
-  const visibleStories = useMemo(
-    () => rankStories(allStories.filter(s => activeSources[s.sources?.[0]?.name ?? ''] !== false)),
-    [allStories, activeSources],
+  // Filter by blocked content, active sources, and disabled subtopics
+  const filteredFeed = useMemo(
+    () => filterFeedItems(allFeed),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allFeed, activeSources, activeTopic, activeSubTopics, showSports, showEntertainment],
   );
 
-  // Extract unique tech sources for the source filter bar
+  // Extract unique tech sources for the filter bar
   const techSources = useMemo(() => {
     if (activeTopic !== 'technology') return [] as string[];
+    const allArticles = filteredFeed.flatMap(item =>
+      item.type === 'cluster' ? item.articles : [item],
+    );
     const seen = new Set<string>();
     const ordered: string[] = [];
-    // Preferred sources first
     for (const name of PREFERRED_SOURCES) {
-      if (visibleStories.some(s => s.sources?.[0]?.name === name)) {
+      if (allArticles.some(s => s.sources?.[0]?.name === name)) {
         seen.add(name); ordered.push(name);
       }
     }
-    // Then any other sources in the feed
-    for (const s of visibleStories) {
+    for (const s of allArticles) {
       const name = s.sources?.[0]?.name;
       if (name && !seen.has(name)) { seen.add(name); ordered.push(name); }
     }
     return ordered.slice(0, 8);
-  }, [activeTopic, visibleStories]);
+  }, [activeTopic, filteredFeed]);
 
-  // Apply tech source filter before grouping
-  const displayStories = useMemo(() => {
-    if (activeTopic !== 'technology' || !techSourceFilter) return visibleStories;
-    return visibleStories.filter(s => s.sources?.[0]?.name === techSourceFilter);
-  }, [visibleStories, activeTopic, techSourceFilter]);
-
-  const clusterGroups = useMemo((): Cluster[] => {
-    const clusters = clusterStories(displayStories);
-    if (aiLabels.size === 0) return clusters;
-    return clusters.map(cluster => {
-      // Majority vote: which AI label covers the most stories in this cluster?
-      const votes = new Map<string, number>();
-      for (const s of cluster.stories) {
-        const lbl = aiLabels.get(s.id);
-        if (lbl) votes.set(lbl, (votes.get(lbl) ?? 0) + 1);
+  // Apply tech source filter
+  const displayFeed = useMemo(() => {
+    if (activeTopic !== 'technology' || !techSourceFilter) return filteredFeed;
+    const out: ApiFeedItem[] = [];
+    for (const item of filteredFeed) {
+      if (item.type === 'cluster') {
+        const filtered = item.articles.filter(a => a.sources?.[0]?.name === techSourceFilter);
+        if (filtered.length > 0) out.push({ ...item, articles: filtered });
+      } else if (item.sources?.[0]?.name === techSourceFilter) {
+        out.push(item);
       }
-      if (votes.size === 0) return cluster;
-      const sorted = [...votes.entries()].sort((a, b) => b[1] - a[1]);
-      const best = sorted[0]?.[0];
-      if (!best) return cluster;
-      return { ...cluster, headline: best };
+    }
+    return out;
+  }, [filteredFeed, activeTopic, techSourceFilter]);
+
+  // Convert server-clustered feed to Cluster[] for rendering — dedupe by id to guard against
+  // duplicate articles coming from the server (same URL fetched from multiple RSS sources).
+  const clusterGroups = useMemo((): Cluster[] => {
+    const seen = new Set<string>();
+    return feedToClusterGroups(displayFeed).filter(c => {
+      if (!c.id || seen.has(c.id)) return false;
+      seen.add(c.id);
+      return true;
     });
-  }, [displayStories, aiLabels]);
+  }, [displayFeed]);
+
+  // Re-rank clusters: MySpace uses personalized scoring + diversity floor;
+  // all other tabs use standard importance × freshness × velocity (no user signal).
+  const rankedClusterGroups = useMemo((): Cluster[] => {
+    if (clusterGroups.length === 0) return clusterGroups;
+
+    const proxies = clusterGroups.map((c, i) => ({
+      id: c.id,
+      headline: c.headline,
+      summary: c.summary,
+      sources: c.stories[0]?.sources ?? [],
+      publishedAt: c.publishedAt,
+      imageUrl: c.imageUrl,
+      isBreaking: c.stories.some(s => s.isBreaking),
+      isTrending: c.stories.length >= 3,
+      _i: i,
+      _category: c._category,
+      _categoryBonus: favTopics.includes(c._category ?? '') ? 5 : 0,
+    }));
+
+    if (activeTopic === 'myspace') {
+      // Add interest score to each proxy
+      const proxiesWithInterest = proxies.map(p => ({
+        ...p,
+        _interestBonus: scoreClusterInterest(
+          clusterGroups[p._i].headline,
+          clusterGroups[p._i].summary,
+          topicInterests,
+        ),
+      }));
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ranked = (rankStories(proxiesWithInterest as any) as any[]).map((p: any) => clusterGroups[p._i]);
+
+      // Split: breaking (< 1hr or flagged) vs rest
+      const breaking: Cluster[] = [];
+      const rest: Cluster[] = [];
+      for (const c of ranked) {
+        const ageMs = Date.now() - new Date(c.publishedAt).getTime();
+        if (c.isBreaking || ageMs < 60 * 60 * 1000) breaking.push(c);
+        else rest.push(c);
+      }
+
+      // Top 5 breaking first, then diversity-capped mix up to 50 total
+      const top5Breaking = breaking.slice(0, 5);
+      const remaining = [...breaking.slice(5), ...rest];
+      const catCount: Record<string, number> = {};
+      const result: Cluster[] = [...top5Breaking];
+      for (const cluster of remaining) {
+        if (result.length >= 50) break;
+        const cat = cluster._category ?? 'unknown';
+        const count = catCount[cat] ?? 0;
+        if (count >= 10) continue;
+        catCount[cat] = count + 1;
+        result.push(cluster);
+      }
+      return result;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (rankStoriesStandard(proxies as any) as any[]).map((p: any) => clusterGroups[p._i]);
+  }, [clusterGroups, activeTopic, favTopics, topicInterests]);
+
+  // Restore scroll position after Activity recreation (fold/unfold).
+  // Tracks the last data-length we restored for, so it fires again if data reloads
+  // from scratch (Activity recreated) but not on normal incremental renders.
+  const lastRestoredLengthRef = useRef<Record<string, number>>({});
+  const scrollFailTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    let t1: ReturnType<typeof setTimeout>;
+    let t2: ReturnType<typeof setTimeout>;
+    if (rankedClusterGroups.length === 0) {
+      // Data cleared — reset so next load triggers restore
+      lastRestoredLengthRef.current[activeTopic] = 0;
+      return;
+    }
+    // Only restore when data goes from 0 → N (fresh load), not on subsequent renders
+    if ((lastRestoredLengthRef.current[activeTopic] ?? 0) > 0) return;
+    lastRestoredLengthRef.current[activeTopic] = rankedClusterGroups.length;
+    AsyncStorage.getItem(`@ireader_scroll_${activeTopic}`).then(saved => {
+      if (!saved) return;
+      const idx = parseInt(saved, 10);
+      if (!isNaN(idx) && idx > 0 && idx < rankedClusterGroups.length) {
+        // Hide feed immediately so user never sees scroll from position 0 → idx
+        feedOpacity.setValue(0);
+        t1 = setTimeout(() => {
+          listRef.current?.scrollToIndex({ index: idx, animated: false, viewPosition: 0 });
+          // Fade in after scroll lands (extra 350ms covers onScrollToIndexFailed retry)
+          t2 = setTimeout(() => {
+            Animated.timing(feedOpacity, { toValue: 1, duration: 120, useNativeDriver: true }).start();
+          }, 350);
+        }, 50);
+      }
+    }).catch(() => {});
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTopic, rankedClusterGroups.length]);
+
+  // Flat article list for passing to StoryCard (related-stories feature)
+  const allArticles = useMemo((): Story[] =>
+    displayFeed.flatMap(item => item.type === 'cluster' ? item.articles : [item]),
+  [displayFeed]);
 
   const activeCat = CATEGORIES.find(c => c.topic === activeTopic) ?? CATEGORIES[0];
   const isBreaking = activeTopic === 'breaking';
 
   const { cardWidth, snapInterval, hPadding, isTablet } = layout;
 
-  // Tap same pill → force-refresh that tab
+  // Tap same pill → force-refresh that tab; tap different pill → switch + scroll to top
   const handleCategoryPress = useCallback((topic: CategoryTopic) => {
     if (topic === activeTopic) {
       onRefresh();
     } else {
+      listRef.current?.scrollToOffset({ offset: 0, animated: false });
       setActiveTopic(topic);
     }
   }, [activeTopic, onRefresh]);
 
   const feedHeader = (
     <View>
-      {/* Header — scrolls with feed */}
-      <View style={styles.header}>
+      {/* Header — scrolls with feed; paddingTop accounts for transparent status bar */}
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.headerRow}>
           <Image source={require('../assets/icon.png')} style={styles.appIcon} contentFit="cover" />
           <View>
@@ -725,7 +1031,7 @@ export default function FeedScreen() {
       </View>
 
       {/* Category tabs — also scrolls with feed */}
-      <View style={{ height: 72, marginBottom: 8 }}>
+      <View style={{ height: 48, marginBottom: 8 }}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -733,28 +1039,25 @@ export default function FeedScreen() {
             paddingHorizontal: 16,
             flexDirection: 'row',
             alignItems: 'center',
-            height: 72,
+            height: 48,
+            gap: 8,
           }}
           style={{ flex: 1 }}
         >
-          {CATEGORIES.map((cat, idx) => {
+          {CATEGORIES.map(cat => {
             const active = cat.topic === activeTopic;
             return (
               <Pressable
                 key={cat.topic}
                 onPress={() => handleCategoryPress(cat.topic)}
                 style={{
-                  paddingHorizontal: 14,
+                  paddingHorizontal: 16,
                   paddingVertical: 8,
-                  borderRadius: 16,
+                  borderRadius: 20,
                   backgroundColor: active ? '#FFFFFF' : 'rgba(255,255,255,0.1)',
-                  marginRight: idx < CATEGORIES.length - 1 ? 8 : 0,
-                  alignItems: 'center',
-                  minWidth: 58,
                 }}
               >
-                <Text style={{ fontSize: 18, lineHeight: 22 }}>{cat.icon}</Text>
-                <Text style={{ color: active ? '#000000' : '#AAAAAA', fontSize: 11, fontWeight: '700', marginTop: 2 }}>
+                <Text style={{ color: active ? '#000000' : '#888888', fontSize: 13, fontWeight: '700', letterSpacing: 0.2 }}>
                   {cat.label}
                 </Text>
               </Pressable>
@@ -815,24 +1118,34 @@ export default function FeedScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']} onLayout={layout.onLayout}>
+    <View style={styles.container} onLayout={layout.onLayout}>
+    <Animated.View style={{ flex: 1, opacity: feedOpacity }}>
       <FlatList
         ref={listRef}
-        data={clusterGroups}
+        data={rankedClusterGroups}
         keyExtractor={c => c.id}
-        extraData={cardWidth}
+        extraData={activeTopic}
+        onScroll={handleFeedScroll}
+        scrollEventThrottle={16}
         renderItem={({ item }) => (
           <TopicSection
             cluster={item}
-            isBreaking={isBreaking}
+            isBreaking={item.isBreaking ?? false}
             catColor={activeCat.color}
-            catLabel={activeCat.label}
             cardWidth={cardWidth}
-            snapInterval={snapInterval}
-            hPadding={hPadding}
-            allStories={displayStories}
+            allStories={allArticles}
+            onCarouselRef={ref => { carouselRefs.current[item.id] = ref; }}
+            onCarouselScroll={x => { carouselOffsets.current[item.id] = x; }}
           />
         )}
+        onScrollToIndexFailed={(info) => {
+          // Item not yet rendered — scroll close via offset, then retry once
+          listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
+          if (scrollFailTimerRef.current) clearTimeout(scrollFailTimerRef.current);
+          scrollFailTimerRef.current = setTimeout(() => {
+            listRef.current?.scrollToIndex({ index: info.index, animated: false, viewPosition: 0 });
+          }, 300);
+        }}
         ListHeaderComponent={feedHeader}
         ListEmptyComponent={
           loading ? (
@@ -847,12 +1160,11 @@ export default function FeedScreen() {
           ) : null
         }
         showsVerticalScrollIndicator={false}
-        removeClippedSubviews
-        maxToRenderPerBatch={3}
-        windowSize={5}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={4}
+        windowSize={7}
         initialNumToRender={3}
-        onEndReached={loadMore}
-        onEndReachedThreshold={0.1}
+        updateCellsBatchingPeriod={50}
         onViewableItemsChanged={onViewableItemsChanged.current}
         viewabilityConfig={viewabilityConfig.current}
         refreshControl={
@@ -863,12 +1175,11 @@ export default function FeedScreen() {
           />
         }
         ListFooterComponent={
-          <View style={{ height: 80, alignItems: 'center', justifyContent: 'center' }}>
-            {loadingMore && <ActivityIndicator color="#FFFFFF" />}
-          </View>
+          <View style={{ height: insets.bottom + 100 }} />
         }
       />
-    </SafeAreaView>
+    </Animated.View>
+    </View>
   );
 }
 
@@ -966,29 +1277,33 @@ const CarouselSection = React.memo(function CarouselSection({
 const TopicSection = React.memo(function TopicSection({
   cluster,
   catColor,
-  catLabel,
   isBreaking,
   cardWidth,
-  snapInterval,
-  hPadding,
   allStories,
+  onCarouselRef,
+  onCarouselScroll,
 }: {
   cluster: Cluster;
   catColor: string;
-  catLabel: string;
   isBreaking: boolean;
+  cardWidth: number;
   allStories?: Story[];
-} & LayoutProps) {
+  onCarouselRef?: (ref: ScrollView | null) => void;
+  onCarouselScroll?: (x: number) => void;
+}) {
   const [activeIndex, setActiveIndex] = useState(0);
-  const navigation = useNavigation<NativeStackNavigationProp<FeedStackParamList>>();
   const count = cluster.stories.length;
+  const ai = useClusterAI(cluster);
+  const navigation = useNavigation<NativeStackNavigationProp<FeedStackParamList>>();
+
+  const clusterCardWidth = count > 1 ? Math.round(cardWidth * 0.82) : cardWidth;
+  const snapInterval = clusterCardWidth + CARD_GAP;
 
   const onScrollSettle = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const idx = Math.round(e.nativeEvent.contentOffset.x / snapInterval);
     setActiveIndex(Math.max(0, Math.min(idx, count - 1)));
   }, [snapInterval, count]);
 
-  // Single-story cluster — just the card, no header
   if (count === 1) {
     return (
       <View style={[styles.section, { alignItems: 'center' }]}>
@@ -997,73 +1312,59 @@ const TopicSection = React.memo(function TopicSection({
     );
   }
 
-  const sourceSubtitle = cluster.stories
-    .slice(0, 3)
-    .map(s => s.sources?.[0]?.name)
-    .filter(Boolean)
-    .join(' · ');
-
+  const headline = ai?.headline ?? cluster.topicLabel;
+  const summary = ai?.summary || cluster.summary;
   return (
     <View style={styles.section}>
-      {/* Particle-style cluster header */}
       <View style={styles.sectionHeader}>
-        <View style={{ flex: 1, paddingRight: 12 }}>
-          <View style={styles.clusterCatRow}>
-            {isBreaking && <View style={[styles.breakingDot, { marginRight: 6 }]} />}
-            <Text style={[styles.clusterCatLabel, { color: catColor }]}>
-              {catLabel.toUpperCase()}
-            </Text>
-          </View>
-          <Text style={styles.sectionTitle} numberOfLines={2}>{cluster.headline}</Text>
-          {sourceSubtitle.length > 0 && (
-            <Text style={styles.clusterSources} numberOfLines={1}>{sourceSubtitle}</Text>
+        <View style={{ flex: 1 }}>
+          {/* Headline — tappable for timeline when 3+ stories */}
+          <TouchableOpacity
+            activeOpacity={count >= 3 ? 0.65 : 1}
+            disabled={count < 3}
+            onPress={count >= 3 ? () => navigation.navigate('StoryTimeline', { clusterId: cluster.id, headline, stories: JSON.stringify(cluster.stories) }) : undefined}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+              {count >= 3 && (
+                <Ionicons name="time-outline" size={14} color="#3A3A3A" />
+              )}
+              <Text style={[styles.clusterHeadline, { flexShrink: 1 }]} numberOfLines={3}>{headline}</Text>
+              {isBreaking && <Text style={styles.breakingText}>BREAKING</Text>}
+            </View>
+          </TouchableOpacity>
+
+          {/* AI summary */}
+          {!!summary && (
+            <Text style={styles.clusterSummary} numberOfLines={3}>{summary}</Text>
           )}
-        </View>
-        <View style={styles.clusterCountBox}>
-          <Text style={styles.clusterCountNum}>{count}</Text>
-          <Text style={styles.clusterCountWord}>{count === 1 ? 'article' : 'articles'}</Text>
-          <Ionicons name="chevron-forward" size={12} color="#444" />
+
+          {/* Story count pill */}
+          <View style={[styles.clusterCountPill, { marginTop: 10 }]}>
+            <Text style={styles.clusterCountPillText}>{count} stories</Text>
+          </View>
         </View>
       </View>
 
-      {/* Keyword chips — tappable */}
-      {cluster.keyTerms.length > 0 && (
-        <View style={styles.keywords}>
-          {cluster.keyTerms.slice(0, 3).map((tag, i) => {
-            const c = TAG_COLORS[i % TAG_COLORS.length];
-            return (
-              <Pressable
-                key={tag}
-                onPress={() => navigation.navigate('TopicFeed', { tag: tag.replace('#', '') })}
-                hitSlop={6}
-              >
-                <Text style={[styles.keywordTag, { color: c.text, backgroundColor: c.bg }]}>{tag}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      )}
-
-      {/* Horizontal card carousel — every story is its own card */}
       <ScrollView
+        ref={onCarouselRef}
         horizontal
         showsHorizontalScrollIndicator={false}
         snapToInterval={snapInterval}
         decelerationRate="fast"
-        contentContainerStyle={[styles.carouselContent, { paddingLeft: hPadding, paddingRight: 16 }]}
+        contentContainerStyle={[styles.carouselContent, { paddingLeft: 16, paddingRight: 16 }]}
         onMomentumScrollEnd={onScrollSettle}
         onScrollEndDrag={onScrollSettle}
+        onScroll={e => onCarouselScroll?.(e.nativeEvent.contentOffset.x)}
         scrollEventThrottle={200}
         removeClippedSubviews
       >
         {cluster.stories.map((story, i) => (
           <View key={story.id} style={i < cluster.stories.length - 1 ? { marginRight: CARD_GAP } : undefined}>
-            <StoryCard story={story} cardWidth={cardWidth} allStories={allStories} />
+            <StoryCard story={story} cardWidth={clusterCardWidth} allStories={allStories} />
           </View>
         ))}
       </ScrollView>
 
-      {/* Dot indicators */}
       <View style={styles.dots}>
         {cluster.stories.map((_, i) => (
           <View key={i} style={[styles.dot, i === activeIndex && styles.dotActive]} />
@@ -1080,10 +1381,8 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   appIcon: {
-    width: 48, height: 48,
-    borderRadius: 24,
-    borderWidth: 2.5,
-    borderColor: '#FFFFFF',
+    width: 58, height: 58,
+    borderRadius: 16,
   },
   greeting: { color: '#FFFFFF', fontSize: 26, fontWeight: '800', letterSpacing: -0.5, lineHeight: 32 },
   date: { color: '#555555', fontSize: 13, fontWeight: '500', marginTop: 2 },
@@ -1101,6 +1400,7 @@ const styles = StyleSheet.create({
     width: '82%', marginBottom: 8,
   },
   breakingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF3333' },
+  breakingText: { color: '#FF3B30', fontSize: 10, fontWeight: '800', letterSpacing: 0.6 },
   breakingTime: { color: '#FF3333', fontSize: 12, fontWeight: '700', letterSpacing: 0.3 },
   breakingSource: { color: '#555', fontSize: 12, fontWeight: '500' },
 
@@ -1125,6 +1425,20 @@ const styles = StyleSheet.create({
   clusterCatRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 5 },
   clusterCatLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.9 },
   clusterSources: { color: '#505050', fontSize: 12, fontWeight: '500' },
+  clusterMeta: { color: '#555', fontSize: 11, fontWeight: '600', letterSpacing: 0.3 },
+  clusterCountPill: {
+    alignSelf: 'flex-start',
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 99,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  clusterCountPillText: { color: 'rgba(255,255,255,0.35)', fontSize: 11, fontWeight: '600', letterSpacing: 0.4 },
+  clusterHeadline: { color: '#FFFFFF', fontSize: 18, fontWeight: '700', lineHeight: 25, letterSpacing: -0.2, marginBottom: 6 },
+  clusterSummary: { color: '#666', fontSize: 13, fontWeight: '400', lineHeight: 18, marginTop: 3 },
   clusterCountBox: { alignItems: 'center', minWidth: 48 },
   clusterCountNum: { color: '#FFFFFF', fontSize: 24, fontWeight: '800', lineHeight: 28 },
   clusterCountWord: { color: '#444444', fontSize: 10, fontWeight: '600', letterSpacing: 0.3 },

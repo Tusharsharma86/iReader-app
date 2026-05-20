@@ -2,26 +2,58 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
   ActivityIndicator,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { tabBarTranslateY } from '../utils/tabBarAnim';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 import { RootStackParamList } from '../types/navigation';
 import { useSettings } from '../contexts/SettingsContext';
 import { getCached, setCached, TTL } from '../utils/cache';
-import { extractChips } from '../components/StoryCard';
+import { trackArticleRead, trackAiUsage } from '../utils/usageTracker';
 
 const HERO_HEIGHT = 280;
+
+const DIFFICULTY_COLORS: Record<string, string> = {
+  Easy: '#34C759',
+  Medium: '#FF9500',
+  Hard: '#FF3B30',
+};
+
+function DifficultyBadge({ level }: { level: string }) {
+  const color = DIFFICULTY_COLORS[level] ?? '#FF9500';
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
+      <Text style={{ color, fontSize: 12, fontWeight: '500' }}>{level}</Text>
+    </View>
+  );
+}
+
+function formatPublished(iso: string): string {
+  const d = new Date(iso);
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  let hrs = d.getHours();
+  const mins = d.getMinutes().toString().padStart(2, '0');
+  const ampm = hrs >= 12 ? 'PM' : 'AM';
+  hrs = hrs % 12 || 12;
+  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}  ·  ${hrs}:${mins} ${ampm}`;
+}
 
 const API = 'https://ireader.onrender.com/api/news';
 
@@ -53,12 +85,14 @@ interface SourceEntry {
   publishedAt: string;
 }
 
-const SOURCE_FAVICONS: Record<string, string> = {
-  'TechCrunch': 'https://techcrunch.com/wp-content/uploads/2015/02/cropped-cropped-favicon-gradient.png',
-  'The Verge': 'https://cdn.vox-cdn.com/uploads/chorus_asset/file/7395367/favicon-64x64.0.png',
-  'Ars Technica': 'https://cdn.arstechnica.net/favicon.ico',
-  'Wired': 'https://www.wired.com/favicon.ico',
-};
+function faviconFromUrl(url: string): string {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, '');
+    return `https://www.google.com/s2/favicons?domain=${hostname}&sz=64`;
+  } catch {
+    return '';
+  }
+}
 
 function SourceIcons({ sources, dominant }: { sources: SourceEntry[]; dominant: string }) {
   const accent = lighten(dominant, 0.55);
@@ -68,7 +102,7 @@ function SourceIcons({ sources, dominant }: { sources: SourceEntry[]; dominant: 
   return (
     <View style={siStyles.row}>
       {shown.map((src, i) => {
-        const faviconUri = src.imageUrl || SOURCE_FAVICONS[src.name];
+        const faviconUri = src.url ? faviconFromUrl(src.url) : '';
         return (
           <View
             key={i}
@@ -139,27 +173,153 @@ export default function ArticleScreen() {
   const tabBg = darken(dominant, 0.3);
   const borderColor = lighten(dominant, 0.3);
 
+  // Guarantee tab bar is off-screen while this screen is focused,
+  // regardless of navigation-state timing in ParticleTabBar.
+  useFocusEffect(useCallback(() => {
+    Animated.timing(tabBarTranslateY, { toValue: 160, duration: 0, useNativeDriver: true }).start();
+    return () => {
+      Animated.timing(tabBarTranslateY, { toValue: 0, duration: 220, useNativeDriver: true }).start();
+    };
+  }, []));
+
   const { fontSize: fontSizeName } = useSettings();
   const fontSizePx = FONT_SIZE_MAP[fontSizeName] ?? 17;
-  const [activeTab, setActiveTab] = useState<Tab>('Long Form');
+  const BLOCKED_LONGFORM_SOURCES = ['NYT World', 'NDTV'];
+  const defaultTab: Tab = BLOCKED_LONGFORM_SOURCES.includes(params.source ?? '') ? 'Summary' : 'Long Form';
+  const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
   const [paragraphs, setParagraphs] = useState<string[]>([]);
   const [paragraphsLoading, setParagraphsLoading] = useState(true);
   const [paragraphsError, setParagraphsError] = useState<string | null>(null);
+  const [readingTimeMinutes, setReadingTimeMinutes] = useState<number | null>(null);
+  const [difficulty, setDifficulty] = useState<string | null>(null);
   const [entities, setEntities] = useState<{ people: string[]; companies: string[] }>({ people: [], companies: [] });
 
   const allStories = useMemo(() => {
-    try { return params.allStories ? JSON.parse(params.allStories) : []; }
-    catch { return []; }
-  }, [params.allStories]);
+    try {
+      if (!params?.allStories) return []
+      const parsed = JSON.parse(params.allStories as string)
+      if (!Array.isArray(parsed)) return []
+      return parsed
+    } catch(e) {
+      console.log('allStories parse error:', e)
+      return []
+    }
+  }, [params?.allStories])
+
+  function extractEntityTokens(text: string): string[] {
+    if (!text) return []
+    const results: string[] = []
+    const words = text.split(/\s+/)
+    for (let i = 0; i < words.length - 1; i++) {
+      const w1 = words[i].replace(/[^a-zA-Z]/g,'')
+      const w2 = words[i+1].replace(/[^a-zA-Z]/g,'')
+      if (
+        w1.length > 1 && w2.length > 1 &&
+        /^[A-Z]/.test(w1) && /^[A-Z]/.test(w2)
+      ) {
+        results.push((w1 + ' ' + w2).toLowerCase())
+      }
+      if (/^[A-Z]{2,}$/.test(w1) && w1.length > 2) {
+        results.push(w1.toLowerCase())
+      }
+    }
+    return [...new Set(results)].slice(0, 6)
+  }
 
   const related = useMemo(() => {
-    if (!allStories.length) return [];
-    const chips = extractChips((params.headline ?? '') + ' ' + (params.summary ?? ''));
-    return allStories
-      .filter((s: any) => s.id !== params.id)
-      .filter((s: any) => extractChips(s.headline ?? '').some((c: string) => chips.includes(c)))
-      .slice(0, 8);
-  }, [allStories, params.id, params.headline, params.summary]);
+    try {
+      if (!allStories || allStories.length === 0) return []
+
+      const currentId = params.id
+      const currentSource = params.source || ''
+
+      // Find current article in allStories to get its category
+      const currentStory = allStories.find((s: any) => s?.id === currentId)
+      const currentCategory = (currentStory as any)?.category || null
+
+      const currentEntities = extractEntityTokens(
+        (params.headline || '') + ' ' + (params.summary || '')
+      )
+
+      // Hard gate: only consider articles from the same category
+      const sameCategory = allStories
+        .filter((s: any) => s?.id !== currentId)
+        .filter((s: any) => s?.sources?.[0]?.name !== currentSource)
+        .filter((s: any) => {
+          if (!currentCategory) return true // no category data — no gate
+          return (s as any)?.category === currentCategory
+        })
+
+      // Score within same-category pool — entity overlap required
+      const result = sameCategory
+        .map((s: any) => {
+          try {
+            const sEntities = extractEntityTokens(
+              (s?.headline || '') + ' ' + (s?.summary || '')
+            )
+            const entityOverlap = sEntities.filter((e: string) => currentEntities.includes(e)).length
+            const hoursOld = (Date.now() - new Date(s?.publishedAt || 0).getTime()) / 3600000
+            const freshScore = Math.max(0, 1 - hoursOld / 48)
+            const score = entityOverlap * 3 + freshScore
+            return { story: s, score, entityOverlap }
+          } catch {
+            return { story: s, score: 0, entityOverlap: 0 }
+          }
+        })
+        .filter((s: any) => s.entityOverlap > 0 && s.story?.imageUrl)
+        .sort((a: any, b: any) => b.score - a.score)
+        .slice(0, 6)
+        .map((s: any) => s.story)
+
+      // Show nothing rather than noise — need at least 2 genuine matches
+      return result.length >= 2 ? result : []
+    } catch(e) {
+      console.log('related articles error:', e)
+      return []
+    }
+  }, [allStories, params.id, params.headline, params.summary, params.source]);
+
+  // Related stories fixed strip — auto-hide on scroll-down, show on scroll-up
+  const relatedScrollRef = useRef<ScrollView>(null);
+  const relatedIdxRef = useRef(0);
+  const relatedPausedRef = useRef(false);
+  const RELATED_CARD_W = 190; // card width (180) + gap (10)
+  const STRIP_HEIGHT = 185;
+  const stripTransY = useRef(new Animated.Value(0)).current;
+  const stripVisibleRef = useRef(true);
+  const lastArticleScrollY = useRef(0);
+  const articleScrollRef = useRef<ScrollView>(null);
+  const articleScrollOpacity = useRef(new Animated.Value(1)).current;
+
+  // Fold/unfold: width changes → hide, jump to same position, fade in
+  const { width } = useWindowDimensions();
+  const prevArticleWidthRef = useRef(width);
+  useEffect(() => {
+    if (prevArticleWidthRef.current === width) return;
+    prevArticleWidthRef.current = width;
+    const y = lastArticleScrollY.current;
+    if (y <= 0) return;
+    articleScrollOpacity.setValue(0);
+    requestAnimationFrame(() => {
+      articleScrollRef.current?.scrollTo({ y, animated: false });
+      setTimeout(() => {
+        Animated.timing(articleScrollOpacity, { toValue: 1, duration: 120, useNativeDriver: true }).start();
+      }, 100);
+    });
+  }, [width, articleScrollOpacity]);
+
+  function onArticleScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
+    const y = e.nativeEvent.contentOffset.y;
+    const dy = y - lastArticleScrollY.current;
+    lastArticleScrollY.current = y;
+    if (dy > 12 && stripVisibleRef.current && y > 200) {
+      stripVisibleRef.current = false;
+      Animated.timing(stripTransY, { toValue: STRIP_HEIGHT, duration: 230, useNativeDriver: true }).start();
+    } else if (dy < -8 && !stripVisibleRef.current) {
+      stripVisibleRef.current = true;
+      Animated.timing(stripTransY, { toValue: 0, duration: 230, useNativeDriver: true }).start();
+    }
+  }
 
   const aiCache = useRef<Partial<Record<Tab, AiResult>>>({});
   const [aiResult, setAiResult] = useState<AiResult | null>(null);
@@ -167,11 +327,28 @@ export default function ArticleScreen() {
   const [aiError, setAiError] = useState<string | null>(null);
 
   // Lazy AI: only generate after user has been reading for 5 seconds
-  const [hasBeenRead, setHasBeenRead] = useState(false);
+  // Skip wait for sources where long form is unavailable — open straight to summary
+  const [hasBeenRead, setHasBeenRead] = useState(BLOCKED_LONGFORM_SOURCES.includes(params.source ?? ''));
   useEffect(() => {
+    if (hasBeenRead) return;
     const timer = setTimeout(() => setHasBeenRead(true), 5000);
     return () => clearTimeout(timer);
   }, []);
+
+  // Auto-scroll Related Stories strip every 3.5 s, pause on user touch
+  useEffect(() => {
+    if (related.length < 2) return;
+    const id = setInterval(() => {
+      if (relatedPausedRef.current) return;
+      const next = (relatedIdxRef.current + 1) % related.length;
+      relatedIdxRef.current = next;
+      relatedScrollRef.current?.scrollTo({ x: next * RELATED_CARD_W, animated: true });
+    }, 3500);
+    return () => clearInterval(id);
+  }, [related.length]);
+
+  // Track article read once on mount
+  useEffect(() => { trackArticleRead(params.source ?? '').catch(() => {}); }, []);
 
   // Parse sources from params
   const allSources: SourceEntry[] = (() => {
@@ -199,6 +376,30 @@ export default function ArticleScreen() {
         const filtered = paras.filter(Boolean);
         setParagraphs(filtered);
         setEntities(extractEntities(filtered.join(' ')));
+        const fullText = filtered.join(' ');
+        if (data.readingTimeMinutes) {
+          setReadingTimeMinutes(data.readingTimeMinutes);
+        } else {
+          const words = fullText.trim().split(/\s+/).filter(Boolean).length;
+          setReadingTimeMinutes(Math.max(1, Math.round(words / 200)));
+        }
+        if (data.difficulty) {
+          setDifficulty(data.difficulty);
+        } else {
+          const sentences = fullText.split(/[.!?]+/).filter(s => s.trim().length > 0);
+          const words = fullText.trim().split(/\s+/).filter(Boolean);
+          if (sentences.length && words.length) {
+            let syl = 0;
+            for (const w of words) {
+              const c = w.toLowerCase().replace(/[^a-z]/g, '');
+              if (c.length <= 3) { syl += 1; continue; }
+              const m = c.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/, '').replace(/^y/, '').match(/[aeiouy]{1,2}/g);
+              syl += m ? m.length : 1;
+            }
+            const score = 206.835 - 1.015 * (words.length / sentences.length) - 84.6 * (syl / words.length);
+            setDifficulty(score >= 70 ? 'Easy' : score >= 50 ? 'Medium' : 'Hard');
+          }
+        }
       })
       .catch(e => {
         setParagraphsError(e.message);
@@ -229,6 +430,7 @@ export default function ArticleScreen() {
     setAiLoading(true);
     setAiError(null);
     setAiResult(null);
+    trackAiUsage(aiType as 'summary' | 'fiveWs' | 'eli5').catch(() => {});
 
     fetch(`${API}/ai-summary`, {
       method: 'POST',
@@ -248,7 +450,7 @@ export default function ArticleScreen() {
       })
       .catch(e => setAiError(e.message))
       .finally(() => setAiLoading(false));
-  }, [activeTab, paragraphsLoading, hasBeenRead]);
+  }, [activeTab, paragraphsLoading, hasBeenRead, paragraphs]);
 
   function renderTabContent() {
     const longForm = (
@@ -259,6 +461,7 @@ export default function ArticleScreen() {
         summary={params.summary}
         fontSize={fontSizePx}
         url={params.url}
+        accentColor={accent}
       />
     );
 
@@ -324,8 +527,15 @@ export default function ArticleScreen() {
         </Pressable>
       </SafeAreaView>
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Hero image scrolls with content */}
+      <Animated.View style={{ flex: 1, opacity: articleScrollOpacity }}>
+      <ScrollView
+        ref={articleScrollRef}
+        style={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        onScroll={onArticleScroll}
+        scrollEventThrottle={16}
+      >
+        {/* Hero image */}
         <View style={styles.heroContainer}>
           <Image source={{ uri: params.image }} style={styles.heroImage} contentFit="cover" />
           <View style={[StyleSheet.absoluteFill, { backgroundColor: dominant + '4D' }]} />
@@ -339,13 +549,29 @@ export default function ArticleScreen() {
         </View>
 
         <View style={styles.metaBlock}>
-          <Text style={[styles.sourceMeta, { color: accent }]}>{params.source?.toUpperCase()}{'  ·  ⚡'}</Text>
           <Text style={styles.headline}>{params.headline}</Text>
           {allSources.length > 0 && <SourceIcons sources={allSources} dominant={dominant} />}
+          <Text style={[styles.publishedAt, { color: lighten(dominant, 0.35) }]}>{formatPublished(params.publishedAt)}</Text>
+          {!!params.summary && (
+            <Text style={styles.summaryText}>{params.summary}</Text>
+          )}
         </View>
 
+        {(readingTimeMinutes != null || difficulty != null) && (
+          <View style={styles.readingMeta}>
+            <Ionicons name="time-outline" size={12} color="rgba(255,255,255,0.5)" />
+            <Text style={styles.readingMetaText}>
+              {readingTimeMinutes != null ? `${readingTimeMinutes} min read` : ''}
+            </Text>
+            {readingTimeMinutes != null && difficulty != null && (
+              <Text style={styles.metaDot}>·</Text>
+            )}
+            {difficulty != null && <DifficultyBadge level={difficulty} />}
+          </View>
+        )}
+
         <View style={[styles.tabBar, { backgroundColor: tabBg }]}>
-          {TABS.map(tab => (
+          {(BLOCKED_LONGFORM_SOURCES.includes(params.source ?? '') ? TABS.filter(t => t !== 'Long Form') : TABS).map(tab => (
             <TouchableOpacity
               key={tab}
               style={[styles.tabBtn, activeTab === tab && { backgroundColor: '#FFFFFF' }]}
@@ -370,7 +596,7 @@ export default function ArticleScreen() {
               <TouchableOpacity
                 key={i}
                 style={styles.refRow}
-                onPress={() => WebBrowser.openBrowserAsync(src.url)}
+                onPress={() => src.url && WebBrowser.openBrowserAsync(src.url)}
               >
                 <View style={[styles.refAvatar, { backgroundColor: lighten(dominant, 0.2) }]}>
                   <Text style={[styles.refAvatarText, { color: accent }]}>
@@ -419,58 +645,135 @@ export default function ArticleScreen() {
           </View>
         )}
 
-        {/* Related Stories */}
-        {related.length > 0 && (
-          <View style={styles.relatedSection}>
-            <Text style={styles.relatedTitle}>Related Stories</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.relatedScroll}
-            >
-              {related.map((s: any) => {
-                const color = getArticleColor(s.id || s.headline);
-                return (
-                  <Pressable
-                    key={s.id}
-                    onPress={() => navigation.replace('Article', {
-                      id: s.id,
-                      url: s.sources?.[0]?.url ?? '',
-                      image: s.imageUrl ?? '',
-                      headline: s.headline,
-                      summary: s.summary ?? '',
-                      source: s.sources?.[0]?.name ?? '',
-                      publishedAt: s.publishedAt,
-                      dominantColor: color,
-                      sources: JSON.stringify(s.sources ?? []),
-                      allStories: params.allStories,
-                    })}
-                    style={styles.relatedCard}
-                  >
-                    {s.imageUrl ? (
-                      <Image source={{ uri: s.imageUrl }} style={styles.relatedImage} contentFit="cover" />
-                    ) : (
-                      <View style={[styles.relatedImage, { backgroundColor: color }]} />
-                    )}
-                    <View style={styles.relatedCardBody}>
-                      <Text style={styles.relatedCardSource}>{s.sources?.[0]?.name}</Text>
-                      <Text style={styles.relatedCardHeadline} numberOfLines={3}>{s.headline}</Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-        )}
-
-        <View style={{ height: 60 }} />
+        <View style={{ height: related.length >= 2 ? STRIP_HEIGHT + 16 : 60 }} />
       </ScrollView>
+      </Animated.View>
+
+      {/* Related Stories — fixed strip, hides on scroll-down */}
+      {related.length >= 2 && (
+        <Animated.View
+          style={[
+            styles.relatedFixed,
+            { transform: [{ translateY: stripTransY }], backgroundColor: darken(dominant, 0.7) + 'EE' },
+          ]}
+        >
+          <Text style={styles.relatedFixedTitle}>RELATED STORIES</Text>
+          <ScrollView
+            ref={relatedScrollRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}
+            onTouchStart={() => { relatedPausedRef.current = true; }}
+            onTouchEnd={() => { setTimeout(() => { relatedPausedRef.current = false; }, 3000); }}
+          >
+            {(related as any[]).map((story: any, i: number) => (
+              <TouchableOpacity
+                key={story.id ?? i}
+                style={styles.relatedCard}
+                onPress={() => {
+                  navigation.push('Article', {
+                    id: story.id,
+                    url: story.sources?.[0]?.url ?? '',
+                    image: story.imageUrl,
+                    headline: story.headline,
+                    summary: story.summary,
+                    source: story.sources?.[0]?.name ?? '',
+                    publishedAt: story.publishedAt,
+                    dominantColor: dominant,
+                    sources: JSON.stringify(story.sources ?? []),
+                    allStories: params.allStories,
+                  });
+                }}
+              >
+                {story.imageUrl ? (
+                  <Image source={{ uri: story.imageUrl }} style={styles.relatedCardImg} contentFit="cover" />
+                ) : (
+                  <View style={[styles.relatedCardImg, { backgroundColor: lighten(dominant, 0.1) }]} />
+                )}
+                <View style={styles.relatedCardBody}>
+                  <Text style={styles.relatedCardHeadline} numberOfLines={2}>{story.headline}</Text>
+                  <Text style={styles.relatedCardSource}>{story.sources?.[0]?.name?.toUpperCase()}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </Animated.View>
+      )}
     </View>
   );
 }
 
-function LongFormTab({ loading, paragraphs, error, summary, fontSize, url }: {
-  loading: boolean; paragraphs: string[]; error: string | null; summary: string; fontSize: number; url?: string;
+// ── Rich text tokeniser ──────────────────────────────────────────────────────
+type Seg = { text: string; kind: 'plain' | 'quote' | 'stat' | 'kw' | 'proper' };
+
+// Priority order: quotes → stats → ALL-CAPS → proper nouns
+// Quote chars: straight double, curly double, curly single (≠ apostrophe U+0027)
+const RICH_RE = new RegExp(
+  [
+    // Straight double quotes — no length cap, greedy-stopped at next “
+    `”([^”]{1,500})”`,
+    // Curly double quotes
+    `“([^”]{1,500})”`,
+    // Curly single quotes (U+2018 / U+2019) — safe, apostrophes are U+0027
+    `‘([^’]{1,500})’`,
+    // Currency + scale  e.g. $4.2B, ₹1,200 crore, €50 million
+    `[\\$₹€£¥][\\d,.]+(?:\\s*(?:billion|million|trillion|crore|lakh|thousand|bn|mn|tn|B|M|T|K))?`,
+    // Percentage / plain stat  e.g. 43%, 1.2 million, 300,000
+    `[\\d][\\d,.]*\\s*%`,
+    `\\b\\d[\\d,.]*\\s*(?:billion|million|trillion|crore|lakh|thousand)\\b`,
+    // ALL-CAPS acronyms 2–8 letters
+    `\\b[A-Z]{2,8}\\b`,
+    // Multi-word proper nouns (2+ consecutive Title-Case words)
+    `\\b[A-Z][a-z]{1,}(?:\\s+[A-Z][a-z]+)+\\b`,
+  ].join('|'),
+  'g',
+);
+
+function tokenize(text: string): Seg[] {
+  const out: Seg[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  RICH_RE.lastIndex = 0;
+  while ((m = RICH_RE.exec(text)) !== null) {
+    if (m.index > last) out.push({ text: text.slice(last, m.index), kind: 'plain' });
+    const raw = m[0];
+    const c0 = raw.codePointAt(0)!;
+    if (c0 === 0x22 || c0 === 0x201c || c0 === 0x2018) {
+      out.push({ text: raw, kind: 'quote' });
+    } else if (/^[$₹€£¥]/.test(raw) || /^[\d]/.test(raw)) {
+      out.push({ text: raw, kind: 'stat' });
+    } else if (/^[A-Z]{2,8}$/.test(raw)) {
+      out.push({ text: raw, kind: 'kw' });
+    } else {
+      out.push({ text: raw, kind: 'proper' });
+    }
+    last = m.index + raw.length;
+  }
+  if (last < text.length) out.push({ text: text.slice(last), kind: 'plain' });
+  return out;
+}
+
+function RichParagraph({ text, fontSize, accentColor }: { text: string; fontSize: number; accentColor: string }) {
+  const segs = useMemo(() => tokenize(text), [text]);
+  return (
+    <Text style={[styles.paragraph, { fontSize, lineHeight: fontSize * 1.65 }]}>
+      {segs.map((seg, i) => {
+        if (seg.kind === 'quote')
+          return <Text key={i} style={{ color: '#FFD166', fontStyle: 'italic' }}>{seg.text}</Text>;
+        if (seg.kind === 'stat')
+          return <Text key={i} style={{ color: '#4ECDC4', fontWeight: '700' }}>{seg.text}</Text>;
+        if (seg.kind === 'kw')
+          return <Text key={i} style={{ color: accentColor, fontWeight: '700' }}>{seg.text}</Text>;
+        if (seg.kind === 'proper')
+          return <Text key={i} style={{ color: 'rgba(255,255,255,0.9)', fontWeight: '600' }}>{seg.text}</Text>;
+        return <Text key={i}>{seg.text}</Text>;
+      })}
+    </Text>
+  );
+}
+
+function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accentColor }: {
+  loading: boolean; paragraphs: string[]; error: string | null; summary: string; fontSize: number; url?: string; accentColor: string;
 }) {
   if (loading) return <Spinner />;
 
@@ -481,7 +784,7 @@ function LongFormTab({ loading, paragraphs, error, summary, fontSize, url }: {
       <View>
         <Text style={styles.errorHint}>Full text unavailable from this publisher</Text>
         {summary ? (
-          <Text style={[styles.paragraph, { fontSize, lineHeight: fontSize * 1.65 }]}>{summary}</Text>
+          <RichParagraph text={summary} fontSize={fontSize} accentColor={accentColor} />
         ) : (
           <ErrorMsg msg="No content available." />
         )}
@@ -499,7 +802,7 @@ function LongFormTab({ loading, paragraphs, error, summary, fontSize, url }: {
 
   return (
     <View>
-      {paragraphs.map((p, i) => <Text key={i} style={[styles.paragraph, { fontSize, lineHeight: fontSize * 1.65 }]}>{p}</Text>)}
+      {paragraphs.map((p, i) => <RichParagraph key={i} text={p} fontSize={fontSize} accentColor={accentColor} />)}
       {url ? (
         <TouchableOpacity
           style={styles.readFullBtn}
@@ -586,8 +889,12 @@ const styles = StyleSheet.create({
   heroContainer: { height: HERO_HEIGHT, position: 'relative' },
   heroImage: { width: '100%', height: '100%' },
   metaBlock: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 },
-  sourceMeta: { fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 8 },
   headline: { color: '#FFF', fontSize: 24, fontWeight: '800', lineHeight: 32 },
+  publishedAt: { fontSize: 11, fontWeight: '600', letterSpacing: 0.3, marginTop: 10 },
+  summaryText: { color: 'rgba(255,255,255,0.6)', fontSize: 14, lineHeight: 22, marginTop: 10 },
+  readingMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, marginBottom: 4, paddingHorizontal: 16 },
+  readingMetaText: { fontSize: 12, color: 'rgba(255,255,255,0.6)' },
+  metaDot: { fontSize: 12, color: 'rgba(255,255,255,0.4)' },
   tabBar: {
     flexDirection: 'row', marginHorizontal: 16,
     borderRadius: 999, padding: 4, marginBottom: 20,
@@ -655,23 +962,27 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.06)',
   },
   entityText: { color: '#DDD', fontSize: 13, fontWeight: '500' },
-  relatedSection: { marginTop: 24 },
-  relatedTitle: {
-    color: '#FFFFFF', fontSize: 16, fontWeight: '700',
-    marginBottom: 12, paddingHorizontal: 16,
+  // Fixed bottom Related Stories strip
+  relatedFixed: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    paddingTop: 10, paddingBottom: 16,
+    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)',
   },
-  relatedScroll: { paddingHorizontal: 16, gap: 10 },
+  relatedFixedTitle: {
+    color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '700',
+    letterSpacing: 1.2, paddingHorizontal: 16, marginBottom: 10,
+  },
   relatedCard: {
-    width: 200, backgroundColor: '#111111',
+    width: 180, backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 12, overflow: 'hidden',
   },
-  relatedImage: { width: 200, height: 110 },
-  relatedCardBody: { padding: 10 },
+  relatedCardImg: { width: 180, height: 90 },
+  relatedCardBody: { padding: 8 },
   relatedCardSource: {
-    color: 'rgba(255,255,255,0.5)', fontSize: 10,
-    fontWeight: '700', letterSpacing: 0.5, marginBottom: 4,
+    color: 'rgba(255,255,255,0.4)', fontSize: 9,
+    fontWeight: '700', letterSpacing: 0.5, marginTop: 4,
   },
   relatedCardHeadline: {
-    color: '#FFFFFF', fontSize: 12, fontWeight: '600', lineHeight: 17,
+    color: '#FFFFFF', fontSize: 12, fontWeight: '600', lineHeight: 16,
   },
 });

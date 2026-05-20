@@ -1,16 +1,12 @@
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Dimensions, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 import { FeedStackParamList } from '../types/navigation';
-import { useSaved } from '../contexts/SavedContext';
 import { trackArticleOpen } from '../utils/personalization';
-
-const CARD_HEIGHT = 420;
 
 export interface Story {
   id: string;
@@ -23,26 +19,30 @@ export interface Story {
   isTrending?: boolean;
   isBreaking?: boolean;
   isDeveloping?: boolean;
+  readingTimeMinutes?: number;
+  difficulty?: 'Easy' | 'Medium' | 'Hard';
 }
 
-export function extractChips(text: string): string[] {
-  const stopWords = new Set([
-    'the','a','an','is','are','was','were','be','been',
-    'has','have','had','will','would','could','should',
-    'this','that','with','from','for','and','but','or',
-    'in','on','at','to','of','its','it','as','by','says',
-    'said','after','over','new','more','than','into','out',
-  ]);
-  const wordCount: Record<string, number> = {};
-  text.toLowerCase()
-    .replace(/[^a-z0-9\s]/g, '')
-    .split(' ')
-    .filter(w => w.length > 3 && !stopWords.has(w))
-    .forEach(w => { wordCount[w] = (wordCount[w] || 0) + 1; });
-  return Object.entries(wordCount)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([w]) => w.charAt(0).toUpperCase() + w.slice(1));
+
+
+function clientReadingTime(text: string): number {
+  const words = (text ?? '').trim().split(/\s+/).filter(Boolean).length;
+  return Math.max(1, Math.round(words / 200));
+}
+
+function clientDifficulty(text: string): 'Easy' | 'Medium' | 'Hard' {
+  const sentences = (text ?? '').split(/[.!?]+/).filter(s => s.trim().length > 0);
+  const words = (text ?? '').trim().split(/\s+/).filter(Boolean);
+  if (!sentences.length || !words.length) return 'Medium';
+  let syllables = 0;
+  for (const w of words) {
+    const clean = w.toLowerCase().replace(/[^a-z]/g, '');
+    if (clean.length <= 3) { syllables += 1; continue; }
+    const m = clean.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/, '').replace(/^y/, '').match(/[aeiouy]{1,2}/g);
+    syllables += m ? m.length : 1;
+  }
+  const score = 206.835 - 1.015 * (words.length / sentences.length) - 84.6 * (syllables / words.length);
+  return score >= 70 ? 'Easy' : score >= 50 ? 'Medium' : 'Hard';
 }
 
 function timeAgo(iso: string): string {
@@ -98,25 +98,22 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, allStories }
     return () => sub.remove();
   }, []);
   const width = Math.abs(hookWidth - dimWidth) < 1 ? hookWidth : dimWidth;
-  // If parent passes explicit cardWidth, use it; otherwise compute reactively from current window width
   const cardWidth = cardWidthProp ?? (width >= 768 ? Math.round(width * 0.46) : width - 28);
+  // Image takes ~72% of card width in height (slightly wider than square)
+  const imageHeight = Math.round(cardWidth * 0.72);
+
   const navigation = useNavigation<NativeStackNavigationProp<FeedStackParamList, 'FeedHome'>>();
   const [imageError, setImageError] = React.useState(false);
 
   const dominant = getArticleColor(story.id || story.headline);
   const accent = lighten(dominant, 0.55);
+  const textBg = darken(dominant, 0.5);
   const source = story.sources?.[0]?.name ?? 'Unknown';
   const sourceCount = story.sources?.length ?? 1;
   const ageMs = Date.now() - new Date(story.publishedAt).getTime();
-  // Prefer server-computed flags; fall back to local computation
   const isTrending = story.isTrending ?? sourceCount >= 3;
-  const isBreakingBadge = story.isBreaking ?? (sourceCount >= 2 && ageMs < 2 * 60 * 60 * 1000);
+  const isBreakingBadge = story.isBreaking || ageMs < 60 * 60 * 1000;
   const isOngoing = story.isDeveloping ?? (sourceCount >= 4 && ageMs < 6 * 60 * 60 * 1000);
-  const chips = useMemo(
-    () => extractChips(story.headline + ' ' + (story.summary || '')),
-    [story.headline, story.summary],
-  );
-
   const handlePress = useCallback(() => {
     trackArticleOpen(story);
     navigation.navigate('Article', {
@@ -135,46 +132,28 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, allStories }
 
   return (
     <Pressable
-      style={[styles.outerCard, { width: cardWidth, shadowColor: dominant }]}
+      style={[styles.card, { width: cardWidth, shadowColor: dominant }]}
       onPress={handlePress}
     >
-      <View style={styles.innerCard}>
+      {/* ── IMAGE ─────────────────────────────────── */}
+      <View style={{ height: imageHeight }}>
+        <Image
+          source={imageError || !story.imageUrl
+            ? require('../assets/news-placeholder.jpg')
+            : { uri: story.imageUrl }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          onError={() => setImageError(true)}
+        />
 
-        {/* Full-bleed image */}
-        {imageError || !story.imageUrl ? (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: darken(dominant, 0.2) }]} />
-        ) : (
-          <Image
-            source={{ uri: story.imageUrl }}
-            style={StyleSheet.absoluteFill}
-            contentFit="cover"
-            onError={() => setImageError(true)}
-          />
-        )}
-
-        {/* Gradient overlay — bottom 70% */}
+        {/* Gradient blends image bottom into the text section color */}
         <LinearGradient
-          colors={['transparent', dominant + '88', dominant]}
-          locations={[0, 0.45, 1]}
-          style={styles.gradientOverlay}
+          colors={['transparent', textBg]}
+          locations={[0.45, 1]}
+          style={StyleSheet.absoluteFill}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
         />
-
-        {/* Topic chips — top-left */}
-        {chips.length > 0 && (
-          <View style={styles.chipsTopLeft}>
-            {chips.map(chip => (
-              <Pressable
-                key={chip}
-                onPress={() => navigation.navigate('TopicFeed', { tag: chip })}
-                style={styles.chip}
-              >
-                <Text style={styles.chipText}>{chip}</Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
 
         {/* Source favicon circles — top-right */}
         <View style={styles.sourceCircles}>
@@ -191,42 +170,32 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, allStories }
             </View>
           ))}
         </View>
+      </View>
 
-        {/* Content overlay — bottom */}
-        <View style={styles.contentOverlay}>
-
-          {/* Source · time · badges */}
-          <View style={styles.metaRow}>
-            <View style={styles.faviconCircle}>
-              <Text style={styles.faviconText}>{source.charAt(0).toUpperCase()}</Text>
-            </View>
-            <Text style={styles.metaLabel}>{source.toUpperCase()}</Text>
-            <Text style={styles.metaDot}>·</Text>
-            <Text style={styles.metaLabel}>{timeAgo(story.publishedAt)}</Text>
-            {isBreakingBadge && (
-              <View style={styles.breakingPill}>
-                <View style={styles.breakingDot} />
-                <Text style={styles.breakingText}>BREAKING</Text>
-              </View>
-            )}
-            {isTrending && !isBreakingBadge && (
-              <Text style={styles.trendingIcon}>🔥</Text>
-            )}
-            {isOngoing && (
-              <Text style={styles.trendingIcon}>📍</Text>
-            )}
-          </View>
-
-          {/* Headline */}
-          <HeadlineWithEntities text={story.headline} accentColor={accent} />
-
-          {/* Summary — hidden in compact mode */}
-          {!compact && (
-            <Text style={styles.summary} numberOfLines={2}>{story.summary}</Text>
-          )}
-
+      {/* ── TEXT ──────────────────────────────────── */}
+      <View style={[styles.textSection, { backgroundColor: textBg }]}>
+        {/* Article count · time · badges */}
+        <View style={styles.metaRow}>
+          <Text style={styles.metaLabel}>{source.toUpperCase()}  ·  {timeAgo(story.publishedAt)}</Text>
+          {isBreakingBadge && <Text style={styles.breakingText}>·  BREAKING</Text>}
+          {isTrending && !isBreakingBadge && <Text style={styles.badge}>🔥</Text>}
+          {isOngoing && <Text style={styles.badge}>📍</Text>}
         </View>
 
+        <HeadlineWithEntities text={story.headline} accentColor={accent} />
+
+        {(() => {
+          const text = story.summary ?? story.headline ?? '';
+          const mins = story.readingTimeMinutes ?? clientReadingTime(text);
+          const diff = story.difficulty ?? clientDifficulty(text);
+          return (
+            <Text style={styles.cardReadingMeta}>{mins} min  ·  {diff}</Text>
+          );
+        })()}
+
+        {!compact && (
+          <Text style={styles.summary} numberOfLines={2}>{story.summary}</Text>
+        )}
       </View>
     </Pressable>
   );
@@ -235,46 +204,14 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, allStories }
 export const StoryCard = React.memo(StoryCardInner);
 
 const styles = StyleSheet.create({
-  outerCard: {
-    borderRadius: 20,
-    alignSelf: 'center',
-    elevation: 4,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    height: CARD_HEIGHT,
-  },
-  innerCard: {
+  card: {
     borderRadius: 20,
     overflow: 'hidden',
-    flex: 1,
-  },
-  gradientOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '70%',
-  },
-  chipsTopLeft: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    maxWidth: '70%',
-  },
-  chip: {
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  chipText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
+    alignSelf: 'center',
+    elevation: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
   },
   sourceCircles: {
     position: 'absolute',
@@ -290,12 +227,10 @@ const styles = StyleSheet.create({
     borderColor: '#000',
     overflow: 'hidden',
   },
-  contentOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 14,
+  textSection: {
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 14,
   },
   metaRow: {
     flexDirection: 'row',
@@ -303,51 +238,21 @@ const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 8,
   },
-  faviconCircle: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  faviconText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#fff',
-  },
   metaLabel: {
-    color: 'rgba(255,255,255,0.75)',
+    color: 'rgba(255,255,255,0.45)',
     fontSize: 11,
     fontWeight: '600',
-  },
-  metaDot: {
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 11,
-  },
-  breakingPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(255,0,0,0.2)',
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  breakingDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#FF0000',
+    letterSpacing: 0.4,
   },
   breakingText: {
-    color: '#FF4444',
+    color: '#FF3B30',
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    lineHeight: 14,
   },
-  trendingIcon: {
-    fontSize: 12,
-  },
+  badge: { fontSize: 12 },
+  cardReadingMeta: { color: 'rgba(255,255,255,0.28)', fontSize: 11, fontWeight: '500', marginTop: 3, marginBottom: 2 },
   headline: {
     fontSize: 20,
     fontWeight: '800',
@@ -356,8 +261,8 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   summary: {
-    color: 'rgba(255,255,255,0.65)',
-    fontSize: 14,
-    lineHeight: 20,
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12,
+    lineHeight: 17,
   },
 });

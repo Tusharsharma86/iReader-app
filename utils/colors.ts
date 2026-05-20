@@ -32,18 +32,18 @@ export function getArticleColor(seed: string): string {
     hash = hash & hash;
   }
   const colors = [
-    '#1A3A2A', // dark forest green
-    '#0A1A3A', // deep navy blue
-    '#2A1A3A', // deep purple
-    '#3A1A0A', // dark burnt orange
-    '#1A2A3A', // dark steel blue
-    '#2A3A0A', // dark olive green
-    '#3A0A1A', // deep burgundy
-    '#0A3A3A', // dark teal
-    '#2A2A0A', // dark khaki
-    '#1A0A3A', // midnight purple
-    '#3A2A0A', // dark amber
-    '#0A2A1A', // dark emerald
+    '#1A4A8A', // vivid navy blue
+    '#8A1A2A', // vivid crimson
+    '#1A6A4A', // vivid emerald
+    '#7A3A0A', // vivid amber
+    '#3A1A7A', // vivid indigo
+    '#0A5A6A', // vivid teal
+    '#6A1A5A', // vivid magenta
+    '#1A5A2A', // vivid forest
+    '#7A4A0A', // vivid burnt orange
+    '#0A3A7A', // vivid cobalt
+    '#5A0A1A', // vivid ruby
+    '#2A5A6A', // vivid cyan slate
   ];
   return colors[Math.abs(hash) % colors.length];
 }

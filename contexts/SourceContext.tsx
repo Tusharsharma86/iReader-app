@@ -1,26 +1,30 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
+// Exact source names must match backend RssSource.name values —
+// the feed filter uses story.sources[0].name to look up this map.
+// Note: Indian Express only available via FeedBurner proxy (Tech section).
+// Direct IE URLs → HTTP 403 from Render. Financial Express RSS is dead (410).
 export const SOURCE_CATEGORIES = [
   {
     label: 'India',
-    sources: ['NDTV', 'Times of India', 'Indian Express', 'The Quint', 'ANI News', 'Hindustan Times', 'News18', 'Firstpost'] as const,
+    sources: ['NDTV', 'India Today', 'The Print', 'The Quint', 'CNBC TV18', 'Scroll.in', 'Hindustan Times', 'Times of India'] as const,
   },
   {
     label: 'World',
-    sources: ['BBC World', 'The Guardian', 'Al Jazeera', 'NYT World', 'Indian Express World', 'NPR World', 'News18', 'Firstpost'] as const,
+    sources: ['BBC World', 'The Guardian', 'Al Jazeera', 'NYT World', 'NPR World', 'The Print', 'Hindustan Times', 'Times of India'] as const,
   },
   {
     label: 'Markets',
-    sources: ['Economic Times', 'MoneyControl', 'NDTV Profit', 'Livemint', 'Business Standard', 'CNBC TV18', 'News18', 'Firstpost'] as const,
+    sources: ['Economic Times', 'Livemint', 'CNBC TV18'] as const,
   },
   {
     label: 'Business',
-    sources: ['Mint', 'Business Standard', 'Economic Times', 'MoneyControl', 'Inc42', 'Hindustan Times', 'News18', 'Firstpost'] as const,
+    sources: ['Mint', 'Economic Times', 'Inc42', 'CNBC TV18', 'The Print'] as const,
   },
   {
     label: 'Technology',
-    sources: ['TechCrunch', 'The Verge', 'Ars Technica', 'Wired', '9to5Google', '9to5Mac', 'Engadget', 'VentureBeat', 'The Next Web', 'Hacker News', 'MIT Tech Review', 'The Quint Tech', 'Indian Express Tech', 'News18', 'Firstpost'] as const,
+    sources: ['TechCrunch', 'The Verge', 'Ars Technica', 'Wired', '9to5Google', '9to5Mac', 'Engadget', 'VentureBeat', 'The Next Web', 'Hacker News', 'MIT Tech Review', 'Indian Express', 'Scroll.in'] as const,
   },
 ];
 
