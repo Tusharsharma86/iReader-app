@@ -7,6 +7,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./
+
     steps:
       - uses: actions/checkout@v4
 
@@ -19,18 +23,31 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Install dependencies
-        run: npm install
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
 
-      - name: Prebuild
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Fix app.json
+        run: node scripts/fix-app-json.js
+
+      - name: Prebuild Android
         run: npx expo prebuild --platform android --clean
+        env:
+          EXPO_PUBLIC_API_URL: https://ireader.onrender.com
 
       - name: Build APK
-        run: cd android && ./gradlew assembleRelease
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
-          path: android/app/build/outputs/apk/release/app-release.apk
+          name: iReader-Pro-APK
+          path: android/app/build/outputs/apk/release/*.apk
           retention-days: 7
