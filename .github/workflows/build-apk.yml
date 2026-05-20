@@ -23,13 +23,8 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.32.1
-
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: npm install --legacy-peer-deps
 
       - name: Fix app.json
         run: node scripts/fix-app-json.js
