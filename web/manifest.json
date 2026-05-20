@@ -1,0 +1,49 @@
+{
+  "name": "iReader Pro",
+  "short_name": "iReader",
+  "description": "AI-curated news across breaking, tech, India, world, markets & business",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0A0A0A",
+  "theme_color": "#0A0A0A",
+  "lang": "en",
+  "categories": ["news"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Breaking News",
+      "url": "/?category=breaking",
+      "description": "Latest breaking news"
+    },
+    {
+      "name": "Tech News",
+      "url": "/?category=technology",
+      "description": "Technology news"
+    },
+    {
+      "name": "Markets",
+      "url": "/?category=markets",
+      "description": "Financial markets"
+    }
+  ]
+}

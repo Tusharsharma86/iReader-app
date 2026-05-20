@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/icons/icon-192.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="AI-curated news across breaking, tech, India, world, markets &amp; business" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="iReader Pro" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <title>iReader Pro</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      html {
+        height: 100%;
+        height: -webkit-fill-available;
+        background: #000;
+        overscroll-behavior: none;
+      }
+      body {
+        position: fixed;
+        width: 100%;
+        height: 100%;
+        height: -webkit-fill-available;
+        background: #000;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        -webkit-font-smoothing: antialiased;
+        overflow: hidden;
+        overscroll-behavior: none;
+        -webkit-overflow-scrolling: touch;
+      }
+      #root {
+        width: 100%;
+        height: 100%;
+        height: 100dvh;
+        background: #000;
+      }
+      ::-webkit-scrollbar { display: none; }
+      * { scrollbar-width: none; -ms-overflow-style: none; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
