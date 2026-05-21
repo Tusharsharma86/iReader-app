@@ -1,5 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import React, { useCallback } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -10,26 +12,36 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSettings, FontSize } from '../contexts/SettingsContext';
-import { useSource, SOURCE_CATEGORIES } from '../contexts/SourceContext';
+import { useSource } from '../contexts/SourceContext';
+import { SettingsStackParamList } from '../types/navigation';
+import { requestNotificationPermission } from '../utils/notifications';
 
 const FONT_SIZES: FontSize[] = ['Small', 'Medium', 'Large', 'XLarge'];
 
 export default function SettingsScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<SettingsStackParamList>>();
   const {
     fontSize, setFontSize,
     notifBreaking, setNotifBreaking,
+    notifTech, setNotifTech,
     notifDigest, setNotifDigest,
     notifSources, setNotifSources,
+    favSources, favTopics,
+    activeTopics,
     resetSettings,
   } = useSettings();
 
-  const { activeSources, toggleSource, resetSources } = useSource();
+  const favCount = favSources.length + favTopics.length;
 
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const { resetSources } = useSource();
 
-  function toggleCollapse(label: string) {
-    setCollapsed(prev => ({ ...prev, [label]: !prev[label] }));
-  }
+  const handleNotifToggle = useCallback(async (value: boolean, setter: (v: boolean) => void) => {
+    if (!value) { setter(false); return; }
+    const granted = await requestNotificationPermission();
+    if (granted) setter(true);
+  }, []);
+
+  const enabledTopicsCount = Object.values(activeTopics).filter(Boolean).length;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -63,78 +75,76 @@ export default function SettingsScreen() {
               <Text style={styles.rowLabel}>Breaking News</Text>
               <Text style={styles.rowSub}>Instant alerts for major stories</Text>
             </View>
-            <Switch value={notifBreaking} onValueChange={setNotifBreaking}
+            <Switch value={notifBreaking} onValueChange={v => handleNotifToggle(v, setNotifBreaking)}
               trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }}
               thumbColor={notifBreaking ? '#4A90D9' : '#444'} />
+          </View>
+          <View style={[styles.row, styles.rowBorder]}>
+            <View style={styles.rowTextCol}>
+              <Text style={styles.rowLabel}>Tech News</Text>
+              <Text style={styles.rowSub}>Alerts for new technology stories</Text>
+            </View>
+            <Switch value={notifTech} onValueChange={v => handleNotifToggle(v, setNotifTech)}
+              trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }}
+              thumbColor={notifTech ? '#4A90D9' : '#444'} />
           </View>
           <View style={[styles.row, styles.rowBorder]}>
             <View style={styles.rowTextCol}>
               <Text style={styles.rowLabel}>Daily Digest</Text>
               <Text style={styles.rowSub}>Morning summary of top stories</Text>
             </View>
-            <Switch value={notifDigest} onValueChange={setNotifDigest}
+            <Switch value={notifDigest} onValueChange={v => handleNotifToggle(v, setNotifDigest)}
               trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }}
               thumbColor={notifDigest ? '#4A90D9' : '#444'} />
           </View>
-          <View style={[styles.row, styles.rowBorder]}>
+          <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => navigation.navigate('FavSources')}>
             <View style={styles.rowTextCol}>
-              <Text style={styles.rowLabel}>New from my sources</Text>
-              <Text style={styles.rowSub}>When selected sources publish</Text>
+              <Text style={styles.rowLabel}>Favorite Sources & Topics</Text>
+              <Text style={styles.rowSub}>
+                {favCount > 0 ? `${favCount} selected — tap to change` : 'Tap to choose sources or topics'}
+              </Text>
             </View>
-            <Switch value={notifSources} onValueChange={setNotifSources}
-              trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }}
-              thumbColor={notifSources ? '#4A90D9' : '#444'} />
-          </View>
+            <Ionicons name="chevron-forward" size={18} color="#444" />
+          </TouchableOpacity>
         </View>
 
-        {/* SOURCES — collapsible per category */}
-        <Text style={styles.sectionHeader}>SOURCES</Text>
-        {SOURCE_CATEGORIES.map((cat) => {
-          const isCollapsed = collapsed[cat.label] ?? false;
-          const allOn = cat.sources.every(s => activeSources[s] !== false);
-          const allOff = cat.sources.every(s => activeSources[s] === false);
-          const partial = !allOn && !allOff;
-
-          return (
-            <View key={cat.label} style={styles.sourceGroup}>
-              {/* Category header row */}
-              <TouchableOpacity
-                style={styles.catHeader}
-                onPress={() => toggleCollapse(cat.label)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.catHeaderLeft}>
-                  <View style={[
-                    styles.catDot,
-                    { backgroundColor: allOff ? '#333' : partial ? '#888' : '#4A90D9' }
-                  ]} />
-                  <Text style={styles.catLabel}>{cat.label}</Text>
-                  <Text style={styles.catCount}>
-                    {cat.sources.filter(s => activeSources[s] !== false).length}/{cat.sources.length}
-                  </Text>
-                </View>
-                <Ionicons
-                  name={isCollapsed ? 'chevron-forward' : 'chevron-down'}
-                  size={16}
-                  color="#444"
-                />
-              </TouchableOpacity>
-
-              {/* Source rows — hidden when collapsed */}
-              {!isCollapsed && cat.sources.map((src, i) => (
-                <View key={src} style={[styles.sourceRow, i === 0 && styles.sourceRowFirst]}>
-                  <Text style={styles.srcLabel}>{src}</Text>
-                  <Switch
-                    value={activeSources[src] !== false}
-                    onValueChange={() => toggleSource(src)}
-                    trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }}
-                    thumbColor={activeSources[src] !== false ? '#4A90D9' : '#444'}
-                  />
-                </View>
-              ))}
+        {/* FEED */}
+        <Text style={styles.sectionHeader}>FEED</Text>
+        <View style={styles.card}>
+          <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('TopicInterests')}>
+            <View style={styles.rowTextCol}>
+              <Text style={styles.rowLabel}>Topic Interests ★</Text>
+              <Text style={styles.rowSub}>Star topics to personalise For You feed</Text>
             </View>
-          );
-        })}
+            <Ionicons name="chevron-forward" size={18} color="#444" />
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => navigation.navigate('Topics')}>
+            <View style={styles.rowTextCol}>
+              <Text style={styles.rowLabel}>Topics</Text>
+              <Text style={styles.rowSub}>{enabledTopicsCount} of 6 categories enabled</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#444" />
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => navigation.navigate('Sources')}>
+            <View style={styles.rowTextCol}>
+              <Text style={styles.rowLabel}>Sources</Text>
+              <Text style={styles.rowSub}>Manage individual news sources</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#444" />
+          </TouchableOpacity>
+        </View>
+
+        {/* MY STATS */}
+        <Text style={styles.sectionHeader}>MY STATS</Text>
+        <View style={styles.card}>
+          <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('Usage')}>
+            <View style={styles.rowTextCol}>
+              <Text style={styles.rowLabel}>Usage & Insights</Text>
+              <Text style={styles.rowSub}>Articles read, AI usage, estimated cost</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#444" />
+          </TouchableOpacity>
+        </View>
 
         {/* ABOUT */}
         <Text style={[styles.sectionHeader, { marginTop: 8 }]}>ABOUT</Text>
@@ -153,6 +163,25 @@ export default function SettingsScreen() {
               <Text style={styles.clearCache}>Reset to Defaults</Text>
             </View>
           </TouchableOpacity>
+        </View>
+
+        <Text style={[styles.sectionHeader, { marginTop: 8 }]}>BIAS RATINGS</Text>
+        <View style={styles.card}>
+          <Text style={styles.biasAttribution}>
+            Bias ratings are adapted from publicly available media bias resources (AllSides, Ad Fontes Media). Used for informational purposes. Not all sources rated.
+          </Text>
+          <View style={{ marginTop: 12, gap: 8 }}>
+            {[
+              { color: '#1E5CFF', label: 'Left / Lean Left' },
+              { color: '#9B9B9B', label: 'Center' },
+              { color: '#FF3B30', label: 'Right / Lean Right' },
+            ].map(({ color, label }) => (
+              <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
+                <Text style={styles.biasLegendText}>{label}</Text>
+              </View>
+            ))}
+          </View>
         </View>
 
         <View style={{ height: 40 }} />
@@ -198,28 +227,8 @@ const styles = StyleSheet.create({
   rowSub: { color: '#555', fontSize: 12, marginTop: 2 },
   rowValue: { color: '#444', fontSize: 15 },
 
-  // Source category groups
-  sourceGroup: {
-    marginHorizontal: 16, backgroundColor: '#0E0E0E',
-    borderRadius: 14, borderWidth: 1, borderColor: '#1A1A1A',
-    marginBottom: 10, overflow: 'hidden',
-  },
-  catHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14,
-  },
-  catHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  catDot: { width: 8, height: 8, borderRadius: 4 },
-  catLabel: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
-  catCount: { color: '#444', fontSize: 13, marginLeft: 4 },
-  sourceRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 12,
-    borderTopWidth: 1, borderTopColor: '#1A1A1A',
-  },
-  sourceRowFirst: { borderTopWidth: 1, borderTopColor: '#2A2A2A' },
-  srcLabel: { color: '#AAA', fontSize: 14, fontWeight: '500' },
-
   clearRow: { flexDirection: 'row', alignItems: 'center' },
   clearCache: { color: '#FF4444', fontSize: 15, fontWeight: '500' },
+  biasAttribution: { color: 'rgba(255,255,255,0.45)', fontSize: 12, lineHeight: 18 },
+  biasLegendText: { color: 'rgba(255,255,255,0.55)', fontSize: 13 },
 });

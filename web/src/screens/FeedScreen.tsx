@@ -51,6 +51,7 @@ interface StoryCluster {
   subtitle: string;
   stories: Story[];
   isBreaking: boolean;
+  biasBreakdown?: { left: number; center: number; right: number; unknown: number; diversity: boolean };
 }
 
 function generateTopicLabel(headline: string): string {
@@ -121,8 +122,27 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
             {cluster.subtitle}
           </div>
         )}
-        <div style={{ color: '#3a3a3a', fontSize: 11, fontWeight: 600, marginTop: 5, letterSpacing: 0.3 }}>
-          {cluster.stories.length} STORIES
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5, flexWrap: 'wrap' }}>
+          <span style={{ color: '#3a3a3a', fontSize: 11, fontWeight: 600, letterSpacing: 0.3 }}>
+            {cluster.stories.length} STORIES
+          </span>
+          {cluster.biasBreakdown && (() => {
+            const bd = cluster.biasBreakdown!;
+            const total = bd.left + bd.center + bd.right;
+            if (total === 0) return null;
+            return (
+              <div style={{ display: 'flex', height: 3, borderRadius: 2, overflow: 'hidden', width: 60 }}>
+                <div style={{ flex: bd.left || 0.001, background: '#1E5CFF' }} />
+                <div style={{ flex: bd.center || 0.001, background: '#9B9B9B' }} />
+                <div style={{ flex: bd.right || 0.001, background: '#FF3B30' }} />
+              </div>
+            );
+          })()}
+          {cluster.biasBreakdown?.diversity && (
+            <span style={{ color: 'rgba(100,200,100,0.8)', fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: '2px 7px', borderRadius: 99, border: '1px solid rgba(100,200,100,0.2)', background: 'rgba(100,180,100,0.1)' }}>
+              Multi-perspective
+            </span>
+          )}
         </div>
       </div>
 
@@ -184,6 +204,7 @@ function serverItemToCluster(item: ServerFeedItem): StoryCluster | null {
       subtitle: item.topicSummary || (item.articles[0].summary ?? ''),
       stories: item.articles,
       isBreaking: item.articles.some(storyIsBreaking),
+      biasBreakdown: (item.articles[0] as any).biasBreakdown,
     };
   }
   return {

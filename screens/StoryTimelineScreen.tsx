@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FeedStackParamList } from '../types/navigation';
-import { Story } from '../components/StoryCard';
+import { Story, BiasDot, type BiasRating } from '../components/StoryCard';
 
 type EventType = 'breaking' | 'update' | 'analysis' | 'reaction';
 
@@ -70,6 +70,7 @@ export default function StoryTimelineScreen() {
       publishedAt: story.publishedAt,
       dominantColor: '#1A1A2E',
       sources: JSON.stringify(story.sources ?? []),
+      sourceBias: (story as any).sourceBias,
     });
   }
 
@@ -116,6 +117,7 @@ export default function StoryTimelineScreen() {
                   <Text style={styles.timeText}>{timeAgo(story.publishedAt)}</Text>
                   <Text style={styles.sep}>·</Text>
                   <Text style={styles.sourceText} numberOfLines={1}>{source}</Text>
+                  <BiasDot bias={(story as any).sourceBias as BiasRating} size={6} />
                 </View>
 
                 <View style={styles.contentRow}>

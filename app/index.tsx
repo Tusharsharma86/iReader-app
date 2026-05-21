@@ -24,7 +24,7 @@ import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Story, StoryCard } from '../components/StoryCard';
+import { Story, StoryCard, BiasDot, BiasSpectrum, type BiasBreakdown } from '../components/StoryCard';
 import { FeedStackParamList } from '../types/navigation';
 import { useSource } from '../contexts/SourceContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -282,6 +282,7 @@ interface Cluster {
   stories: Story[];
   isBreaking?: boolean;
   _category?: string;
+  biasBreakdown?: BiasBreakdown;
 }
 
 interface TermData { terms: Set<string>; entities: Set<string> }
@@ -510,6 +511,7 @@ function feedToClusterGroups(feed: ApiFeedItem[]): Cluster[] {
         stories: item.articles,
         isBreaking: item.articles.some(s => s.isBreaking || (Date.now() - new Date(s.publishedAt).getTime()) < 60 * 60 * 1000),
         _category: item._category,
+        biasBreakdown: (rep as any).biasBreakdown,
       }];
     }
     return [{
@@ -1338,9 +1340,17 @@ const TopicSection = React.memo(function TopicSection({
             <Text style={styles.clusterSummary} numberOfLines={3}>{summary}</Text>
           )}
 
-          {/* Story count pill */}
-          <View style={[styles.clusterCountPill, { marginTop: 10 }]}>
-            <Text style={styles.clusterCountPillText}>{count} stories</Text>
+          {/* Story count pill + bias spectrum */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+            <View style={styles.clusterCountPill}>
+              <Text style={styles.clusterCountPillText}>{count} stories</Text>
+            </View>
+            {cluster.biasBreakdown && <BiasSpectrum breakdown={cluster.biasBreakdown} />}
+            {cluster.biasBreakdown?.diversity && (
+              <View style={styles.diversityBadge}>
+                <Text style={styles.diversityText}>Multi-perspective</Text>
+              </View>
+            )}
           </View>
         </View>
       </View>
@@ -1437,6 +1447,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.05)',
   },
   clusterCountPillText: { color: 'rgba(255,255,255,0.35)', fontSize: 11, fontWeight: '600', letterSpacing: 0.4 },
+  diversityBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99, backgroundColor: 'rgba(100,180,100,0.12)', borderWidth: 1, borderColor: 'rgba(100,200,100,0.2)' },
+  diversityText: { color: 'rgba(100,200,100,0.8)', fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
   clusterHeadline: { color: '#FFFFFF', fontSize: 18, fontWeight: '700', lineHeight: 25, letterSpacing: -0.2, marginBottom: 6 },
   clusterSummary: { color: '#666', fontSize: 13, fontWeight: '400', lineHeight: 18, marginTop: 3 },
   clusterCountBox: { alignItems: 'center', minWidth: 48 },

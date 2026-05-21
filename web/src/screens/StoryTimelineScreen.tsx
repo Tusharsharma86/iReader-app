@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import type { Story, ArticleParams } from '../types';
+import type { Story, ArticleParams, BiasRating } from '../types';
+import { BIAS_CONFIG } from '../types';
 import { useRouter } from '../contexts/RouterContext';
 import { getArticleColor } from '../utils/colors';
 
@@ -59,6 +60,7 @@ export default function StoryTimelineScreen({ params }: { params: { clusterId: s
       dominantColor: dominant,
       sources: JSON.stringify(story.sources ?? []),
       allStories: '[]',
+      sourceBias: (story as any).sourceBias,
     };
     navigate({ name: 'Article', params: ap });
   }
@@ -109,6 +111,9 @@ export default function StoryTimelineScreen({ params }: { params: { clusterId: s
                   <span style={{ color: '#3A3A3A', fontSize: 11 }}>{timeAgo(story.publishedAt)}</span>
                   <span style={{ color: '#2A2A2A', fontSize: 10 }}>·</span>
                   <span style={{ color: '#444', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>{source}</span>
+                  {(story as any).sourceBias && (story as any).sourceBias !== 'unknown' && (
+                    <div style={{ width: 6, height: 6, borderRadius: 3, background: BIAS_CONFIG[(story as any).sourceBias as BiasRating]?.color, flexShrink: 0 }} />
+                  )}
                 </div>
 
                 {/* Content row */}

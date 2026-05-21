@@ -13,6 +13,7 @@ export type FeedStackParamList = {
     dominantColor: string;
     sources?: string; // JSON-stringified array of { name, url, imageUrl?, publishedAt }
     allStories?: string; // JSON-stringified Story[] slice for related stories
+    sourceBias?: string;
   };
 };
 

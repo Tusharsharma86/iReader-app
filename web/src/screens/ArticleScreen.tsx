@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { ArticleParams, Story } from '../types';
+import type { ArticleParams, Story, BiasRating } from '../types';
+import { BIAS_CONFIG } from '../types';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 import { useRouter } from '../contexts/RouterContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -76,6 +77,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
   const [paragraphsError, setParagraphsError] = useState<string | null>(null);
   const [readingTimeMinutes, setReadingTimeMinutes] = useState<number | null>(null);
   const [difficulty, setDifficulty] = useState<string | null>(null);
+  const [biasModalVisible, setBiasModalVisible] = useState(false);
   const [entities, setEntities] = useState<{ people: string[]; companies: string[] }>({ people: [], companies: [] });
   const [hasBeenRead, setHasBeenRead] = useState(BLOCKED_LONGFORM_SOURCES.includes(params.source ?? ''));
   const [aiResult, setAiResult] = useState<AiResult | null>(null);
@@ -263,8 +265,39 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
               );
             })}
             <span style={{ marginLeft: 10, color: lighten(dominant, 0.4), fontSize: 12, fontWeight: 600 }}>{allSources.slice(0,5).map(s=>s.name).join('  ·  ')}</span>
+            {params.sourceBias && params.sourceBias !== 'unknown' && (() => {
+              const cfg = BIAS_CONFIG[params.sourceBias as BiasRating];
+              return (
+                <button onClick={() => setBiasModalVisible(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 8, display: 'flex', alignItems: 'center', gap: 4, padding: 0 }}>
+                  <div style={{ width: 7, height: 7, borderRadius: 4, background: cfg?.color, flexShrink: 0 }} />
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="8"/><line x1="12" y1="12" x2="12" y2="16"/></svg>
+                </button>
+              );
+            })()}
           </div>
         )}
+
+        {biasModalVisible && params.sourceBias && params.sourceBias !== 'unknown' && (() => {
+          const cfg = BIAS_CONFIG[params.sourceBias as BiasRating];
+          const label = params.sourceBias.replace('-', ' ').replace(/\b\w/g, c => c.toUpperCase());
+          return (
+            <div onClick={() => setBiasModalVisible(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+              <div onClick={e => e.stopPropagation()} style={{ background: '#1A1A1A', borderRadius: 16, padding: 20, maxWidth: 320, width: '100%' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: 5, background: cfg?.color }} />
+                  <span style={{ color: '#fff', fontSize: 15, fontWeight: 700 }}>Rated: {label}</span>
+                </div>
+                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, lineHeight: 1.55, margin: 0 }}>
+                  This source is rated based on publicly available media bias data (AllSides, Ad Fontes Media). Ratings are reference points, not endorsements.
+                </p>
+                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, lineHeight: 1.55, margin: '8px 0 0' }}>
+                  Consider reading multiple perspectives for a complete picture.
+                </p>
+                <button onClick={() => setBiasModalVisible(false)} style={{ marginTop: 16, width: '100%', background: '#222', border: 'none', borderRadius: 10, padding: '10px 0', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Got it</button>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Reading meta */}

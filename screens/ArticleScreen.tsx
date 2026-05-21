@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
   ActivityIndicator,
+  Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
@@ -22,6 +23,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { tabBarTranslateY } from '../utils/tabBarAnim';
 import { darken, lighten, getArticleColor } from '../utils/colors';
+import { BiasDot, BIAS_CONFIG, type BiasRating } from '../components/StoryCard';
 import { RootStackParamList } from '../types/navigation';
 import { useSettings } from '../contexts/SettingsContext';
 import { getCached, setCached, TTL } from '../utils/cache';
@@ -130,6 +132,41 @@ function SourceIcons({ sources, dominant }: { sources: SourceEntry[]; dominant: 
   );
 }
 
+function BiasInfoModal({ bias, visible, onClose }: { bias?: string; visible: boolean; onClose: () => void }) {
+  const cfg = BIAS_CONFIG[(bias as BiasRating) ?? 'unknown'];
+  const biasLabel = bias && bias !== 'unknown'
+    ? bias.replace('-', ' ').replace(/\b\w/g, c => c.toUpperCase())
+    : null;
+  return (
+    <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
+      <Pressable style={bmStyles.overlay} onPress={onClose}>
+        <View style={bmStyles.card}>
+          {biasLabel && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: cfg.color }} />
+              <Text style={bmStyles.title}>Rated: {biasLabel}</Text>
+            </View>
+          )}
+          <Text style={bmStyles.body}>This source is rated based on publicly available media bias data (AllSides, Ad Fontes Media). Ratings are reference points, not endorsements.</Text>
+          <Text style={[bmStyles.body, { marginTop: 8 }]}>Consider reading multiple perspectives for a complete picture.</Text>
+          <TouchableOpacity onPress={onClose} style={bmStyles.btn}>
+            <Text style={bmStyles.btnText}>Got it</Text>
+          </TouchableOpacity>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
+const bmStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 32 },
+  card: { backgroundColor: '#1A1A1A', borderRadius: 16, padding: 20, width: '100%' },
+  title: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  body: { color: 'rgba(255,255,255,0.6)', fontSize: 13, lineHeight: 20 },
+  btn: { marginTop: 16, backgroundColor: '#222', borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
+  btnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+});
+
 const siStyles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
   circle: { width: 36, height: 36, borderRadius: 18, overflow: 'hidden', borderWidth: 2 },
@@ -192,6 +229,7 @@ export default function ArticleScreen() {
   const [paragraphsError, setParagraphsError] = useState<string | null>(null);
   const [readingTimeMinutes, setReadingTimeMinutes] = useState<number | null>(null);
   const [difficulty, setDifficulty] = useState<string | null>(null);
+  const [biasModalVisible, setBiasModalVisible] = useState(false);
   const [entities, setEntities] = useState<{ people: string[]; companies: string[] }>({ people: [], companies: [] });
 
   const allStories = useMemo(() => {
@@ -550,7 +588,17 @@ export default function ArticleScreen() {
 
         <View style={styles.metaBlock}>
           <Text style={styles.headline}>{params.headline}</Text>
-          {allSources.length > 0 && <SourceIcons sources={allSources} dominant={dominant} />}
+          {allSources.length > 0 && (
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <SourceIcons sources={allSources} dominant={dominant} />
+              {params.sourceBias && params.sourceBias !== 'unknown' && (
+                <TouchableOpacity onPress={() => setBiasModalVisible(true)} style={{ marginLeft: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <BiasDot bias={params.sourceBias as BiasRating} size={8} />
+                  <Ionicons name="information-circle-outline" size={13} color="rgba(255,255,255,0.3)" />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
           <Text style={[styles.publishedAt, { color: lighten(dominant, 0.35) }]}>{formatPublished(params.publishedAt)}</Text>
           {!!params.summary && (
             <Text style={styles.summaryText}>{params.summary}</Text>
@@ -648,6 +696,8 @@ export default function ArticleScreen() {
         <View style={{ height: related.length >= 2 ? STRIP_HEIGHT + 16 : 60 }} />
       </ScrollView>
       </Animated.View>
+
+      <BiasInfoModal bias={params.sourceBias} visible={biasModalVisible} onClose={() => setBiasModalVisible(false)} />
 
       {/* Related Stories — fixed strip, hides on scroll-down */}
       {related.length >= 2 && (

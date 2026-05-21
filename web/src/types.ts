@@ -1,3 +1,22 @@
+export type BiasRating = 'left' | 'lean-left' | 'center' | 'lean-right' | 'right' | 'unknown';
+
+export const BIAS_CONFIG: Record<BiasRating, { color: string; label: string }> = {
+  'left':       { color: '#1E5CFF', label: 'L' },
+  'lean-left':  { color: '#4D9EFF', label: 'LL' },
+  'center':     { color: '#9B9B9B', label: 'C' },
+  'lean-right': { color: '#FF7A4D', label: 'LR' },
+  'right':      { color: '#FF3B30', label: 'R' },
+  'unknown':    { color: 'transparent', label: '' },
+};
+
+export interface BiasBreakdown {
+  left: number;
+  center: number;
+  right: number;
+  unknown: number;
+  diversity: boolean;
+}
+
 export interface Story {
   id: string;
   headline: string;
@@ -12,6 +31,9 @@ export interface Story {
   isDeveloping?: boolean;
   readingTimeMinutes?: number;
   difficulty?: 'Easy' | 'Medium' | 'Hard';
+  sourceBias?: BiasRating;
+  sourceCredibility?: 'high' | 'medium' | 'low' | 'unknown';
+  biasBreakdown?: BiasBreakdown;
 }
 
 export interface TopicGroup {
@@ -38,6 +60,7 @@ export interface ArticleParams {
   dominantColor: string;
   sources: string; // JSON array of SourceEntry
   allStories: string; // JSON array of Story (up to 30)
+  sourceBias?: string;
 }
 
 export type NavScreen =

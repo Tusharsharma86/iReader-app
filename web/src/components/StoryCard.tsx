@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import type { Story, ArticleParams } from '../types';
+import type { Story, ArticleParams, BiasRating } from '../types';
+import { BIAS_CONFIG } from '../types';
 import { getArticleColor, lighten, darken } from '../utils/colors';
 import { useRouter } from '../contexts/RouterContext';
 import { useSaved } from '../contexts/SavedContext';
@@ -87,6 +88,7 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
       dominantColor: dominant,
       sources: JSON.stringify(story.sources ?? []),
       allStories: JSON.stringify((allStories ?? []).slice(0, 30)),
+      sourceBias: story.sourceBias,
     };
     navigate({ name: 'Article', params });
   };
@@ -133,6 +135,9 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
             {source.charAt(0).toUpperCase()}
           </div>
           <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: 600 }}>{source.toUpperCase()}</span>
+          {story.sourceBias && story.sourceBias !== 'unknown' && (
+            <div style={{ width: 6, height: 6, borderRadius: 3, background: BIAS_CONFIG[story.sourceBias as BiasRating]?.color, flexShrink: 0 }} />
+          )}
           <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>·</span>
           <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: 600 }}>{timeAgo(story.publishedAt)}</span>
           {isBreakingBadge && !suppressBreaking && (

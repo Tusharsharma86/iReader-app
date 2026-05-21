@@ -8,6 +8,45 @@ import { darken, lighten, getArticleColor } from '../utils/colors';
 import { FeedStackParamList } from '../types/navigation';
 import { trackArticleOpen } from '../utils/personalization';
 
+export type BiasRating = 'left' | 'lean-left' | 'center' | 'lean-right' | 'right' | 'unknown';
+
+export const BIAS_CONFIG: Record<BiasRating, { color: string; label: string }> = {
+  'left':       { color: '#1E5CFF', label: 'L' },
+  'lean-left':  { color: '#4D9EFF', label: 'LL' },
+  'center':     { color: '#9B9B9B', label: 'C' },
+  'lean-right': { color: '#FF7A4D', label: 'LR' },
+  'right':      { color: '#FF3B30', label: 'R' },
+  'unknown':    { color: 'transparent', label: '' },
+};
+
+export function BiasDot({ bias, size = 7 }: { bias?: BiasRating; size?: number }) {
+  if (!bias || bias === 'unknown') return null;
+  return (
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: BIAS_CONFIG[bias].color }} />
+  );
+}
+
+export interface BiasBreakdown {
+  left: number;
+  center: number;
+  right: number;
+  unknown: number;
+  diversity: boolean;
+}
+
+export function BiasSpectrum({ breakdown }: { breakdown?: BiasBreakdown }) {
+  if (!breakdown) return null;
+  const total = breakdown.left + breakdown.center + breakdown.right;
+  if (total === 0) return null;
+  return (
+    <View style={{ flexDirection: 'row', height: 3, borderRadius: 2, overflow: 'hidden', width: 60 }}>
+      <View style={{ flex: breakdown.left || 0.001, backgroundColor: '#1E5CFF' }} />
+      <View style={{ flex: breakdown.center || 0.001, backgroundColor: '#9B9B9B' }} />
+      <View style={{ flex: breakdown.right || 0.001, backgroundColor: '#FF3B30' }} />
+    </View>
+  );
+}
+
 export interface Story {
   id: string;
   headline: string;
@@ -21,6 +60,9 @@ export interface Story {
   isDeveloping?: boolean;
   readingTimeMinutes?: number;
   difficulty?: 'Easy' | 'Medium' | 'Hard';
+  sourceBias?: BiasRating;
+  sourceCredibility?: 'high' | 'medium' | 'low' | 'unknown';
+  biasBreakdown?: BiasBreakdown;
 }
 
 
@@ -127,6 +169,7 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, allStories }
       dominantColor: dominant,
       sources: JSON.stringify(story.sources ?? []),
       allStories: JSON.stringify((allStories ?? []).slice(0, 30)),
+      sourceBias: story.sourceBias,
     });
   }, [story, dominant, navigation, allStories]);
 
@@ -177,6 +220,7 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, allStories }
         {/* Article count · time · badges */}
         <View style={styles.metaRow}>
           <Text style={styles.metaLabel}>{source.toUpperCase()}  ·  {timeAgo(story.publishedAt)}</Text>
+          <BiasDot bias={story.sourceBias} size={6} />
           {isBreakingBadge && <Text style={styles.breakingText}>·  BREAKING</Text>}
           {isTrending && !isBreakingBadge && <Text style={styles.badge}>🔥</Text>}
           {isOngoing && <Text style={styles.badge}>📍</Text>}

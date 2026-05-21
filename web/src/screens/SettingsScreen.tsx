@@ -123,6 +123,23 @@ export default function SettingsScreen() {
         </div>
       </div>
 
+      <div style={sectionHeader}>BIAS RATINGS</div>
+      <div style={{ margin: '0 16px', background: '#111', borderRadius: 12, overflow: 'hidden', padding: '14px 16px' }}>
+        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12, lineHeight: 1.6, margin: '0 0 12px' }}>
+          Bias ratings are adapted from publicly available media bias resources (AllSides, Ad Fontes Media). Used for informational purposes. Not all sources rated.
+        </p>
+        {[
+          { color: '#1E5CFF', label: 'Left / Lean Left' },
+          { color: '#9B9B9B', label: 'Center' },
+          { color: '#FF3B30', label: 'Right / Lean Right' },
+        ].map(({ color, label }) => (
+          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <div style={{ width: 8, height: 8, borderRadius: 4, background: color, flexShrink: 0 }} />
+            <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13 }}>{label}</span>
+          </div>
+        ))}
+      </div>
+
       <div style={{ height: 40 }} />
     </div>
   );
