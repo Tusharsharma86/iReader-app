@@ -49,6 +49,19 @@ function faviconUrl(name: string) {
   return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 }
 
+function domainFromUrl(url: string | undefined): string {
+  if (!url) return '';
+  try { return new URL(url).hostname.replace(/^www\./, ''); }
+  catch { return ''; }
+}
+
+function faviconFromStory(name: string, url: string | undefined): string {
+  const mapped = SOURCE_DOMAINS[name];
+  const fromUrl = domainFromUrl(url);
+  const domain = mapped || fromUrl;
+  return domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=128` : '';
+}
+
 interface Props {
   story: Story;
   compact?: boolean;
@@ -105,13 +118,52 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
         WebkitTapHighlightColor: 'transparent',
       }}
     >
-      {/* Background image */}
+      {/* Background image or typographic fallback */}
       {!imgError && story.imageUrl ? (
         <img src={story.imageUrl} alt="" onError={() => setImgError(true)}
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
       ) : (
-        <img src="/news-placeholder.jpg" alt=""
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: `linear-gradient(135deg, ${lighten(dominant, 0.25)} 0%, ${dominant} 55%, ${darken(dominant, 0.3)} 100%)`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: `linear-gradient(135deg, transparent 35%, ${accent}22 55%, transparent 75%)`,
+          }} />
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: 20, position: 'relative' }}>
+            {(() => {
+              const fav = faviconFromStory(source, story.sources?.[0]?.url);
+              return (
+                <div style={{
+                  width: 44, height: 44, borderRadius: 22,
+                  border: `2px solid ${accent}AA`,
+                  background: 'rgba(0,0,0,0.25)',
+                  overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {fav ? (
+                    <img src={fav} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{
+                      width: '100%', height: '100%',
+                      background: lighten(dominant, 0.15),
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: accent, fontSize: 18, fontWeight: 800,
+                    }}>
+                      {(source ?? '?').charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+            <div style={{ color: accent, fontSize: 13, fontWeight: 800, letterSpacing: 0.4 }}>{source.toUpperCase()}</div>
+            <div style={{ width: 28, height: 1, background: `${accent}55`, borderRadius: 1 }} />
+            <div style={{ color: `${accent}CC`, fontSize: 9, fontWeight: 700, letterSpacing: 1.6 }}>
+              {timeAgo(story.publishedAt)}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Gradient overlay */}

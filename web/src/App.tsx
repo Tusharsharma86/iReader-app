@@ -4,9 +4,12 @@ import { SettingsProvider } from './contexts/SettingsContext';
 import { SourceProvider } from './contexts/SourceContext';
 import { SavedProvider } from './contexts/SavedContext';
 import { TabBarProvider } from './contexts/TabBarContext';
+import { TabBar } from './components/TabBar';
 
 const FeedScreen       = lazy(() => import('./screens/FeedScreen'));
 const ArticleScreen    = lazy(() => import('./screens/ArticleScreen'));
+const DigestScreen     = lazy(() => import('./screens/DigestScreen'));
+const SavedScreen      = lazy(() => import('./screens/SavedScreen'));
 const SettingsScreen   = lazy(() => import('./screens/SettingsScreen'));
 const SourcesScreen    = lazy(() => import('./screens/SourcesScreen'));
 const TopicsScreen     = lazy(() => import('./screens/TopicsScreen'));
@@ -46,6 +49,8 @@ function ScreenRenderer() {
         <div style={{ position: 'absolute', inset: 0, zIndex: 1 }}>
           <Suspense fallback={spinner}>
             {currentScreen.name === 'Article'    && <ArticleScreen params={currentScreen.params} />}
+            {currentScreen.name === 'Digest'     && <DigestScreen />}
+            {currentScreen.name === 'Saved'      && <SavedScreen />}
             {currentScreen.name === 'TopicFeed'  && <TopicFeedScreen tag={currentScreen.params.tag} />}
             {currentScreen.name === 'Settings'   && <SettingsScreen />}
             {currentScreen.name === 'Sources'    && <SourcesScreen />}
@@ -77,6 +82,7 @@ export default function App() {
                 position: 'relative',
               }}>
                 <ScreenRenderer />
+                <TabBar />
               </div>
             </RouterProvider>
           </TabBarProvider>

@@ -40,6 +40,35 @@ function faviconFromUrl(url: string): string {
   } catch { return ''; }
 }
 
+function deriveCategory(source: string, url: string, headline: string): string {
+  const s = (source || '').toLowerCase();
+  const u = (url || '').toLowerCase();
+  const h = (headline || '').toLowerCase();
+  if (/techcrunch|verge|ars technica|wired|9to5|venturebeat|tech\b/.test(s + ' ' + u) ||
+      /\b(ai|tech|startup|app|software|chip|robot)\b/.test(h)) return 'Tech';
+  if (/economic times|moneycontrol|livemint|mint|cnbc|markets|bloomberg/.test(s) ||
+      /\b(stock|sensex|nifty|market|ipo|fund|rupee|inflation)\b/.test(h)) return 'Markets';
+  if (/bbc|reuters|guardian|al jazeera|world/.test(s) ||
+      /\b(ukraine|russia|israel|gaza|china|nato|biden|trump|putin)\b/.test(h)) return 'World';
+  if (/ndtv|india today|times of india|hindu|indian express|the print|quint/.test(s) ||
+      /\b(modi|bjp|congress|delhi|mumbai|india)\b/.test(h)) return 'India';
+  return 'News';
+}
+
+function fmtDateInline(iso: string): string {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    return `${date}  ·  ${time}`;
+  } catch { return ''; }
+}
+
+function wordCount(s: string): number {
+  return (s ?? '').trim().split(/\s+/).filter(Boolean).length;
+}
+
 function extractEntityTokens(text: string): string[] {
   if (!text) return [];
   const results: string[] = [];
@@ -68,11 +97,18 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
   const dominant = params.dominantColor;
   const accent = lighten(dominant, 0.45);
   const tabBg = darken(dominant, 0.3);
+  const borderColor = lighten(dominant, 0.3);
+  const articleCategory = deriveCategory(params.source ?? '', params.url ?? '', params.headline ?? '');
 
   const BLOCKED_LONGFORM_SOURCES = ['NYT World', 'NDTV'];
   const defaultTab: Tab = BLOCKED_LONGFORM_SOURCES.includes(params.source ?? '') ? 'Summary' : 'Long Form';
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
   const [paragraphs, setParagraphs] = useState<string[]>([]);
+  const [originalParagraphs, setOriginalParagraphs] = useState<string[]>([]);
+  const [dedupedFlag, setDedupedFlag] = useState(false);
+  const [dedupModalVisible, setDedupModalVisible] = useState(false);
+  const [heroImageFailed, setHeroImageFailed] = useState(false);
+  const noHero = !params.image || heroImageFailed;
   const [paragraphsLoading, setParagraphsLoading] = useState(true);
   const [paragraphsError, setParagraphsError] = useState<string | null>(null);
   const [readingTimeMinutes, setReadingTimeMinutes] = useState<number | null>(null);
@@ -112,8 +148,11 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     fetch(`${API}/article?url=${encodeURIComponent(params.url)}`)
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(data => {
-        const paras: string[] = data.paragraphs ?? (data.text ? data.text.split('\n\n').filter(Boolean) : null) ?? (params.summary ? [params.summary] : []);
+        const paras: string[] = data.paragraphs ?? data.originalParagraphs ?? (data.text ? data.text.split('\n\n').filter(Boolean) : null) ?? (params.summary ? [params.summary] : []);
         const filtered = paras.filter(Boolean);
+        const origRaw: string[] = (data.originalParagraphs ?? paras) as string[];
+        setOriginalParagraphs((origRaw || []).filter(Boolean));
+        setDedupedFlag(Boolean(data.deduped));
         setParagraphs(filtered);
         setEntities(extractEntities(filtered.join(' ')));
         const fullText = filtered.join(' ');
@@ -237,45 +276,155 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
         </a>
       </div>
 
-      {/* Hero image */}
-      <div style={{ height: 280, position: 'relative', marginTop: 0 }}>
-        {params.image ? <img src={params.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} /> : <div style={{ width: '100%', height: '100%', background: darken(dominant, 0.3) }} />}
-        <div style={{ position: 'absolute', inset: 0, background: `${dominant}4D` }} />
-        <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(to bottom, transparent 40%, ${dominant}CC 75%, ${dominant} 100%)` }} />
+      {/* Hero — image variant OR typographic fallback */}
+      <div style={{ height: 280, position: 'relative', marginTop: 0, overflow: 'hidden' }}>
+        {noHero ? (
+          <>
+            <div style={{
+              position: 'absolute', inset: 0,
+              background: `linear-gradient(135deg, ${lighten(dominant, 0.25)} 0%, ${dominant} 55%, ${darken(dominant, 0.3)} 100%)`,
+            }} />
+            <div style={{
+              position: 'absolute', inset: 0,
+              background: `linear-gradient(135deg, transparent 35%, ${accent}22 55%, transparent 75%)`,
+            }} />
+            <div style={{
+              position: 'absolute', top: 0, left: 0, right: 0, bottom: 60,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: 14, padding: '0 24px',
+            }}>
+              {(() => {
+                const fav = params.url ? faviconFromUrl(params.url) : '';
+                return (
+                  <div style={{
+                    width: 64, height: 64, borderRadius: 32,
+                    border: `2px solid ${accent}AA`, overflow: 'hidden',
+                    background: 'rgba(0,0,0,0.25)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {fav ? (
+                      <img src={fav} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <span style={{ color: accent, fontSize: 28, fontWeight: 800 }}>
+                        {(params.source ?? '?').charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+              <span style={{
+                color: accent, fontSize: 16, fontWeight: 800,
+                letterSpacing: 0.4, textTransform: 'uppercase',
+              }}>{params.source ?? 'UNKNOWN'}</span>
+              <div style={{ width: 40, height: 1, background: `${accent}55`, borderRadius: 1 }} />
+              <span style={{ color: `${accent}CC`, fontSize: 10, fontWeight: 700, letterSpacing: 2 }}>
+                {articleCategory.toUpperCase()} · ARTICLE
+              </span>
+            </div>
+            <div style={{
+              position: 'absolute', inset: 0,
+              background: `linear-gradient(to bottom, transparent 0%, transparent 55%, ${darken(dominant, 0.4)} 100%)`,
+            }} />
+          </>
+        ) : (
+          <>
+            <img
+              src={params.image}
+              alt=""
+              onError={() => setHeroImageFailed(true)}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+            />
+            <div style={{ position: 'absolute', inset: 0, background: `${dominant}33` }} />
+            <div style={{
+              position: 'absolute', inset: 0,
+              background: `linear-gradient(to bottom, transparent 0%, transparent 55%, ${darken(dominant, 0.4)} 100%)`,
+            }} />
+          </>
+        )}
       </div>
 
-      {/* Meta */}
-      <div style={{ padding: '16px 16px 12px' }}>
-        <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: 500, marginBottom: 8 }}>{formatPublishedAt(params.publishedAt)}</div>
-        <h1 style={{ color: '#fff', fontSize: 24, fontWeight: 800, lineHeight: 1.33, margin: 0 }}>{params.headline}</h1>
-        {params.summary && <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, lineHeight: 1.55, margin: '10px 0 0' }}>{params.summary}</p>}
+      {/* Meta — pulled up to overlap hero fade */}
+      <div style={{ padding: '4px 16px 14px', marginTop: -32, position: 'relative' }}>
+        {/* Category chip */}
+        <div style={{
+          display: 'inline-flex', alignItems: 'center',
+          padding: '4px 10px', borderRadius: 999,
+          border: `1px solid ${accent}88`, color: accent,
+          fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
+          marginBottom: 14,
+        }}>{articleCategory}</div>
 
-        {/* Source icons */}
-        {allSources.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', marginTop: 10 }}>
-            {allSources.slice(0,5).map((src, i) => {
-              const faviconUri = src.url ? faviconFromUrl(src.url) : '';
-              return (
-                <div key={i} style={{ width: 36, height: 36, borderRadius: 18, border: `2px solid ${dominant}`, overflow: 'hidden', marginLeft: i > 0 ? -12 : 0, background: lighten(dominant, 0.2), zIndex: 5-i, position: 'relative' }}>
-                  {faviconUri
-                    ? <img src={faviconUri} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                    : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: accent, fontSize: 14, fontWeight: 800 }}>{src.name.charAt(0)}</div>
-                  }
-                </div>
-              );
-            })}
-            <span style={{ marginLeft: 10, color: lighten(dominant, 0.4), fontSize: 12, fontWeight: 600 }}>{allSources.slice(0,5).map(s=>s.name).join('  ·  ')}</span>
-            {params.sourceBias && params.sourceBias !== 'unknown' && (() => {
-              const cfg = BIAS_CONFIG[params.sourceBias as BiasRating];
-              return (
-                <button onClick={() => setBiasModalVisible(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 8, display: 'flex', alignItems: 'center', gap: 4, padding: 0 }}>
-                  <div style={{ width: 7, height: 7, borderRadius: 4, background: cfg?.color, flexShrink: 0 }} />
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="8"/><line x1="12" y1="12" x2="12" y2="16"/></svg>
-                </button>
-              );
-            })()}
-          </div>
-        )}
+        <h1 style={{ color: '#fff', fontSize: 24, fontWeight: 800, lineHeight: 1.33, margin: 0 }}>{params.headline}</h1>
+
+        {/* Primary source row: avatar + name + verified */}
+        {allSources.length > 0 && (() => {
+          const primary = allSources[0];
+          const faviconUri = primary.url ? faviconFromUrl(primary.url) : '';
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14 }}>
+              <div style={{
+                width: 30, height: 30, borderRadius: 15,
+                border: `2px solid ${dominant}`,
+                overflow: 'hidden',
+                background: lighten(dominant, 0.2),
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {faviconUri ? (
+                  <img src={faviconUri} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                ) : (
+                  <span style={{ color: accent, fontSize: 12, fontWeight: 800 }}>{primary.name.charAt(0)}</span>
+                )}
+              </div>
+              <span style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>{primary.name}</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="#3B9EFF">
+                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" fill="none" stroke="#3B9EFF" strokeWidth="2"/>
+                <circle cx="12" cy="12" r="10" fill="#3B9EFF" />
+                <path d="M9 12l2 2 4-4" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {params.sourceBias && params.sourceBias !== 'unknown' && (() => {
+                const cfg = BIAS_CONFIG[params.sourceBias as BiasRating];
+                return (
+                  <button onClick={() => setBiasModalVisible(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 4, display: 'flex', alignItems: 'center', padding: 0 }}>
+                    <div style={{ width: 6, height: 6, borderRadius: 3, background: cfg?.color, flexShrink: 0 }} />
+                  </button>
+                );
+              })()}
+              {allSources.length > 1 && (
+                <span style={{ marginLeft: 4, color: lighten(dominant, 0.4), fontSize: 11, fontWeight: 600 }}>
+                  +{allSources.length - 1}
+                </span>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Inline meta: date · time · reading · difficulty */}
+        {(() => {
+          const diffColor = { Easy: '#34C759', Medium: '#FF9500', Hard: '#FF3B30' }[difficulty ?? 'Medium'] ?? '#FF9500';
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+              <span style={{ color: lighten(dominant, 0.35), fontSize: 12, fontWeight: 500 }}>
+                {fmtDateInline(params.publishedAt)}
+              </span>
+              {readingTimeMinutes != null && (
+                <>
+                  <span style={{ color: lighten(dominant, 0.35), fontSize: 12 }}>·</span>
+                  <span style={{ color: lighten(dominant, 0.35), fontSize: 12, fontWeight: 500 }}>
+                    {readingTimeMinutes} min read
+                  </span>
+                </>
+              )}
+              {difficulty != null && (
+                <>
+                  <span style={{ color: lighten(dominant, 0.35), fontSize: 12 }}>·</span>
+                  <span style={{ color: diffColor, fontSize: 12, fontWeight: 600 }}>{difficulty}</span>
+                </>
+              )}
+            </div>
+          );
+        })()}
+
+        {params.summary && <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, lineHeight: 1.55, margin: '14px 0 0' }}>{params.summary}</p>}
 
         {biasModalVisible && params.sourceBias && params.sourceBias !== 'unknown' && (() => {
           const cfg = BIAS_CONFIG[params.sourceBias as BiasRating];
@@ -300,33 +449,124 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
         })()}
       </div>
 
-      {/* Reading meta */}
-      {(readingTimeMinutes != null || difficulty != null) && (() => {
-        const color = { Easy: '#34C759', Medium: '#FF9500', Hard: '#FF3B30' }[difficulty ?? 'Medium'] ?? '#FF9500';
+      {/* Tab bar — icon + label in outlined pill */}
+      <div style={{
+        display: 'flex', margin: '0 16px 16px',
+        background: tabBg, borderRadius: 999, padding: 4,
+        border: `1px solid ${borderColor}55`,
+      }}>
+        {(BLOCKED_LONGFORM_SOURCES.includes(params.source ?? '') ? TABS.filter(t => t !== 'Long Form') : TABS).map(tab => {
+          const active = activeTab === tab;
+          const color = active ? '#fff' : 'rgba(255,255,255,0.4)';
+          return (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              style={{
+                flex: 1, padding: '9px 0', borderRadius: 999, border: 'none', cursor: 'pointer',
+                background: active ? lighten(dominant, 0.05) : 'transparent',
+                color,
+                fontSize: 12, fontWeight: 600,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                transition: 'all 0.2s',
+              }}>
+              <TabIcon tab={tab} color={color} />
+              <span>{tab}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Redundancy stats card */}
+      {(() => {
+        const preText = originalParagraphs.join(' ');
+        const postText = paragraphs.join(' ');
+        const preWords = wordCount(preText);
+        const postWords = wordCount(postText);
+
+        if (activeTab === 'Long Form') {
+          if (preWords === 0) return null;
+          const reduction = preWords > postWords ? Math.round(((preWords - postWords) / preWords) * 100) : 0;
+          const paraReduction = originalParagraphs.length > paragraphs.length ? originalParagraphs.length - paragraphs.length : 0;
+          return (
+            <div>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                margin: '0 16px 12px', padding: '14px',
+                borderRadius: 14, border: `1px solid ${borderColor}55`,
+                background: 'rgba(0,0,0,0.25)',
+              }}>
+                <div style={{
+                  width: 32, height: 32, borderRadius: 16,
+                  border: `1px solid ${accent}88`, background: `${dominant}40`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13,
+                }}>📄</div>
+                <StatCell value={preWords} label="BEFORE" accent={accent} />
+                <span style={{ color: accent, fontSize: 14 }}>→</span>
+                <StatCell value={postWords} label="AFTER" accent={accent} />
+                <div style={{ width: 1, height: 28, background: `${borderColor}55`, margin: '0 4px' }} />
+                <span style={{ fontSize: 16, color: reduction > 0 ? '#34C759' : 'rgba(255,255,255,0.4)' }}>↘</span>
+                <StatCell value={`${reduction}%`} label={dedupedFlag ? (paraReduction > 0 ? `LESS (-${paraReduction} ¶)` : 'LESS') : 'NO DEDUP'} accent={accent} />
+              </div>
+              <button
+                onClick={() => setDedupModalVisible(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  margin: '0 16px 16px', padding: '8px 14px',
+                  borderRadius: 999, border: `1px solid ${borderColor}55`,
+                  background: 'rgba(0,0,0,0.18)', color: accent,
+                  fontSize: 10, fontWeight: 700, letterSpacing: 1.2, cursor: 'pointer',
+                  width: 'calc(100% - 32px)',
+                }}
+              >
+                <span>{'</>'}</span>
+                VERIFY DEDUP · VIEW RAW FETCH
+                <span>›</span>
+              </button>
+            </div>
+          );
+        }
+
+        // AI tabs: original → distilled
+        const originalWords = postWords || preWords;
+        if (originalWords === 0) return null;
+        let aiText = '';
+        if (activeTab === 'Summary') aiText = aiResult?.bullets?.join(' ') ?? aiResult?.summary ?? '';
+        else if (activeTab === '5 Ws') aiText = (aiResult?.fiveWs ?? []).join(' ');
+        else if (activeTab === 'ELI5') aiText = aiResult?.eli5 ?? '';
+        const aiWords = wordCount(aiText);
+        if (aiWords === 0) return null;
+        const reduction = Math.max(0, Math.round(((originalWords - aiWords) / originalWords) * 100));
         return (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 16px 14px' }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>{readingTimeMinutes} min read</span>
-            {difficulty != null && (
-              <>
-                <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12 }}>·</span>
-                <div style={{ width: 6, height: 6, borderRadius: 3, background: color, flexShrink: 0 }} />
-                <span style={{ color, fontSize: 12, fontWeight: 500 }}>{difficulty}</span>
-              </>
-            )}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            margin: '0 16px 16px', padding: '14px',
+            borderRadius: 14, border: `1px solid ${borderColor}55`,
+            background: 'rgba(0,0,0,0.25)',
+          }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 16,
+              border: `1px solid ${accent}88`, background: `${dominant}40`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13,
+            }}>✨</div>
+            <StatCell value={originalWords} label="ORIGINAL" accent={accent} />
+            <span style={{ color: accent, fontSize: 14 }}>→</span>
+            <StatCell value={aiWords} label="DISTILLED" accent={accent} />
+            <div style={{ width: 1, height: 28, background: `${borderColor}55`, margin: '0 4px' }} />
+            <span style={{ fontSize: 16, color: '#34C759' }}>↘</span>
+            <StatCell value={`${reduction}%`} label="LESS" accent={accent} />
           </div>
         );
       })()}
 
-      {/* Tab bar */}
-      <div style={{ display: 'flex', margin: '0 16px 20px', background: tabBg, borderRadius: 999, padding: 4 }}>
-        {(BLOCKED_LONGFORM_SOURCES.includes(params.source ?? '') ? TABS.filter(t => t !== 'Long Form') : TABS).map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab)}
-            style={{ flex: 1, padding: '9px 0', borderRadius: 999, border: 'none', cursor: 'pointer', background: activeTab === tab ? '#fff' : 'transparent', color: activeTab === tab ? '#000' : 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: 600, transition: 'all 0.2s' }}>
-            {tab}
-          </button>
-        ))}
-      </div>
+      {/* Dedup validation modal */}
+      {dedupModalVisible && (
+        <DedupModal
+          onClose={() => setDedupModalVisible(false)}
+          originalParagraphs={originalParagraphs}
+          paragraphs={paragraphs}
+          dedupedFlag={dedupedFlag}
+          apiUrl={params.url ? `${API}/article?url=${encodeURIComponent(params.url)}` : ''}
+        />
+      )}
 
       {/* Tab body */}
       <div style={{ padding: '8px 20px 24px' }}>{renderTabContent()}</div>
@@ -417,6 +657,163 @@ function Spinner() {
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', paddingBlock: 48 }}>
       <div style={{ width: 36, height: 36, border: '3px solid #333', borderTopColor: '#888', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
+}
+
+function TabIcon({ tab, color }: { tab: string; color: string }) {
+  // Ionicons-matched SVGs: reader-outline / document-text-outline / list-outline / happy-outline
+  const common = { width: 15, height: 15, viewBox: '0 0 512 512', fill: 'none', stroke: color, strokeWidth: 32, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  if (tab === 'Long Form') {
+    return (
+      <svg {...common}>
+        <path d="M256 160c16-63.16 76.43-95.41 208-96a15.94 15.94 0 0116 16v288a16 16 0 01-16 16c-128 0-177.45 25.81-208 64-30.37-38-80-64-208-64-9.88 0-16-8.05-16-17.93V80a15.94 15.94 0 0116-16c131.57.59 192 32.84 208 96zM256 160v288" />
+      </svg>
+    );
+  }
+  if (tab === 'Summary') {
+    return (
+      <svg {...common}>
+        <path d="M416 221.25V416a48 48 0 01-48 48H144a48 48 0 01-48-48V96a48 48 0 0148-48h140.75a32 32 0 0122.62 9.37l141.26 141.26a32 32 0 019.37 22.62z" />
+        <path d="M256 56v120a32 32 0 0032 32h120M176 288h160M176 368h160" />
+      </svg>
+    );
+  }
+  if (tab === '5 Ws') {
+    return (
+      <svg {...common}>
+        <path d="M160 144h288M160 256h288M160 368h288" />
+        <circle cx="80" cy="144" r="16" fill={color} stroke="none" />
+        <circle cx="80" cy="256" r="16" fill={color} stroke="none" />
+        <circle cx="80" cy="368" r="16" fill={color} stroke="none" />
+      </svg>
+    );
+  }
+  // ELI5 — happy face
+  return (
+    <svg {...common}>
+      <path d="M448 256c0-106-86-192-192-192S64 150 64 256s86 192 192 192 192-86 192-192z" />
+      <path d="M168 320c20 32 49 48 88 48s68-16 88-48" />
+      <circle cx="184" cy="208" r="20" fill={color} stroke="none" />
+      <circle cx="328" cy="208" r="20" fill={color} stroke="none" />
+    </svg>
+  );
+}
+
+function StatCell({ value, label, accent }: { value: number | string; label: string; accent: string }) {
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <span style={{ color: accent, fontSize: 17, fontWeight: 700, letterSpacing: -0.2 }}>{value}</span>
+      <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 9, fontWeight: 700, letterSpacing: 1.2, marginTop: 2 }}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function DedupModal({ onClose, originalParagraphs, paragraphs, dedupedFlag, apiUrl }: {
+  onClose: () => void;
+  originalParagraphs: string[];
+  paragraphs: string[];
+  dedupedFlag: boolean;
+  apiUrl: string;
+}) {
+  const wc = (s: string) => (s ?? '').trim().split(/\s+/).filter(Boolean).length;
+  const preText = originalParagraphs.join(' ');
+  const postText = paragraphs.join(' ');
+  const preWords = wc(preText);
+  const postWords = wc(postText);
+  const wordsReduction = preWords > 0 ? Math.max(0, Math.round(((preWords - postWords) / preWords) * 100)) : 0;
+  const paraReduction = originalParagraphs.length > 0
+    ? Math.max(0, Math.round(((originalParagraphs.length - paragraphs.length) / originalParagraphs.length) * 100))
+    : 0;
+  const finalNorm = new Set(paragraphs.map(p => p.trim()));
+  const removed = originalParagraphs.filter(p => !finalNorm.has(p.trim()));
+
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.78)',
+      zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 16,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: '#0E0E0E', borderRadius: 14, border: '1px solid #222',
+        padding: 16, maxWidth: 480, width: '100%', maxHeight: '88vh', overflowY: 'auto',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <span style={{ color: '#fff', fontSize: 12, fontWeight: 800, letterSpacing: 1.4 }}>DEDUP VALIDATION</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fff', fontSize: 18 }}>✕</button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+          <Cell label="SERVER FLAG" value={dedupedFlag ? 'deduped: true' : 'deduped: false'} color={dedupedFlag ? '#34C759' : '#FF9500'} />
+          <Cell label="WORDS" value={`${preWords} → ${postWords}  (${wordsReduction}% less)`} />
+          <Cell label="PARAGRAPHS" value={`${originalParagraphs.length} → ${paragraphs.length}  (${paraReduction}% less)`} />
+          <Cell label="REMOVED COUNT" value={String(removed.length)} />
+        </div>
+
+        <Label text="API ENDPOINT" />
+        <a href={apiUrl || '#'} target="_blank" rel="noopener noreferrer" style={{
+          display: 'block', textDecoration: 'none',
+          background: '#161616', borderRadius: 8, padding: 10,
+          border: '1px solid #222', marginBottom: 16,
+        }}>
+          <div style={{ color: '#9AD0FF', fontSize: 11, fontFamily: 'monospace', lineHeight: 1.4, wordBreak: 'break-all' }}>
+            {apiUrl || '—'}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 8, color: '#3B9EFF', fontSize: 10, fontWeight: 800, letterSpacing: 1.2 }}>
+            OPEN RAW JSON ↗
+          </div>
+        </a>
+
+        {removed.length > 0 && (
+          <>
+            <Label text={`REMOVED / MERGED PARAGRAPHS (${removed.length})`} />
+            {removed.map((p, i) => (
+              <DiffRow key={i} type="removed" text={p} />
+            ))}
+          </>
+        )}
+
+        <Label text={`KEPT PARAGRAPHS (${paragraphs.length})`} />
+        {paragraphs.map((p, i) => (
+          <DiffRow key={i} type="kept" text={p} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Cell({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div style={{ background: '#161616', borderRadius: 8, padding: 10, border: '1px solid #222' }}>
+      <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: 700, letterSpacing: 1.2, marginBottom: 4 }}>{label}</div>
+      <div style={{ color: color ?? '#fff', fontSize: 13, fontWeight: 600, fontFamily: 'monospace' }}>{value}</div>
+    </div>
+  );
+}
+
+function Label({ text }: { text: string }) {
+  return (
+    <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10, fontWeight: 700, letterSpacing: 1.4, marginTop: 16, marginBottom: 8 }}>
+      {text}
+    </div>
+  );
+}
+
+function DiffRow({ type, text }: { type: 'removed' | 'kept'; text: string }) {
+  const isRemoved = type === 'removed';
+  return (
+    <div style={{
+      display: 'flex', gap: 8,
+      background: isRemoved ? 'rgba(255,59,48,0.08)' : 'rgba(52,199,89,0.06)',
+      borderLeft: `2px solid ${isRemoved ? '#FF3B30' : '#34C759'}`,
+      padding: 8, marginBottom: 6, borderRadius: 4,
+    }}>
+      <span style={{ color: isRemoved ? '#FF3B30' : '#34C759', fontFamily: 'monospace', fontWeight: 800, fontSize: 13 }}>
+        {isRemoved ? '−' : '+'}
+      </span>
+      <span style={{ flex: 1, color: 'rgba(255,255,255,0.8)', fontSize: 12, lineHeight: 1.5 }}>{text}</span>
     </div>
   );
 }

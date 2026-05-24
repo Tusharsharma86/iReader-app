@@ -26,8 +26,33 @@ import { darken, lighten, getArticleColor } from '../utils/colors';
 import { BiasDot, BIAS_CONFIG, type BiasRating } from '../components/StoryCard';
 import { RootStackParamList } from '../types/navigation';
 import { useSettings } from '../contexts/SettingsContext';
+import { useSaved } from '../contexts/SavedContext';
 import { getCached, setCached, TTL } from '../utils/cache';
 import { trackArticleRead, trackAiUsage } from '../utils/usageTracker';
+
+function deriveCategory(source: string, url: string, headline: string): string {
+  const s = (source || '').toLowerCase();
+  const u = (url || '').toLowerCase();
+  const h = (headline || '').toLowerCase();
+  if (/techcrunch|verge|ars technica|wired|9to5|venturebeat|tech\b/.test(s + ' ' + u) ||
+      /\b(ai|tech|startup|app|software|chip|robot)\b/.test(h)) return 'Tech';
+  if (/economic times|moneycontrol|livemint|mint|cnbc|markets|bloomberg/.test(s) ||
+      /\b(stock|sensex|nifty|market|ipo|fund|rupee|inflation)\b/.test(h)) return 'Markets';
+  if (/bbc|reuters|guardian|al jazeera|world/.test(s) ||
+      /\b(ukraine|russia|israel|gaza|china|nato|biden|trump|putin)\b/.test(h)) return 'World';
+  if (/ndtv|india today|times of india|hindu|indian express|the print|quint/.test(s) ||
+      /\b(modi|bjp|congress|delhi|mumbai|india)\b/.test(h)) return 'India';
+  return 'News';
+}
+
+function fmtDateInline(iso: string): string {
+  try {
+    const d = new Date(iso);
+    const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    return `${date}  ·  ${time}`;
+  } catch { return ''; }
+}
 
 const HERO_HEIGHT = 280;
 
@@ -178,6 +203,174 @@ const siStyles = StyleSheet.create({
   sourceNames: { marginLeft: 10, fontSize: 12, fontWeight: '600', flexShrink: 1 },
 });
 
+function DedupValidationModal({
+  visible, onClose, originalParagraphs, paragraphs, dedupedFlag, apiUrl,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  originalParagraphs: string[];
+  paragraphs: string[];
+  dedupedFlag: boolean;
+  apiUrl: string;
+}) {
+  const wordCount = (s: string) => (s ?? '').trim().split(/\s+/).filter(Boolean).length;
+  const preText = originalParagraphs.join(' ');
+  const postText = paragraphs.join(' ');
+  const preWords = wordCount(preText);
+  const postWords = wordCount(postText);
+  const wordsReduction = preWords > 0
+    ? Math.max(0, Math.round(((preWords - postWords) / preWords) * 100))
+    : 0;
+  const paraReduction = originalParagraphs.length > 0
+    ? Math.max(0, Math.round(((originalParagraphs.length - paragraphs.length) / originalParagraphs.length) * 100))
+    : 0;
+
+  // Diff helper: identify paragraphs in `original` that didn't make it to `final`
+  const finalNorm = new Set(paragraphs.map(p => p.trim()));
+  const removed = originalParagraphs.filter(p => !finalNorm.has(p.trim()));
+
+  return (
+    <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
+      <Pressable style={dmStyles.overlay} onPress={onClose}>
+        <Pressable style={dmStyles.card} onPress={(e) => e.stopPropagation()}>
+          <View style={dmStyles.header}>
+            <Text style={dmStyles.title}>DEDUP VALIDATION</Text>
+            <Pressable hitSlop={10} onPress={onClose}>
+              <Ionicons name="close" size={20} color="#FFF" />
+            </Pressable>
+          </View>
+
+          <ScrollView style={{ maxHeight: 520 }} showsVerticalScrollIndicator={false}>
+            {/* Stats grid */}
+            <View style={dmStyles.grid}>
+              <View style={dmStyles.cell}>
+                <Text style={dmStyles.cellLabel}>SERVER FLAG</Text>
+                <Text style={[dmStyles.cellValue, { color: dedupedFlag ? '#34C759' : '#FF9500' }]}>
+                  {dedupedFlag ? 'deduped: true' : 'deduped: false'}
+                </Text>
+              </View>
+              <View style={dmStyles.cell}>
+                <Text style={dmStyles.cellLabel}>WORDS</Text>
+                <Text style={dmStyles.cellValue}>{preWords} → {postWords}  ({wordsReduction}% less)</Text>
+              </View>
+              <View style={dmStyles.cell}>
+                <Text style={dmStyles.cellLabel}>PARAGRAPHS</Text>
+                <Text style={dmStyles.cellValue}>
+                  {originalParagraphs.length} → {paragraphs.length}  ({paraReduction}% less)
+                </Text>
+              </View>
+              <View style={dmStyles.cell}>
+                <Text style={dmStyles.cellLabel}>REMOVED COUNT</Text>
+                <Text style={dmStyles.cellValue}>{removed.length}</Text>
+              </View>
+            </View>
+
+            {/* API URL — tap to open raw JSON in browser */}
+            <Text style={dmStyles.sectionLabel}>API ENDPOINT</Text>
+            <Pressable
+              onPress={() => apiUrl && WebBrowser.openBrowserAsync(apiUrl).catch(() => {})}
+              style={dmStyles.urlBox}
+            >
+              <Text style={dmStyles.urlText} numberOfLines={3} selectable>{apiUrl || '—'}</Text>
+              <View style={dmStyles.urlAction}>
+                <Ionicons name="open-outline" size={13} color="#3B9EFF" />
+                <Text style={dmStyles.urlActionText}>OPEN RAW JSON</Text>
+              </View>
+            </Pressable>
+
+            {/* Removed paragraphs (the "redundancy") */}
+            {removed.length > 0 && (
+              <>
+                <Text style={dmStyles.sectionLabel}>
+                  REMOVED / MERGED PARAGRAPHS ({removed.length})
+                </Text>
+                {removed.map((p, i) => (
+                  <View key={i} style={dmStyles.diffRemoved}>
+                    <Text style={dmStyles.diffMarker}>−</Text>
+                    <Text style={dmStyles.diffText} selectable>{p}</Text>
+                  </View>
+                ))}
+              </>
+            )}
+
+            {/* Kept paragraphs */}
+            <Text style={dmStyles.sectionLabel}>
+              KEPT PARAGRAPHS ({paragraphs.length})
+            </Text>
+            {paragraphs.map((p, i) => (
+              <View key={i} style={dmStyles.diffKept}>
+                <Text style={[dmStyles.diffMarker, { color: '#34C759' }]}>+</Text>
+                <Text style={dmStyles.diffText} selectable>{p}</Text>
+              </View>
+            ))}
+
+            <View style={{ height: 12 }} />
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+const dmStyles = StyleSheet.create({
+  overlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.78)',
+    justifyContent: 'center', padding: 16,
+  },
+  card: {
+    backgroundColor: '#0E0E0E',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#222',
+    padding: 16,
+    maxHeight: '88%',
+  },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  title: { color: '#FFF', fontSize: 12, fontWeight: '800', letterSpacing: 1.4 },
+  grid: { gap: 10, marginBottom: 16 },
+  cell: {
+    backgroundColor: '#161616',
+    borderRadius: 8, padding: 10,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: '#222',
+  },
+  cellLabel: {
+    color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: '700',
+    letterSpacing: 1.2, marginBottom: 4,
+  },
+  cellValue: { color: '#FFF', fontSize: 13, fontWeight: '600', fontFamily: 'monospace' },
+  sectionLabel: {
+    color: 'rgba(255,255,255,0.45)', fontSize: 10, fontWeight: '700',
+    letterSpacing: 1.4, marginTop: 16, marginBottom: 8,
+  },
+  urlBox: {
+    backgroundColor: '#161616',
+    borderRadius: 8, padding: 10,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: '#222',
+  },
+  urlText: { color: '#9AD0FF', fontSize: 11, fontFamily: 'monospace', lineHeight: 16 },
+  urlAction: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
+  urlActionText: { color: '#3B9EFF', fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
+  diffRemoved: {
+    flexDirection: 'row', gap: 8,
+    backgroundColor: 'rgba(255,59,48,0.08)',
+    borderLeftWidth: 2, borderLeftColor: '#FF3B30',
+    padding: 8, marginBottom: 6, borderRadius: 4,
+  },
+  diffKept: {
+    flexDirection: 'row', gap: 8,
+    backgroundColor: 'rgba(52,199,89,0.06)',
+    borderLeftWidth: 2, borderLeftColor: '#34C759',
+    padding: 8, marginBottom: 6, borderRadius: 4,
+  },
+  diffMarker: { color: '#FF3B30', fontFamily: 'monospace', fontWeight: '800', fontSize: 13 },
+  diffText: {
+    flex: 1, color: 'rgba(255,255,255,0.8)', fontSize: 12, lineHeight: 18,
+  },
+});
+
 function extractEntities(text: string): { people: string[]; companies: string[] } {
   const people: string[] = [];
   const companies: string[] = [];
@@ -220,16 +413,24 @@ export default function ArticleScreen() {
   }, []));
 
   const { fontSize: fontSizeName } = useSettings();
+  const { isSaved, toggleSave } = useSaved();
   const fontSizePx = FONT_SIZE_MAP[fontSizeName] ?? 17;
+  const articleCategory = deriveCategory(params.source ?? '', params.url ?? '', params.headline ?? '');
+  const savedNow = isSaved(params.id);
   const BLOCKED_LONGFORM_SOURCES = ['NYT World', 'NDTV'];
   const defaultTab: Tab = BLOCKED_LONGFORM_SOURCES.includes(params.source ?? '') ? 'Summary' : 'Long Form';
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
   const [paragraphs, setParagraphs] = useState<string[]>([]);
+  const [originalParagraphs, setOriginalParagraphs] = useState<string[]>([]);
+  const [dedupedFlag, setDedupedFlag] = useState(false);
   const [paragraphsLoading, setParagraphsLoading] = useState(true);
   const [paragraphsError, setParagraphsError] = useState<string | null>(null);
   const [readingTimeMinutes, setReadingTimeMinutes] = useState<number | null>(null);
   const [difficulty, setDifficulty] = useState<string | null>(null);
   const [biasModalVisible, setBiasModalVisible] = useState(false);
+  const [dedupModalVisible, setDedupModalVisible] = useState(false);
+  const [heroImageFailed, setHeroImageFailed] = useState(false);
+  const noHero = !params.image || heroImageFailed;
   const [entities, setEntities] = useState<{ people: string[]; companies: string[] }>({ people: [], companies: [] });
 
   const allStories = useMemo(() => {
@@ -412,6 +613,9 @@ export default function ArticleScreen() {
           (data.text ? data.text.split('\n\n').filter(Boolean) : null) ??
           (params.summary ? [params.summary] : []);
         const filtered = paras.filter(Boolean);
+        const origRaw: string[] = (data.originalParagraphs ?? paras) as string[];
+        setOriginalParagraphs((origRaw || []).filter(Boolean));
+        setDedupedFlag(Boolean(data.deduped));
         setParagraphs(filtered);
         setEntities(extractEntities(filtered.join(' ')));
         const fullText = filtered.join(' ');
@@ -557,12 +761,28 @@ export default function ArticleScreen() {
         <Pressable style={[styles.glassBtn, { backgroundColor: dominant + '59' }]} onPress={() => navigation.goBack()}>
           <Ionicons name="chevron-back" size={22} color="#FFF" />
         </Pressable>
-        <Pressable
-          style={[styles.glassBtn, { backgroundColor: dominant + '59' }]}
-          onPress={() => params.url && WebBrowser.openBrowserAsync(params.url)}
-        >
-          <Ionicons name="share-outline" size={20} color="#FFF" />
-        </Pressable>
+        <View style={styles.topBarRight}>
+          <Pressable
+            style={[styles.glassBtn, { backgroundColor: dominant + '59' }]}
+            onPress={() => toggleSave({
+              id: params.id,
+              headline: params.headline,
+              summary: params.summary,
+              publishedAt: params.publishedAt,
+              imageUrl: params.image,
+              sources: (() => { try { return JSON.parse(params.sources ?? '[]'); } catch { return []; } })(),
+              sourceBias: params.sourceBias as BiasRating | undefined,
+            } as never)}
+          >
+            <Ionicons name={savedNow ? 'bookmark' : 'bookmark-outline'} size={20} color="#FFF" />
+          </Pressable>
+          <Pressable
+            style={[styles.glassBtn, { backgroundColor: dominant + '59' }]}
+            onPress={() => params.url && WebBrowser.openBrowserAsync(params.url)}
+          >
+            <Ionicons name="share-outline" size={20} color="#FFF" />
+          </Pressable>
+        </View>
       </SafeAreaView>
 
       <Animated.View style={{ flex: 1, opacity: articleScrollOpacity }}>
@@ -573,62 +793,279 @@ export default function ArticleScreen() {
         onScroll={onArticleScroll}
         scrollEventThrottle={16}
       >
-        {/* Hero image */}
-        <View style={styles.heroContainer}>
-          <Image source={{ uri: params.image }} style={styles.heroImage} contentFit="cover" />
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: dominant + '4D' }]} />
-          <LinearGradient
-            colors={['transparent', dominant + 'CC', dominant]}
-            locations={[0.4, 0.75, 1]}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          />
-        </View>
+        {/* Hero — image variant OR typographic fallback for image-less articles */}
+        {noHero ? (
+          <View style={[styles.heroContainer, styles.heroFallback]}>
+            {/* Layered gradient creates a richer "abstract" hero so it doesn't read empty */}
+            <LinearGradient
+              colors={[lighten(dominant, 0.25), dominant, darken(dominant, 0.3)]}
+              locations={[0, 0.55, 1]}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            />
+            {/* Subtle diagonal accent stripe for visual interest */}
+            <LinearGradient
+              colors={['transparent', accent + '22', 'transparent']}
+              locations={[0.35, 0.55, 0.75]}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            />
+
+            {/* Center mark: large source avatar + name */}
+            <View style={styles.heroFallbackCenter}>
+              {(() => {
+                const fav = params.url ? faviconFromUrl(params.url) : '';
+                return (
+                  <View style={[styles.heroFallbackAvatar, { borderColor: accent + 'AA' }]}>
+                    {fav ? (
+                      <Image source={{ uri: fav }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                    ) : (
+                      <Text style={[styles.heroFallbackLetter, { color: accent }]}>
+                        {(params.source ?? '?').charAt(0).toUpperCase()}
+                      </Text>
+                    )}
+                  </View>
+                );
+              })()}
+              <Text style={[styles.heroFallbackSource, { color: accent }]} numberOfLines={1}>
+                {params.source ?? 'UNKNOWN'}
+              </Text>
+              <View style={[styles.heroFallbackDivider, { backgroundColor: accent + '55' }]} />
+              <Text style={[styles.heroFallbackTag, { color: accent + 'CC' }]}>
+                {articleCategory.toUpperCase()} · ARTICLE
+              </Text>
+            </View>
+
+            {/* Bottom fade into screen bg */}
+            <LinearGradient
+              colors={['transparent', 'transparent', darken(dominant, 0.4)]}
+              locations={[0, 0.6, 1]}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+            />
+          </View>
+        ) : (
+          <View style={styles.heroContainer}>
+            <Image
+              source={{ uri: params.image }}
+              style={styles.heroImage}
+              contentFit="cover"
+              onError={() => setHeroImageFailed(true)}
+            />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: dominant + '33' }]} />
+            <LinearGradient
+              colors={['transparent', 'transparent', darken(dominant, 0.4)]}
+              locations={[0, 0.55, 1]}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+            />
+          </View>
+        )}
 
         <View style={styles.metaBlock}>
+          {/* Category chip */}
+          <View style={[styles.categoryChip, { borderColor: accent + '88' }]}>
+            <Text style={[styles.categoryChipText, { color: accent }]}>{articleCategory}</Text>
+          </View>
+
+          {/* Headline */}
           <Text style={styles.headline}>{params.headline}</Text>
-          {allSources.length > 0 && (
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <SourceIcons sources={allSources} dominant={dominant} />
-              {params.sourceBias && params.sourceBias !== 'unknown' && (
-                <TouchableOpacity onPress={() => setBiasModalVisible(true)} style={{ marginLeft: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <BiasDot bias={params.sourceBias as BiasRating} size={8} />
-                  <Ionicons name="information-circle-outline" size={13} color="rgba(255,255,255,0.3)" />
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-          <Text style={[styles.publishedAt, { color: lighten(dominant, 0.35) }]}>{formatPublished(params.publishedAt)}</Text>
+
+          {/* Source row: avatar + name + verified */}
+          {allSources.length > 0 && (() => {
+            const primary = allSources[0];
+            const faviconUri = primary.url ? faviconFromUrl(primary.url) : '';
+            return (
+              <View style={styles.sourceRow}>
+                <View style={[styles.sourceAvatar, { borderColor: dominant }]}>
+                  {faviconUri ? (
+                    <Image source={{ uri: faviconUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                  ) : (
+                    <View style={[styles.sourceAvatarFallback, { backgroundColor: lighten(dominant, 0.2) }]}>
+                      <Text style={[styles.sourceAvatarLetter, { color: accent }]}>
+                        {primary.name.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.sourceName}>{primary.name}</Text>
+                <Ionicons name="checkmark-circle" size={14} color="#3B9EFF" />
+                {params.sourceBias && params.sourceBias !== 'unknown' && (
+                  <TouchableOpacity
+                    onPress={() => setBiasModalVisible(true)}
+                    style={{ marginLeft: 6, flexDirection: 'row', alignItems: 'center', gap: 3 }}
+                  >
+                    <BiasDot bias={params.sourceBias as BiasRating} size={6} />
+                  </TouchableOpacity>
+                )}
+                {allSources.length > 1 && (
+                  <Text style={[styles.sourceCount, { color: lighten(dominant, 0.4) }]}>
+                    +{allSources.length - 1}
+                  </Text>
+                )}
+              </View>
+            );
+          })()}
+
+          {/* Date · time · reading time · difficulty — all inline */}
+          <View style={styles.metaInline}>
+            <Text style={[styles.metaInlineText, { color: lighten(dominant, 0.35) }]}>
+              {fmtDateInline(params.publishedAt)}
+            </Text>
+            {readingTimeMinutes != null && (
+              <>
+                <Text style={[styles.metaInlineDot, { color: lighten(dominant, 0.35) }]}>·</Text>
+                <Text style={[styles.metaInlineText, { color: lighten(dominant, 0.35) }]}>
+                  {readingTimeMinutes} min read
+                </Text>
+              </>
+            )}
+            {difficulty != null && (
+              <>
+                <Text style={[styles.metaInlineDot, { color: lighten(dominant, 0.35) }]}>·</Text>
+                <Text
+                  style={[styles.metaInlineText, { color: DIFFICULTY_COLORS[difficulty] ?? '#FF9500', fontWeight: '600' }]}
+                >
+                  {difficulty}
+                </Text>
+              </>
+            )}
+          </View>
+
           {!!params.summary && (
             <Text style={styles.summaryText}>{params.summary}</Text>
           )}
         </View>
 
-        {(readingTimeMinutes != null || difficulty != null) && (
-          <View style={styles.readingMeta}>
-            <Ionicons name="time-outline" size={12} color="rgba(255,255,255,0.5)" />
-            <Text style={styles.readingMetaText}>
-              {readingTimeMinutes != null ? `${readingTimeMinutes} min read` : ''}
-            </Text>
-            {readingTimeMinutes != null && difficulty != null && (
-              <Text style={styles.metaDot}>·</Text>
-            )}
-            {difficulty != null && <DifficultyBadge level={difficulty} />}
-          </View>
-        )}
-
-        <View style={[styles.tabBar, { backgroundColor: tabBg }]}>
-          {(BLOCKED_LONGFORM_SOURCES.includes(params.source ?? '') ? TABS.filter(t => t !== 'Long Form') : TABS).map(tab => (
-            <TouchableOpacity
-              key={tab}
-              style={[styles.tabBtn, activeTab === tab && { backgroundColor: '#FFFFFF' }]}
-              onPress={() => setActiveTab(tab)}
-            >
-              <Text style={[styles.tabLabel, activeTab === tab && styles.tabLabelActive]}>{tab}</Text>
-            </TouchableOpacity>
-          ))}
+        <View style={[styles.tabBar, { backgroundColor: tabBg, borderColor: borderColor + '55' }]}>
+          {(BLOCKED_LONGFORM_SOURCES.includes(params.source ?? '') ? TABS.filter(t => t !== 'Long Form') : TABS).map(tab => {
+            const active = activeTab === tab;
+            const iconName: React.ComponentProps<typeof Ionicons>['name'] =
+              tab === 'Long Form' ? 'reader-outline' :
+              tab === 'Summary'   ? 'document-text-outline' :
+              tab === '5 Ws'      ? 'list-outline' :
+                                    'happy-outline';
+            return (
+              <TouchableOpacity
+                key={tab}
+                style={[styles.tabBtn, active && [styles.tabBtnActive, { backgroundColor: lighten(dominant, 0.05) }]]}
+                onPress={() => setActiveTab(tab)}
+              >
+                <Ionicons
+                  name={iconName}
+                  size={15}
+                  color={active ? '#FFFFFF' : 'rgba(255,255,255,0.4)'}
+                />
+                <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{tab}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
+
+        {/* Redundancy stats — real before/after from server dedup */}
+        {(() => {
+          const wordCount = (s: string) => (s ?? '').trim().split(/\s+/).filter(Boolean).length;
+          const preText = originalParagraphs.length > 0 ? originalParagraphs.join(' ') : '';
+          const postText = paragraphs.length > 0 ? paragraphs.join(' ') : '';
+          const preWords = wordCount(preText);
+          const postWords = wordCount(postText);
+
+          // Long Form: pre-dedup vs post-dedup word count from server
+          if (activeTab === 'Long Form') {
+            if (preWords === 0) return null;
+            const reduction = preWords > postWords
+              ? Math.round(((preWords - postWords) / preWords) * 100)
+              : 0;
+            const paraReduction = originalParagraphs.length > paragraphs.length
+              ? originalParagraphs.length - paragraphs.length
+              : 0;
+            return (
+              <View>
+                <View style={[styles.statsCard, { borderColor: borderColor + '55' }]}>
+                  <View style={[styles.statsIconCircle, { borderColor: accent + '88', backgroundColor: dominant + '40' }]}>
+                    <Ionicons name="reader" size={14} color={accent} />
+                  </View>
+                  <View style={styles.statCell}>
+                    <Text style={[styles.statValue, { color: accent }]}>{preWords}</Text>
+                    <Text style={styles.statLabel}>BEFORE</Text>
+                  </View>
+                  <Ionicons name="arrow-forward" size={14} color={accent} />
+                  <View style={styles.statCell}>
+                    <Text style={[styles.statValue, { color: accent }]}>{postWords}</Text>
+                    <Text style={styles.statLabel}>AFTER</Text>
+                  </View>
+                  <View style={[styles.statDivider, { backgroundColor: borderColor + '55' }]} />
+                  <View style={styles.statTrend}>
+                    <Ionicons name="trending-down" size={16} color={reduction > 0 ? '#34C759' : 'rgba(255,255,255,0.4)'} />
+                  </View>
+                  <View style={styles.statCell}>
+                    <Text style={[styles.statValue, { color: accent }]}>{reduction}%</Text>
+                    <Text style={styles.statLabel}>
+                      {dedupedFlag
+                        ? paraReduction > 0 ? `LESS  (-${paraReduction} ¶)` : 'LESS'
+                        : 'NO DEDUP'}
+                    </Text>
+                  </View>
+                </View>
+                {/* Validate button — opens modal with raw fetch + side-by-side diff */}
+                <Pressable
+                  onPress={() => setDedupModalVisible(true)}
+                  style={[styles.verifyLink, { borderColor: borderColor + '55' }]}
+                >
+                  <Ionicons name="code-slash-outline" size={12} color={accent} />
+                  <Text style={[styles.verifyLinkText, { color: accent }]}>
+                    VERIFY DEDUP · VIEW RAW FETCH
+                  </Text>
+                  <Ionicons name="chevron-forward" size={12} color={accent} />
+                </Pressable>
+              </View>
+            );
+          }
+
+          // AI tabs: show full article → AI-distilled comparison
+          const originalWords = postWords || preWords;
+          if (originalWords === 0) return null;
+          let aiText = '';
+          if (activeTab === 'Summary') {
+            aiText = aiResult?.bullets?.join(' ') ?? aiResult?.summary ?? '';
+          } else if (activeTab === '5 Ws') {
+            aiText = (aiResult?.fiveWs ?? []).join(' ');
+          } else if (activeTab === 'ELI5') {
+            aiText = aiResult?.eli5 ?? '';
+          }
+          const aiWords = wordCount(aiText);
+          if (aiWords === 0) return null;
+          const reduction = Math.max(0, Math.round(((originalWords - aiWords) / originalWords) * 100));
+
+          return (
+            <View style={[styles.statsCard, { borderColor: borderColor + '55' }]}>
+              <View style={[styles.statsIconCircle, { borderColor: accent + '88', backgroundColor: dominant + '40' }]}>
+                <Ionicons name="sparkles" size={13} color={accent} />
+              </View>
+              <View style={styles.statCell}>
+                <Text style={[styles.statValue, { color: accent }]}>{originalWords}</Text>
+                <Text style={styles.statLabel}>ORIGINAL</Text>
+              </View>
+              <Ionicons name="arrow-forward" size={14} color={accent} />
+              <View style={styles.statCell}>
+                <Text style={[styles.statValue, { color: accent }]}>{aiWords}</Text>
+                <Text style={styles.statLabel}>DISTILLED</Text>
+              </View>
+              <View style={[styles.statDivider, { backgroundColor: borderColor + '55' }]} />
+              <View style={styles.statTrend}>
+                <Ionicons name="trending-down" size={16} color="#34C759" />
+              </View>
+              <View style={styles.statCell}>
+                <Text style={[styles.statValue, { color: accent }]}>{reduction}%</Text>
+                <Text style={styles.statLabel}>LESS</Text>
+              </View>
+            </View>
+          );
+        })()}
 
         <View style={styles.tabBody}>
           {renderTabContent()}
@@ -698,6 +1135,14 @@ export default function ArticleScreen() {
       </Animated.View>
 
       <BiasInfoModal bias={params.sourceBias} visible={biasModalVisible} onClose={() => setBiasModalVisible(false)} />
+      <DedupValidationModal
+        visible={dedupModalVisible}
+        onClose={() => setDedupModalVisible(false)}
+        originalParagraphs={originalParagraphs}
+        paragraphs={paragraphs}
+        dedupedFlag={dedupedFlag}
+        apiUrl={params.url ? `${API}/article?url=${encodeURIComponent(params.url)}` : ''}
+      />
 
       {/* Related Stories — fixed strip, hides on scroll-down */}
       {related.length >= 2 && (
@@ -931,6 +1376,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between',
     paddingHorizontal: 12, paddingTop: 4,
   },
+  topBarRight: { flexDirection: 'row', gap: 10 },
   glassBtn: {
     borderRadius: 22, padding: 9,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
@@ -938,24 +1384,168 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   heroContainer: { height: HERO_HEIGHT, position: 'relative' },
   heroImage: { width: '100%', height: '100%' },
-  metaBlock: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 },
+  // Image-less articles — typographic hero so it still feels intentional
+  heroFallback: { overflow: 'hidden' },
+  heroFallbackCenter: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+    paddingHorizontal: 24,
+  },
+  heroFallbackAvatar: {
+    width: 64, height: 64, borderRadius: 32,
+    overflow: 'hidden',
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  heroFallbackLetter: { fontSize: 28, fontWeight: '800' },
+  heroFallbackSource: {
+    fontSize: 16, fontWeight: '800',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  heroFallbackDivider: { width: 40, height: 1, borderRadius: 1 },
+  heroFallbackTag: {
+    fontSize: 10, fontWeight: '700', letterSpacing: 2,
+  },
+  // Pull metaBlock up so headline starts inside the faded bottom of the image —
+  // image dissolves into screen bg with no visible edge.
+  metaBlock: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 14, marginTop: -32 },
+  categoryChip: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    marginBottom: 14,
+  },
+  categoryChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
   headline: { color: '#FFF', fontSize: 24, fontWeight: '800', lineHeight: 32 },
+  sourceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 14,
+  },
+  sourceAvatar: {
+    width: 30, height: 30, borderRadius: 15,
+    overflow: 'hidden',
+    borderWidth: 2,
+  },
+  sourceAvatarFallback: {
+    width: '100%', height: '100%',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  sourceAvatarLetter: { fontSize: 12, fontWeight: '800' },
+  sourceName: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  sourceCount: { marginLeft: 4, fontSize: 11, fontWeight: '600' },
+  metaInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 10,
+  },
+  metaInlineText: { fontSize: 12, fontWeight: '500' },
+  metaInlineDot: { fontSize: 12 },
   publishedAt: { fontSize: 11, fontWeight: '600', letterSpacing: 0.3, marginTop: 10 },
-  summaryText: { color: 'rgba(255,255,255,0.6)', fontSize: 14, lineHeight: 22, marginTop: 10 },
+  summaryText: { color: 'rgba(255,255,255,0.6)', fontSize: 14, lineHeight: 22, marginTop: 14 },
   readingMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, marginBottom: 4, paddingHorizontal: 16 },
   readingMetaText: { fontSize: 12, color: 'rgba(255,255,255,0.6)' },
   metaDot: { fontSize: 12, color: 'rgba(255,255,255,0.4)' },
   tabBar: {
     flexDirection: 'row', marginHorizontal: 16,
-    borderRadius: 999, padding: 4, marginBottom: 20,
+    borderRadius: 999, padding: 4, marginBottom: 16,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  tabBtn: { flex: 1, paddingVertical: 9, borderRadius: 999, alignItems: 'center' },
+  tabBtn: {
+    flex: 1, paddingVertical: 9, borderRadius: 999,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
+  },
+  tabBtnActive: {},
   tabLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: '600' },
-  tabLabelActive: { color: '#000' },
+  tabLabelActive: { color: '#FFFFFF' },
   tabBody: {
     paddingHorizontal: 20,
     paddingVertical: 8,
     paddingBottom: 24,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  statsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    gap: 8,
+  },
+  statsIconCircle: {
+    width: 32, height: 32, borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: 4,
+  },
+  statTrend: { paddingHorizontal: 2 },
+  verifyLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginHorizontal: 16,
+    marginBottom: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(0,0,0,0.18)',
+  },
+  verifyLinkText: { fontSize: 10, fontWeight: '700', letterSpacing: 1.2 },
+  statCell: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  statLabel: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    marginTop: 2,
+  },
+  statArrow: {
+    paddingHorizontal: 4,
+  },
+  statDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 28,
+    marginHorizontal: 4,
   },
   refSection: {
     marginHorizontal: 20,

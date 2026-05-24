@@ -13,6 +13,7 @@ import ArticleScreen from './screens/ArticleScreen';
 import TopicFeedScreen from './screens/TopicFeedScreen';
 import SavedScreen from './screens/SavedScreen';
 import FeedScreen from './app/index';
+import DigestScreen from './screens/DigestScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import TopicsScreen from './screens/TopicsScreen';
 import SourcesScreen from './screens/SourcesScreen';
@@ -37,6 +38,7 @@ type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
 const TAB_ITEMS: { route: keyof RootTabParamList; label: string; icon: IoniconsName; iconActive: IoniconsName }[] = [
   { route: 'Feed',     label: 'Feed',     icon: 'newspaper-outline',  iconActive: 'newspaper'  },
+  { route: 'Digest',   label: 'Digest',   icon: 'flash-outline',      iconActive: 'flash'      },
   { route: 'Saved',    label: 'Saved',    icon: 'bookmark-outline',   iconActive: 'bookmark'   },
   { route: 'Settings', label: 'Settings', icon: 'settings-outline',   iconActive: 'settings'   },
 ];
@@ -51,73 +53,96 @@ function ParticleTabBar({ state, navigation }: BottomTabBarProps) {
   if (nestedRouteName === 'Article') return null;
 
   return (
-    <Animated.View style={[tabStyles.bar, { paddingBottom: insets.bottom + 8, transform: [{ translateY: tabBarTranslateY }], position: 'absolute', bottom: 0, left: 0, right: 0 }]}>
-      {TAB_ITEMS.map((item, index) => {
-        const focused = state.index === index;
-        return (
-          <Pressable
-            key={item.route}
-            onPress={() => {
-              const event = navigation.emit({
-                type: 'tabPress',
-                target: state.routes[index]?.key,
-                canPreventDefault: true,
-              });
-              if (!focused && !event.defaultPrevented) {
-                navigation.navigate(item.route);
-              }
-            }}
-            style={tabStyles.tabItem}
-          >
-            <View style={[tabStyles.iconPill, focused && tabStyles.iconPillActive]}>
-              <Ionicons
-                name={focused ? item.iconActive : item.icon}
-                size={22}
-                color={focused ? '#FFFFFF' : '#4A4A4A'}
-              />
-            </View>
-            <Text style={[tabStyles.tabLabel, focused && tabStyles.tabLabelActive]}>
-              {item.label}
-            </Text>
-          </Pressable>
-        );
-      })}
+    <Animated.View
+      style={[
+        tabStyles.floatWrap,
+        {
+          bottom: Math.max(insets.bottom + 8, 16),
+          transform: [{ translateY: tabBarTranslateY }],
+        },
+      ]}
+      pointerEvents="box-none"
+    >
+      <View style={tabStyles.pill}>
+        {/* Subtle inner border + glassy tint for depth */}
+        <View style={tabStyles.pillBorder} pointerEvents="none" />
+        {TAB_ITEMS.map((item, index) => {
+          const focused = state.index === index;
+          return (
+            <Pressable
+              key={item.route}
+              onPress={() => {
+                const event = navigation.emit({
+                  type: 'tabPress',
+                  target: state.routes[index]?.key,
+                  canPreventDefault: true,
+                });
+                if (!focused && !event.defaultPrevented) {
+                  navigation.navigate(item.route);
+                }
+              }}
+              style={tabStyles.tabItem}
+              hitSlop={4}
+            >
+              <View style={[tabStyles.iconWrap, focused && tabStyles.iconWrapActive]}>
+                <Ionicons
+                  name={focused ? item.iconActive : item.icon}
+                  size={focused ? 22 : 20}
+                  color={focused ? '#FFFFFF' : 'rgba(255,255,255,0.55)'}
+                />
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
     </Animated.View>
   );
 }
 
 const tabStyles = StyleSheet.create({
-  bar: {
+  floatWrap: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+  },
+  pill: {
     flexDirection: 'row',
-    backgroundColor: '#080808',
-    borderTopWidth: 1,
-    borderTopColor: '#181818',
-    paddingTop: 10,
-    paddingHorizontal: 16,
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    overflow: 'hidden',
+    // Dark translucent pill — gives the glassy floating feel without needing
+    // a native blur view (which mismatches the Expo Go bundled module version).
+    backgroundColor: 'rgba(15,15,15,0.92)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  pillBorder: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   tabItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-  },
-  iconPill: {
-    width: 52,
-    height: 32,
-    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconPillActive: {
-    backgroundColor: '#1E1E1E',
+  iconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  tabLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#4A4A4A',
-    letterSpacing: 0.2,
-  },
-  tabLabelActive: {
-    color: '#FFFFFF',
+  iconWrapActive: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
 });
 
@@ -209,6 +234,7 @@ export default function App() {
           screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: '#080808' } }}
         >
           <Tab.Screen name="Feed"     component={FeedNavigator} />
+          <Tab.Screen name="Digest"   component={DigestScreen} />
           <Tab.Screen name="Saved"    component={SavedScreen} />
           <Tab.Screen name="Settings" component={SettingsNavigator} />
         </Tab.Navigator>

@@ -1298,7 +1298,10 @@ const TopicSection = React.memo(function TopicSection({
   const ai = useClusterAI(cluster);
   const navigation = useNavigation<NativeStackNavigationProp<FeedStackParamList>>();
 
+  // Cluster cards stay 82% width to hint there's more to swipe, but use the
+  // FULL-WIDTH image height so they feel as tall as individual cards.
   const clusterCardWidth = count > 1 ? Math.round(cardWidth * 0.82) : cardWidth;
+  const clusterImageHeight = Math.round(cardWidth * 0.72);
   const snapInterval = clusterCardWidth + CARD_GAP;
 
   const onScrollSettle = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -1320,18 +1323,23 @@ const TopicSection = React.memo(function TopicSection({
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
         <View style={{ flex: 1 }}>
-          {/* Headline — tappable for timeline when 3+ stories */}
+          {/* Headline row — clock icon + headline left, story count pill right */}
           <TouchableOpacity
             activeOpacity={count >= 3 ? 0.65 : 1}
             disabled={count < 3}
             onPress={count >= 3 ? () => navigation.navigate('StoryTimeline', { clusterId: cluster.id, headline, stories: JSON.stringify(cluster.stories) }) : undefined}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-              {count >= 3 && (
-                <Ionicons name="time-outline" size={14} color="#3A3A3A" />
-              )}
-              <Text style={[styles.clusterHeadline, { flexShrink: 1 }]} numberOfLines={3}>{headline}</Text>
-              {isBreaking && <Text style={styles.breakingText}>BREAKING</Text>}
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, flexWrap: 'wrap', flex: 1 }}>
+                {count >= 3 && (
+                  <Ionicons name="time-outline" size={14} color="#3A3A3A" />
+                )}
+                <Text style={[styles.clusterHeadline, { flexShrink: 1 }]} numberOfLines={3}>{headline}</Text>
+                {isBreaking && <Text style={styles.breakingText}>BREAKING</Text>}
+              </View>
+              <View style={[styles.clusterCountPill, { marginTop: 2 }]}>
+                <Text style={styles.clusterCountPillText}>{count} stories</Text>
+              </View>
             </View>
           </TouchableOpacity>
 
@@ -1340,18 +1348,17 @@ const TopicSection = React.memo(function TopicSection({
             <Text style={styles.clusterSummary} numberOfLines={3}>{summary}</Text>
           )}
 
-          {/* Story count pill + bias spectrum */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
-            <View style={styles.clusterCountPill}>
-              <Text style={styles.clusterCountPillText}>{count} stories</Text>
+          {/* Bias spectrum + diversity badge (count pill moved to headline row) */}
+          {!!cluster.biasBreakdown && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+              {cluster.biasBreakdown && <BiasSpectrum breakdown={cluster.biasBreakdown} />}
+              {cluster.biasBreakdown?.diversity && (
+                <View style={styles.diversityBadge}>
+                  <Text style={styles.diversityText}>Multi-perspective</Text>
+                </View>
+              )}
             </View>
-            {cluster.biasBreakdown && <BiasSpectrum breakdown={cluster.biasBreakdown} />}
-            {cluster.biasBreakdown?.diversity && (
-              <View style={styles.diversityBadge}>
-                <Text style={styles.diversityText}>Multi-perspective</Text>
-              </View>
-            )}
-          </View>
+          )}
         </View>
       </View>
 
@@ -1370,7 +1377,12 @@ const TopicSection = React.memo(function TopicSection({
       >
         {cluster.stories.map((story, i) => (
           <View key={story.id} style={i < cluster.stories.length - 1 ? { marginRight: CARD_GAP } : undefined}>
-            <StoryCard story={story} cardWidth={clusterCardWidth} allStories={allStories} />
+            <StoryCard
+              story={story}
+              cardWidth={clusterCardWidth}
+              imageHeight={clusterImageHeight}
+              allStories={allStories}
+            />
           </View>
         ))}
       </ScrollView>

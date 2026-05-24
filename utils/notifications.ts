@@ -1,12 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Linking, Platform } from 'react-native';
 
-// expo-notifications requires native modules (ExpoPushTokenManager) that are
-// not bundled in Expo Go. Lazy-require so the app doesn't crash in Expo Go —
-// all functions below silently no-op when the module can't be loaded.
+// Skip require in Expo Go (SDK 53+ removed expo-notifications). Loads only in
+// dev clients / standalone builds. All functions no-op when null.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let N: any = null;
-try { N = require('expo-notifications'); } catch {}
+if (Constants.executionEnvironment !== ExecutionEnvironment.StoreClient) {
+  try { N = require('expo-notifications'); } catch {}
+}
 
 if (N?.setNotificationHandler) {
   try {

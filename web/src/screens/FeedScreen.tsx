@@ -4,6 +4,7 @@ import { StoryCard } from '../components/StoryCard';
 import { useSource } from '../contexts/SourceContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useRouter } from '../contexts/RouterContext';
+import { useTabBar } from '../contexts/TabBarContext';
 import { loadProfile, rankStories, rankStoriesStandard } from '../utils/personalization';
 import { TOPIC_SUBTOPICS, storyMatchesSubTopic } from '../utils/topics';
 
@@ -105,45 +106,56 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
       <div style={{ paddingLeft: sideMargin, paddingRight: sideMargin, marginBottom: 12 }}>
         <div
           onClick={canTimeline ? openTimeline : undefined}
-          style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap', cursor: canTimeline ? 'pointer' : 'default', WebkitTapHighlightColor: 'transparent' }}
+          style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 4, cursor: canTimeline ? 'pointer' : 'default', WebkitTapHighlightColor: 'transparent' }}
         >
-          {canTimeline && (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3A3A3A" strokeWidth="2" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          )}
-          <div style={{ color: '#fff', fontSize: 21, fontWeight: 800, letterSpacing: -0.4, lineHeight: 1.2 }}>
-            {cluster.topicLabel}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', flex: 1 }}>
+            {canTimeline && (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3A3A3A" strokeWidth="2" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            )}
+            <div style={{ color: '#fff', fontSize: 21, fontWeight: 800, letterSpacing: -0.4, lineHeight: 1.2 }}>
+              {cluster.topicLabel}
+            </div>
+            {isBreaking && (
+              <span style={{ color: '#FF3B30', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>BREAKING</span>
+            )}
           </div>
-          {isBreaking && (
-            <span style={{ color: '#FF3B30', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>BREAKING</span>
-          )}
+          <span style={{
+            color: '#888', fontSize: 10, fontWeight: 700, letterSpacing: 0.6,
+            padding: '4px 10px', borderRadius: 999,
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            whiteSpace: 'nowrap', marginTop: 2,
+          }}>
+            {cluster.stories.length} stories
+          </span>
         </div>
         {cluster.subtitle && (
-          <div style={{ color: '#666', fontSize: 13, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+          <div style={{ color: '#666', fontSize: 13, lineHeight: 1.4, marginTop: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
             {cluster.subtitle}
           </div>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5, flexWrap: 'wrap' }}>
-          <span style={{ color: '#3a3a3a', fontSize: 11, fontWeight: 600, letterSpacing: 0.3 }}>
-            {cluster.stories.length} STORIES
-          </span>
-          {cluster.biasBreakdown && (() => {
-            const bd = cluster.biasBreakdown!;
-            const total = bd.left + bd.center + bd.right;
-            if (total === 0) return null;
-            return (
-              <div style={{ display: 'flex', height: 3, borderRadius: 2, overflow: 'hidden', width: 60 }}>
-                <div style={{ flex: bd.left || 0.001, background: '#1E5CFF' }} />
-                <div style={{ flex: bd.center || 0.001, background: '#9B9B9B' }} />
-                <div style={{ flex: bd.right || 0.001, background: '#FF3B30' }} />
-              </div>
-            );
-          })()}
-          {cluster.biasBreakdown?.diversity && (
-            <span style={{ color: 'rgba(100,200,100,0.8)', fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: '2px 7px', borderRadius: 99, border: '1px solid rgba(100,200,100,0.2)', background: 'rgba(100,180,100,0.1)' }}>
-              Multi-perspective
-            </span>
-          )}
-        </div>
+        {(() => {
+          const bd = cluster.biasBreakdown;
+          const hasBias = bd && (bd.left + bd.center + bd.right) > 0;
+          const hasDiversity = bd?.diversity;
+          if (!hasBias && !hasDiversity) return null;
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+              {hasBias && (
+                <div style={{ display: 'flex', height: 3, borderRadius: 2, overflow: 'hidden', width: 60 }}>
+                  <div style={{ flex: bd!.left || 0.001, background: '#1E5CFF' }} />
+                  <div style={{ flex: bd!.center || 0.001, background: '#9B9B9B' }} />
+                  <div style={{ flex: bd!.right || 0.001, background: '#FF3B30' }} />
+                </div>
+              )}
+              {hasDiversity && (
+                <span style={{ color: 'rgba(100,200,100,0.8)', fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: '2px 7px', borderRadius: 99, border: '1px solid rgba(100,200,100,0.2)', background: 'rgba(100,180,100,0.1)' }}>
+                  Multi-perspective
+                </span>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Horizontal carousel — narrower cards, next card peeks */}
@@ -220,6 +232,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   const { activeSources } = useSource();
   const { activeTopics, activeSubTopics, showSports, showEntertainment } = useSettings();
   const { navigate } = useRouter();
+  const { reportScroll } = useTabBar();
   const isVisibleRef = useRef(isVisible);
   useEffect(() => { isVisibleRef.current = isVisible; }, [isVisible]);
 
@@ -377,16 +390,17 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   }, [activeTopic]);
 
 
-  // Save scroll offset on scroll
+  // Save scroll offset on scroll + drive tab-bar auto-hide
   const handleScroll = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
     scrollOffsetRef.current = el.scrollTop;
+    reportScroll(el.scrollTop);
     const elapsed = Date.now() - lastFetchRef.current;
     if (el.scrollTop === 0 && elapsed > BG_REFRESH_THRESHOLD_MS) {
       backgroundRefresh(activeTopicRef.current, allFeed);
     }
-  }, [allFeed]);
+  }, [allFeed, reportScroll]);
 
   // Save offset when navigating away / closing
   useEffect(() => {
