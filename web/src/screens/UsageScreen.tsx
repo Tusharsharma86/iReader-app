@@ -7,6 +7,25 @@ const PURPLE = '#8B5CF6';
 const GREEN = '#34D399';
 const AMBER = '#F59E0B';
 const CARD = { background: '#0E0E0E', border: '1px solid #1A1A1A', borderRadius: 14, padding: '14px 16px', marginBottom: 24 } as const;
+const USAGE_API = 'https://ireader.onrender.com/api/news/usage';
+const CONSOLE_URL = 'https://platform.claude.com/cost?range=mtd';
+
+interface ServerUsage {
+  range: { start: string; end: string; key: string };
+  totals: { cost: number; calls: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreateTokens: number };
+  days: Array<{ day: string; cost: number; calls: number }>;
+  byModel: Record<string, { cost: number; calls: number }>;
+  byFeature: Record<string, { cost: number; calls: number }>;
+  byApp: Record<string, { cost: number; calls: number }>;
+}
+
+type Range = 'mtd' | '7d' | '30d';
+
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
 
 // ── Bar chart ────────────────────────────────────────────────────────────────
 
@@ -82,8 +101,22 @@ function Divider() {
 export default function UsageScreen() {
   const { goBack } = useRouter();
   const [stats, setStats] = useState<UsageStats | null>(null);
+  const [range, setRange] = useState<Range>('mtd');
+  const [serverUsage, setServerUsage] = useState<ServerUsage | null>(null);
+  const [usageLoading, setUsageLoading] = useState(true);
+  const [usageError, setUsageError] = useState<string | null>(null);
 
   useEffect(() => { setStats(getUsageStats()); }, []);
+
+  useEffect(() => {
+    setUsageLoading(true);
+    setUsageError(null);
+    fetch(`${USAGE_API}?range=${range}`)
+      .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
+      .then((d: ServerUsage) => setServerUsage(d))
+      .catch(e => setUsageError(String(e)))
+      .finally(() => setUsageLoading(false));
+  }, [range]);
 
   const fmt$ = (n: number) => n === 0 ? '$0.00' : n < 0.10 ? `$${n.toFixed(3)}` : `$${n.toFixed(2)}`;
 
@@ -104,6 +137,90 @@ export default function UsageScreen() {
         </div>
       ) : (
         <>
+          {/* ACTUAL CLAUDE COST (server aggregate) */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px 10px' }}>
+            <span style={{ color: '#444', fontSize: 11, fontWeight: 700, letterSpacing: 1.5 }}>ACTUAL CLAUDE COST</span>
+            <div style={{ display: 'flex', gap: 4, background: '#0E0E0E', border: '1px solid #1A1A1A', borderRadius: 999, padding: 3 }}>
+              {(['mtd','7d','30d'] as Range[]).map(r => (
+                <button key={r} onClick={() => setRange(r)} style={{
+                  padding: '4px 10px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                  background: range === r ? GREEN + '22' : 'transparent',
+                  color: range === r ? GREEN : '#555',
+                  fontSize: 9, fontWeight: 800, letterSpacing: 1.2,
+                }}>
+                  {r === 'mtd' ? 'MONTH' : r.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ ...CARD, margin: '0 16px 12px' }}>
+            {usageLoading ? (
+              <div style={{ textAlign: 'center', padding: 16 }}>
+                <div style={{ width: 24, height: 24, border: '3px solid #222', borderTopColor: GREEN, borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
+              </div>
+            ) : usageError ? (
+              <div style={{ color: '#444', fontSize: 14, textAlign: 'center', padding: '16px 0' }}>Could not load cost: {usageError}</div>
+            ) : !serverUsage ? (
+              <div style={{ color: '#444', fontSize: 14, textAlign: 'center', padding: '16px 0' }}>No data.</div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '6px 0' }}>
+                  <span style={{ color: GREEN, fontSize: 36, fontWeight: 800, letterSpacing: -1 }}>
+                    ${serverUsage.totals.cost.toFixed(2)}
+                  </span>
+                  <div>
+                    <div style={{ color: '#DDD', fontSize: 14, fontWeight: 700 }}>{serverUsage.totals.calls} calls</div>
+                    <div style={{ color: '#555', fontSize: 10, fontWeight: 600, marginTop: 2 }}>
+                      {serverUsage.range.start} → {serverUsage.range.end}
+                    </div>
+                  </div>
+                </div>
+                <Divider />
+                <div style={{ display: 'flex', padding: '12px 0' }}>
+                  {[
+                    ['INPUT TOK', fmtTokens(serverUsage.totals.inputTokens)],
+                    ['OUTPUT TOK', fmtTokens(serverUsage.totals.outputTokens)],
+                    ['CACHE READ', fmtTokens(serverUsage.totals.cacheReadTokens)],
+                  ].map(([label, value]) => (
+                    <div key={label} style={{ flex: 1, textAlign: 'center' }}>
+                      <div style={{ color: '#DDD', fontSize: 14, fontWeight: 700 }}>{value}</div>
+                      <div style={{ color: '#555', fontSize: 9, fontWeight: 700, letterSpacing: 1.1, marginTop: 2 }}>{label}</div>
+                    </div>
+                  ))}
+                </div>
+                {Object.keys(serverUsage.byModel).length > 0 && (
+                  <>
+                    <Divider />
+                    {Object.entries(serverUsage.byModel)
+                      .sort((a, b) => b[1].cost - a[1].cost)
+                      .slice(0, 3)
+                      .map(([model, v]) => (
+                        <div key={model} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0' }}>
+                          <span style={{ flex: 1, color: '#BBB', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {model.replace(/^claude-/, '').replace(/-\d{8}$/, '')}
+                          </span>
+                          <span style={{ color: GREEN, fontSize: 13, fontWeight: 700 }}>${v.cost.toFixed(2)}</span>
+                          <span style={{ color: '#555', fontSize: 11, width: 36, textAlign: 'right' }}>{v.calls}</span>
+                        </div>
+                      ))}
+                  </>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Open live console dashboard */}
+          <a href={CONSOLE_URL} target="_blank" rel="noopener noreferrer" style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            margin: '0 16px 24px', padding: '14px 16px',
+            borderRadius: 12, background: '#0E0E0E',
+            border: '1px solid #1A1A1A', textDecoration: 'none',
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={BLUE} strokeWidth="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" /></svg>
+            <span style={{ flex: 1, color: BLUE, fontSize: 13, fontWeight: 700 }}>Open Anthropic Console</span>
+            <span style={{ color: '#444', fontSize: 16 }}>›</span>
+          </a>
+
           {/* TODAY */}
           <SectionHeader title="TODAY" />
           <div style={{ display: 'flex', gap: 8, margin: '0 16px 24px' }}>

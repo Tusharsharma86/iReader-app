@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as WebBrowser from 'expo-web-browser';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -11,6 +12,18 @@ import { Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { getUsageStats, UsageStats, DayData } from '../utils/usageTracker';
+
+const USAGE_API = 'https://ireader.onrender.com/api/news/usage';
+const CONSOLE_URL = 'https://platform.claude.com/cost?range=mtd';
+
+interface ServerUsage {
+  range: { start: string; end: string; key: string };
+  totals: { cost: number; calls: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreateTokens: number };
+  days: Array<{ day: string; cost: number; calls: number }>;
+  byModel: Record<string, { cost: number; calls: number }>;
+  byFeature: Record<string, { cost: number; calls: number }>;
+  byApp: Record<string, { cost: number; calls: number }>;
+}
 
 const BLUE = '#4A90D9';
 const PURPLE = '#8B5CF6';
@@ -156,15 +169,48 @@ function SectionHeader({ title }: { title: string }) {
   return <Text style={styles.sectionHeader}>{title}</Text>;
 }
 
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={{ flex: 1, alignItems: 'center' }}>
+      <Text style={{ color: '#DDD', fontSize: 14, fontWeight: '700' }}>{value}</Text>
+      <Text style={{ color: '#555', fontSize: 9, fontWeight: '700', letterSpacing: 1.1, marginTop: 2 }}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
 // ── Main screen ───────────────────────────────────────────────────────────────
+
+type Range = 'mtd' | '7d' | '30d';
 
 export default function UsageScreen() {
   const navigation = useNavigation();
   const [stats, setStats] = useState<UsageStats | null>(null);
+  const [range, setRange] = useState<Range>('mtd');
+  const [serverUsage, setServerUsage] = useState<ServerUsage | null>(null);
+  const [usageLoading, setUsageLoading] = useState(true);
+  const [usageError, setUsageError] = useState<string | null>(null);
 
   useEffect(() => {
     getUsageStats().then(setStats);
   }, []);
+
+  useEffect(() => {
+    setUsageLoading(true);
+    setUsageError(null);
+    fetch(`${USAGE_API}?range=${range}`)
+      .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
+      .then((d: ServerUsage) => setServerUsage(d))
+      .catch(e => setUsageError(String(e)))
+      .finally(() => setUsageLoading(false));
+  }, [range]);
 
   const fmt$ = (n: number) => n === 0 ? '$0.00' : n < 0.10 ? `$${n.toFixed(3)}` : `$${n.toFixed(2)}`;
 
@@ -184,6 +230,75 @@ export default function UsageScreen() {
         </View>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 48 }}>
+
+          {/* ── ACTUAL ANTHROPIC COST (server-side aggregate) ── */}
+          <View style={styles.costHeaderRow}>
+            <Text style={styles.sectionHeader}>ACTUAL CLAUDE COST</Text>
+            <View style={styles.rangeTabs}>
+              {(['mtd','7d','30d'] as Range[]).map(r => (
+                <Pressable key={r} onPress={() => setRange(r)}
+                  style={[styles.rangeTab, range === r && styles.rangeTabActive]}>
+                  <Text style={[styles.rangeTabLabel, range === r && styles.rangeTabLabelActive]}>
+                    {r === 'mtd' ? 'MONTH' : r.toUpperCase()}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+          <View style={styles.card}>
+            {usageLoading ? (
+              <ActivityIndicator color={GREEN} style={{ paddingVertical: 16 }} />
+            ) : usageError ? (
+              <Text style={styles.empty}>Could not load cost: {usageError}</Text>
+            ) : !serverUsage ? (
+              <Text style={styles.empty}>No data.</Text>
+            ) : (
+              <>
+                <View style={styles.bigCostRow}>
+                  <Text style={styles.bigCostValue}>${serverUsage.totals.cost.toFixed(2)}</Text>
+                  <View>
+                    <Text style={styles.bigCostLabel}>{serverUsage.totals.calls} calls</Text>
+                    <Text style={styles.bigCostSub}>
+                      {serverUsage.range.start} → {serverUsage.range.end}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.miniGrid}>
+                  <MiniStat label="INPUT TOK" value={fmtTokens(serverUsage.totals.inputTokens)} />
+                  <MiniStat label="OUTPUT TOK" value={fmtTokens(serverUsage.totals.outputTokens)} />
+                  <MiniStat label="CACHE READ" value={fmtTokens(serverUsage.totals.cacheReadTokens)} />
+                </View>
+                {Object.keys(serverUsage.byModel).length > 0 && (
+                  <>
+                    <View style={styles.divider} />
+                    {Object.entries(serverUsage.byModel)
+                      .sort((a, b) => b[1].cost - a[1].cost)
+                      .slice(0, 3)
+                      .map(([model, v]) => (
+                        <View key={model} style={styles.modelRow}>
+                          <Text style={styles.modelName} numberOfLines={1}>
+                            {model.replace(/^claude-/, '').replace(/-\d{8}$/, '')}
+                          </Text>
+                          <Text style={styles.modelCost}>${v.cost.toFixed(2)}</Text>
+                          <Text style={styles.modelCalls}>{v.calls}</Text>
+                        </View>
+                      ))}
+                  </>
+                )}
+              </>
+            )}
+          </View>
+
+          {/* Open live console dashboard */}
+          <Pressable
+            onPress={() => WebBrowser.openBrowserAsync(CONSOLE_URL).catch(() => {})}
+            style={styles.linkRow}
+          >
+            <Ionicons name="open-outline" size={16} color={BLUE} />
+            <Text style={styles.linkText}>Open Anthropic Console</Text>
+            <Ionicons name="chevron-forward" size={16} color="#444" />
+          </Pressable>
 
           {/* ── TODAY ── */}
           <SectionHeader title="TODAY" />
@@ -294,4 +409,39 @@ const styles = StyleSheet.create({
     color: '#333', fontSize: 11, textAlign: 'center',
     marginHorizontal: 24, marginTop: -12, lineHeight: 16,
   },
+  costHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingTop: 4, paddingBottom: 10,
+  },
+  rangeTabs: {
+    flexDirection: 'row', gap: 4,
+    backgroundColor: CARD_BG, borderRadius: 999,
+    borderWidth: 1, borderColor: BORDER, padding: 3,
+  },
+  rangeTab: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
+  rangeTabActive: { backgroundColor: GREEN + '22' },
+  rangeTabLabel: { color: '#555', fontSize: 9, fontWeight: '800', letterSpacing: 1.2 },
+  rangeTabLabelActive: { color: GREEN },
+  bigCostRow: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 6 },
+  bigCostValue: { color: GREEN, fontSize: 36, fontWeight: '800', letterSpacing: -1 },
+  bigCostLabel: { color: '#DDD', fontSize: 14, fontWeight: '700' },
+  bigCostSub: { color: '#555', fontSize: 10, fontWeight: '600', letterSpacing: 0.4, marginTop: 2 },
+  miniGrid: { flexDirection: 'row', paddingVertical: 12 },
+  modelRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 8, gap: 12,
+  },
+  modelName: { flex: 1, color: '#BBB', fontSize: 12, fontWeight: '600' },
+  modelCost: { color: GREEN, fontSize: 13, fontWeight: '700' },
+  modelCalls: { color: '#555', fontSize: 11, width: 36, textAlign: 'right' },
+  linkRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    marginHorizontal: 16, marginBottom: 24,
+    paddingHorizontal: 16, paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER,
+  },
+  linkText: { flex: 1, color: BLUE, fontSize: 13, fontWeight: '700' },
 });
