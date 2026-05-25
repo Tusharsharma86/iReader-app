@@ -2,6 +2,7 @@ import React from 'react';
 import { useSettings, } from '../contexts/SettingsContext';
 import { useSource } from '../contexts/SourceContext';
 import { useRouter } from '../contexts/RouterContext';
+import { useTabBar } from '../contexts/TabBarContext';
 import type { FontSize } from '../types';
 
 const FONT_SIZES: FontSize[] = ['Small', 'Medium', 'Large', 'XLarge'];
@@ -24,11 +25,15 @@ export default function SettingsScreen() {
   const { fontSize, setFontSize, notifBreaking, setNotifBreaking, notifTech, setNotifTech, notifDigest, setNotifDigest, notifSources, setNotifSources, favSources, favTopics, activeTopics, resetSettings } = useSettings();
   const favCount = favSources.length + favTopics.length;
   const { resetSources } = useSource();
+  const { reportScroll } = useTabBar();
 
   const enabledTopicsCount = Object.values(activeTopics).filter(Boolean).length;
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', background: '#000', WebkitOverflowScrolling: 'touch' }}>
+    <div
+      onScroll={(e) => reportScroll((e.target as HTMLDivElement).scrollTop)}
+      style={{ height: '100%', overflowY: 'auto', background: '#000', WebkitOverflowScrolling: 'touch' }}
+    >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px 24px' }}>
         {canGoBack && (
           <button onClick={goBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px 4px 0', color: '#4A90D9', fontSize: 22, lineHeight: 1 }}>‹</button>

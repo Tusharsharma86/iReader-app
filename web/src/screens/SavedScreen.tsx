@@ -1,13 +1,18 @@
 import React from 'react';
 import { useSaved } from '../contexts/SavedContext';
+import { useTabBar } from '../contexts/TabBarContext';
 import { StoryCard } from '../components/StoryCard';
 
 export default function SavedScreen() {
   const { savedStories } = useSaved();
+  const { reportScroll } = useTabBar();
   const cardWidth = Math.min(window.innerWidth - 28, 452);
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', background: '#000', WebkitOverflowScrolling: 'touch' }}>
+    <div
+      onScroll={(e) => reportScroll((e.target as HTMLDivElement).scrollTop)}
+      style={{ height: '100%', overflowY: 'auto', background: '#000', WebkitOverflowScrolling: 'touch' }}
+    >
       <div style={{ color: '#fff', fontSize: 28, fontWeight: 800, padding: '16px 20px 20px' }}>Saved</div>
 
       {savedStories.length === 0 ? (

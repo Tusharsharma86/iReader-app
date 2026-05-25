@@ -1,14 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback } from 'react';
 import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StoryCard } from '../components/StoryCard';
 import { useSaved } from '../contexts/SavedContext';
+import { useTabBarAutoHide } from '../utils/tabBarAnim';
 
 export default function SavedScreen() {
   const { width } = useWindowDimensions();
   const cardWidth = width >= 768 ? Math.round(width * 0.46) : width - 28;
   const { savedStories } = useSaved();
+  const { onScroll, restore } = useTabBarAutoHide();
+  useFocusEffect(useCallback(() => () => restore(), [restore]));
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -24,6 +28,8 @@ export default function SavedScreen() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.list}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
         >
           <Text style={styles.count}>{savedStories.length} saved</Text>
           {savedStories.map(story => (

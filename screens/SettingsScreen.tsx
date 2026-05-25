@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback } from 'react';
 import {
@@ -15,6 +15,7 @@ import { useSettings, FontSize } from '../contexts/SettingsContext';
 import { useSource } from '../contexts/SourceContext';
 import { SettingsStackParamList } from '../types/navigation';
 import { requestNotificationPermission } from '../utils/notifications';
+import { useTabBarAutoHide } from '../utils/tabBarAnim';
 
 const FONT_SIZES: FontSize[] = ['Small', 'Medium', 'Large', 'XLarge'];
 
@@ -42,10 +43,12 @@ export default function SettingsScreen() {
   }, []);
 
   const enabledTopicsCount = Object.values(activeTopics).filter(Boolean).length;
+  const { onScroll, restore } = useTabBarAutoHide();
+  useFocusEffect(useCallback(() => () => restore(), [restore]));
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false} onScroll={onScroll} scrollEventThrottle={16}>
         <Text style={styles.screenTitle}>Settings</Text>
 
         {/* READING PREFERENCES */}

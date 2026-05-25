@@ -22,6 +22,7 @@ import type { Story } from '../components/StoryCard';
 import { FeedStackParamList } from '../types/navigation';
 import { trackArticleOpen } from '../utils/personalization';
 import { darken, lighten, getArticleColor } from '../utils/colors';
+import { useTabBarAutoHide } from '../utils/tabBarAnim';
 
 const FEED_API = 'https://ireader.onrender.com/api/news/feed';
 const AI_SUMMARY_API = 'https://ireader.onrender.com/api/news/ai-summary';
@@ -364,12 +365,17 @@ export default function DigestScreen() {
     setCollapsed(c => ({ ...c, [key]: !c[key] }));
   }, []);
 
+  const { onScroll: onTabBarScroll, restore: restoreTabBar } = useTabBarAutoHide();
+  useFocusEffect(useCallback(() => () => restoreTabBar(), [restoreTabBar]));
+
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
+        onScroll={onTabBarScroll}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             tintColor="#888"
