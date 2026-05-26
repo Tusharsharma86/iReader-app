@@ -12,19 +12,27 @@ const TabBarContext = createContext<TabBarCtx>({ visible: true, reportScroll: ()
 export function TabBarProvider({ children }: { children: React.ReactNode }) {
   const [visible, setVisible] = useState(true);
   const lastScrollRef = useRef(0);
+  // When a screen calls hide() explicitly (e.g. Article reader), it locks the
+  // bar off so background scroll events from the Feed don't pop it back into view.
+  const forceHiddenRef = useRef(false);
 
   const reportScroll = useCallback((scrollTop: number) => {
+    if (forceHiddenRef.current) return;          // locked off by an open screen
     const delta = scrollTop - lastScrollRef.current;
     lastScrollRef.current = scrollTop;
-    // Always show at the very top
     if (scrollTop < 80) { setVisible(true); return; }
-    // Hide when scrolling down >8px, show when scrolling up >8px
     if (delta > 8) setVisible(false);
     else if (delta < -8) setVisible(true);
   }, []);
 
-  const show = useCallback(() => setVisible(true), []);
-  const hide = useCallback(() => setVisible(false), []);
+  const show = useCallback(() => {
+    forceHiddenRef.current = false;
+    setVisible(true);
+  }, []);
+  const hide = useCallback(() => {
+    forceHiddenRef.current = true;
+    setVisible(false);
+  }, []);
 
   return (
     <TabBarContext.Provider value={{ visible, reportScroll, show, hide }}>

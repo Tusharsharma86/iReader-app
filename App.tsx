@@ -14,6 +14,7 @@ import TopicFeedScreen from './screens/TopicFeedScreen';
 import SavedScreen from './screens/SavedScreen';
 import FeedScreen from './app/index';
 import DigestScreen from './screens/DigestScreen';
+import AIFeedScreen from './screens/AIFeedScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import TopicsScreen from './screens/TopicsScreen';
 import SourcesScreen from './screens/SourcesScreen';
@@ -23,6 +24,7 @@ import { SavedProvider } from './contexts/SavedContext';
 import { FeedStackParamList, RootTabParamList, SettingsStackParamList } from './types/navigation';
 import FavSourcesScreen from './screens/FavSourcesScreen';
 import UsageScreen from './screens/UsageScreen';
+import CostDashboardScreen from './screens/CostDashboardScreen';
 import TopicInterestsScreen from './screens/TopicInterestsScreen';
 import StoryTimelineScreen from './screens/StoryTimelineScreen';
 import { setupNotificationChannels, requestNotificationPermission } from './utils/notifications';
@@ -39,6 +41,7 @@ type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 const TAB_ITEMS: { route: keyof RootTabParamList; label: string; icon: IoniconsName; iconActive: IoniconsName }[] = [
   { route: 'Feed',     label: 'Feed',     icon: 'newspaper-outline',  iconActive: 'newspaper'  },
   { route: 'Digest',   label: 'Digest',   icon: 'flash-outline',      iconActive: 'flash'      },
+  { route: 'AIFeed',   label: 'AI Feed',  icon: 'sparkles-outline',   iconActive: 'sparkles'   },
   { route: 'Saved',    label: 'Saved',    icon: 'bookmark-outline',   iconActive: 'bookmark'   },
   { route: 'Settings', label: 'Settings', icon: 'settings-outline',   iconActive: 'settings'   },
 ];
@@ -169,6 +172,7 @@ function SettingsNavigator() {
       <SettingsStack.Screen name="Sources" component={SourcesScreen} />
       <SettingsStack.Screen name="FavSources" component={FavSourcesScreen} />
       <SettingsStack.Screen name="Usage" component={UsageScreen} />
+      <SettingsStack.Screen name="CostDashboard" component={CostDashboardScreen} />
       <SettingsStack.Screen name="TopicInterests" component={TopicInterestsScreen} />
     </SettingsStack.Navigator>
   );
@@ -235,6 +239,7 @@ export default function App() {
         >
           <Tab.Screen name="Feed"     component={FeedNavigator} />
           <Tab.Screen name="Digest"   component={DigestScreen} />
+          <Tab.Screen name="AIFeed"   component={AIFeedScreen} />
           <Tab.Screen name="Saved"    component={SavedScreen} />
           <Tab.Screen name="Settings" component={SettingsNavigator} />
         </Tab.Navigator>

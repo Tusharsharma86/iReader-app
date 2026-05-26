@@ -20,6 +20,7 @@ export type FeedStackParamList = {
 export type RootTabParamList = {
   Feed: undefined;
   Digest: undefined;
+  AIFeed: undefined;
   Saved: undefined;
   Settings: undefined;
 };
@@ -30,6 +31,7 @@ export type SettingsStackParamList = {
   Sources: undefined;
   FavSources: undefined;
   Usage: undefined;
+  CostDashboard: undefined;
   TopicInterests: undefined;
 };
 

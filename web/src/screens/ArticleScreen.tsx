@@ -18,6 +18,42 @@ const FONT_SIZE_MAP: Record<string, number> = { Small: 14, Medium: 17, Large: 19
 interface AiResult { bullets?: string[]; summary?: string; fiveWs?: string[]; eli5?: string; }
 interface SourceEntry { name: string; url: string; imageUrl?: string; publishedAt: string; }
 
+// Render a paragraph with two-tier highlights:
+//   - quoted text ("…" or curly quotes) → italic + gold accent
+//   - named entities (people/companies) → white bold
+// Falls back to plain text when no matches.
+function renderParagraphHighlights(text: string, entities: string[], _accent: string): React.ReactNode {
+  if (!text) return null;
+  // First pass: split on quotes (straight + curly). Capture group includes the quotes.
+  const QUOTE_RE = /(["“][^"”]{3,}?["”])/g;
+  const segments = text.split(QUOTE_RE);
+  return segments.map((seg, i) => {
+    if (QUOTE_RE.test(seg)) {
+      // Reset lastIndex (global regex state)
+      QUOTE_RE.lastIndex = 0;
+      return (
+        <span key={i} style={{ color: '#FFC542', fontStyle: 'italic', fontWeight: 500 }}>{seg}</span>
+      );
+    }
+    QUOTE_RE.lastIndex = 0;
+    return <React.Fragment key={i}>{renderEntities(seg, entities)}</React.Fragment>;
+  });
+}
+
+function renderEntities(text: string, entities: string[]): React.ReactNode {
+  if (!entities || entities.length === 0) return text;
+  const escaped = [...new Set(entities)]
+    .filter(e => e && e.length > 2)
+    .sort((a, b) => b.length - a.length)
+    .map(e => e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (escaped.length === 0) return text;
+  const re = new RegExp(`\\b(${escaped.join('|')})\\b`, 'g');
+  const parts = text.split(re);
+  return parts.map((p, i) => i % 2 === 1
+    ? <strong key={i} style={{ color: '#fff', fontWeight: 700 }}>{p}</strong>
+    : <React.Fragment key={i}>{p}</React.Fragment>);
+}
+
 function extractEntities(text: string) {
   const people: string[] = []; const companies: string[] = [];
   const words = text.split(/\s+/);
@@ -207,7 +243,11 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
         {paragraphsLoading ? <Spinner /> : (
           <>
             {paragraphsError && <div style={{ color: '#FF6B6B', fontSize: 12, marginBottom: 12 }}>Full text unavailable from this publisher</div>}
-            {paragraphs.map((p, i) => <p key={i} style={{ color: '#DDD', fontSize: fontSizePx, lineHeight: 1.65, marginBottom: 16 }}>{p}</p>)}
+            {paragraphs.map((p, i) => (
+              <p key={i} style={{ color: '#DDD', fontSize: fontSizePx, lineHeight: 1.7, marginBottom: 16 }}>
+                {renderParagraphHighlights(p, [...entities.people, ...entities.companies], accent)}
+              </p>
+            ))}
             <a href={params.url} target="_blank" rel="noopener noreferrer"
               style={{ display: 'block', marginTop: 20, padding: '14px', borderRadius: 12, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', textAlign: 'center', color: '#fff', fontSize: 15, fontWeight: 700, textDecoration: 'none' }}>
               Read Full Article →

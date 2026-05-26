@@ -3,11 +3,12 @@ import type { TabName, NavScreen } from '../types';
 import { useRouter } from '../contexts/RouterContext';
 import { useTabBar } from '../contexts/TabBarContext';
 
-type IconName = 'feed' | 'digest' | 'saved' | 'profile';
+type IconName = 'feed' | 'digest' | 'aifeed' | 'saved' | 'profile';
 
 const TAB_ITEMS: Array<{ tab: TabName; screen: NavScreen; icon: IconName; label: string }> = [
   { tab: 'feed',     screen: { name: 'Feed' },     icon: 'feed',    label: 'Feed'    },
   { tab: 'digest',   screen: { name: 'Digest' },   icon: 'digest',  label: 'Digest'  },
+  { tab: 'aifeed',   screen: { name: 'AIFeed' },   icon: 'aifeed',  label: 'AI Feed' },
   { tab: 'saved',    screen: { name: 'Saved' },    icon: 'saved',   label: 'Saved'   },
   { tab: 'settings', screen: { name: 'Settings' }, icon: 'profile', label: 'Profile' },
 ];
@@ -36,6 +37,14 @@ function TabIcon({ name, active }: { name: IconName; active: boolean }) {
     return (
       <svg {...common} fill={active ? color : 'none'}>
         <path d="M315.27 33L96 304h128l-31.51 173.23a2.81 2.81 0 005 2.17L416 208H288l31.61-173.25a2.81 2.81 0 00-4.34-2.92z" />
+      </svg>
+    );
+  }
+  if (name === 'aifeed') {
+    // sparkles — AI native
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+        <path d="M12 1.5l1.6 5.4 5.4 1.6-5.4 1.6L12 15.5l-1.6-5.4L5 8.5l5.4-1.6L12 1.5zM19 14l.9 2.7 2.7.9-2.7.9L19 21.2l-.9-2.7-2.7-.9 2.7-.9L19 14zM5.5 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2z" />
       </svg>
     );
   }

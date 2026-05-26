@@ -66,6 +66,7 @@ export interface ArticleParams {
 export type NavScreen =
   | { name: 'Feed' }
   | { name: 'Digest' }
+  | { name: 'AIFeed' }
   | { name: 'Article'; params: ArticleParams }
   | { name: 'TopicFeed'; params: { tag: string } }
   | { name: 'StoryTimeline'; params: { clusterId: string; headline: string; stories: string } }
@@ -76,4 +77,4 @@ export type NavScreen =
   | { name: 'FavSources' }
   | { name: 'Usage' };
 
-export type TabName = 'feed' | 'digest' | 'saved' | 'settings';
+export type TabName = 'feed' | 'digest' | 'aifeed' | 'saved' | 'settings';

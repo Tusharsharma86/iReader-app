@@ -290,13 +290,13 @@ export default function UsageScreen() {
             )}
           </View>
 
-          {/* Open live console dashboard */}
+          {/* Open Anthropic dashboard inside the app (in-app WebView) */}
           <Pressable
-            onPress={() => WebBrowser.openBrowserAsync(CONSOLE_URL).catch(() => {})}
+            onPress={() => (navigation as any).navigate('CostDashboard')}
             style={styles.linkRow}
           >
-            <Ionicons name="open-outline" size={16} color={BLUE} />
-            <Text style={styles.linkText}>Open Anthropic Console</Text>
+            <Ionicons name="bar-chart-outline" size={16} color={BLUE} />
+            <Text style={styles.linkText}>Anthropic Cost Dashboard</Text>
             <Ionicons name="chevron-forward" size={16} color="#444" />
           </Pressable>
 

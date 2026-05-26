@@ -1,0 +1,1172 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { Story } from '../types';
+import { useTabBar } from '../contexts/TabBarContext';
+import { darken, lighten, getArticleColor } from '../utils/colors';
+
+const FEED_API_BASE = 'https://ireader.onrender.com/api/news/feed';
+// Topic rotation for infinite scroll — once we run low on cards we pull the
+// next topic, dedupe against existing items, and append.
+const TOPIC_QUEUE = [
+  'breaking',
+  'technology',
+  'india-politics',
+  'geopolitics',
+  'markets',
+  'business',
+];
+const DEEPDIVE_API = 'https://ireader.onrender.com/api/news/deepdive';
+const CACHE_PREFIX = '@deepdive_v1_';
+const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const VIOLET = '#b994ff';
+const GOLD   = '#FFC542';
+
+interface DeepDiveData {
+  tldr: string[];
+  narrative: string;
+  insight: string;
+  questions: string[];
+  tags: string[];
+  keyPeople?: string[];
+  keyCompanies?: string[];
+  topics?: string[];
+}
+
+interface FeedItem {
+  primary: Story;
+  allStories: Story[];
+  sources: { name: string; url: string }[];
+}
+
+function readCache(id: string): DeepDiveData | null {
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + id);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Date.now() - parsed.at > CACHE_TTL_MS) return null;
+    return parsed;
+  } catch { return null; }
+}
+function writeCache(id: string, data: DeepDiveData) {
+  try { localStorage.setItem(CACHE_PREFIX + id, JSON.stringify({ ...data, at: Date.now() })); } catch {}
+}
+
+function timeAgo(iso: string): string {
+  if (!iso) return '';
+  try {
+    const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    if (mins < 60) return `${mins}M AGO`;
+    const hrs = Math.round(mins / 60);
+    if (hrs < 24) return `${hrs}H AGO`;
+    return `${Math.round(hrs / 24)}D AGO`;
+  } catch { return ''; }
+}
+
+interface ApiItem { type?: string; articles?: Story[]; topicTitle?: string; }
+
+// Each cluster from server = one feed item. Singletons also become items.
+// Then a second-pass headline similarity dedupes the singletons that share
+// most of their content with another item (server cluster missed them).
+function dedupeFeed(items: ApiItem[]): FeedItem[] {
+  const initial: FeedItem[] = items
+    .map(it => {
+      if (it.type === 'cluster' && Array.isArray(it.articles) && it.articles.length > 0) {
+        const primary = it.articles[0];
+        const sources = dedupeSources(it.articles.flatMap(a => a.sources ?? []));
+        return { primary, allStories: it.articles, sources };
+      }
+      const s = it as unknown as Story;
+      if (!s.headline) return null;
+      return { primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []) };
+    })
+    .filter((x): x is FeedItem => !!x);
+
+  // Headline-similarity merge — combine items whose primary headlines share ≥60% tokens
+  const out: FeedItem[] = [];
+  for (const it of initial) {
+    const sig = headlineSignature(it.primary.headline);
+    let merged = false;
+    for (const existing of out) {
+      const sim = jaccard(sig, headlineSignature(existing.primary.headline));
+      if (sim >= 0.6) {
+        existing.allStories.push(...it.allStories.filter(s => !existing.allStories.some(e => e.id === s.id)));
+        existing.sources = dedupeSources([...existing.sources, ...it.sources]);
+        merged = true;
+        break;
+      }
+    }
+    if (!merged) out.push(it);
+  }
+  return out;
+}
+
+function dedupeSources(arr: { name: string; url: string }[]): { name: string; url: string }[] {
+  const seen = new Set<string>();
+  const out: { name: string; url: string }[] = [];
+  for (const s of arr) {
+    const k = (s.name || '').toLowerCase().trim();
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push({ name: s.name, url: s.url });
+  }
+  return out;
+}
+
+const STOPWORDS = new Set([
+  'the','a','an','is','are','was','were','be','been','to','for','of','and','or',
+  'in','on','at','by','from','with','as','it','its','this','that','these','those',
+  'has','have','had','will','says','said','after','before','over','says','new',
+]);
+
+function headlineSignature(h: string): Set<string> {
+  return new Set(
+    (h ?? '').toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(w => w.length > 3 && !STOPWORDS.has(w)),
+  );
+}
+
+function jaccard(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let inter = 0;
+  for (const x of a) if (b.has(x)) inter++;
+  const union = a.size + b.size - inter;
+  return union > 0 ? inter / union : 0;
+}
+
+export default function AIFeedScreen() {
+  const [items, setItems] = useState<FeedItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [openedItem, setOpenedItem] = useState<FeedItem | null>(null);
+  const [topicCursor, setTopicCursor] = useState(0);
+  const [exhausted, setExhausted] = useState(false);
+  const { reportScroll } = useTabBar();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const itemsRef = useRef<FeedItem[]>([]);
+  itemsRef.current = items;
+
+  // Fetch one topic, dedupe against current items, append.
+  const loadTopic = useCallback(async (topicIdx: number, isInitial: boolean) => {
+    const topic = TOPIC_QUEUE[topicIdx % TOPIC_QUEUE.length];
+    if (isInitial) setLoading(true); else setLoadingMore(true);
+    try {
+      const r = await fetch(`${FEED_API_BASE}?topic=${topic}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const raw = await r.json();
+      const rawItems: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
+      const incoming = dedupeFeed(rawItems)
+        .filter(it => it.primary.headline && it.primary.publishedAt);
+
+      // Dedupe against what we already have
+      const existingIds = new Set(itemsRef.current.map(it => it.primary.id));
+      const existingSigs = itemsRef.current.map(it => headlineSignature(it.primary.headline));
+      const newOnes = incoming.filter(it => {
+        if (existingIds.has(it.primary.id)) return false;
+        const sig = headlineSignature(it.primary.headline);
+        return !existingSigs.some(es => jaccard(sig, es) >= 0.6);
+      });
+
+      if (newOnes.length === 0 && !isInitial) {
+        // This topic added nothing new — try the next one immediately
+        if (topicIdx + 1 < TOPIC_QUEUE.length) {
+          setTopicCursor(topicIdx + 1);
+          loadTopic(topicIdx + 1, false);
+          return;
+        }
+        setExhausted(true);
+        return;
+      }
+
+      setItems(prev => isInitial ? newOnes : [...prev, ...newOnes]);
+      if (isInitial) setError(null);
+    } catch (e) {
+      if (isInitial) setError(String(e));
+    } finally {
+      if (isInitial) setLoading(false); else setLoadingMore(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Pre-warm Render
+    try { fetch('https://ireader.onrender.com/api/news/sources', { cache: 'no-store' }).catch(() => {}); } catch {}
+    loadTopic(0, true);
+  }, [loadTopic]);
+
+  // ── Pull-to-refresh ─────────────────────────────────────────────────────
+  const PULL_THRESHOLD = 80;
+  const [pull, setPull] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const pullStartY = useRef<number | null>(null);
+
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    const el = scrollRef.current;
+    if (!el || el.scrollTop > 0 || refreshing) return;
+    pullStartY.current = e.touches[0].clientY;
+  }, [refreshing]);
+
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    if (pullStartY.current == null) return;
+    const dy = e.touches[0].clientY - pullStartY.current;
+    if (dy > 0) {
+      // dampen so it feels like rubber
+      setPull(Math.min(120, dy * 0.5));
+      // Stop snap-scroll from intercepting once we're clearly pulling
+      if (dy > 10 && e.cancelable) e.preventDefault();
+    } else {
+      // User reversed direction — abandon the pull, let snap take over
+      pullStartY.current = null;
+      setPull(0);
+    }
+  }, []);
+
+  const onTouchEnd = useCallback(async () => {
+    if (pullStartY.current == null) return;
+    const triggered = pull >= PULL_THRESHOLD;
+    pullStartY.current = null;
+    if (triggered) {
+      setRefreshing(true);
+      setTopicCursor(0);
+      setExhausted(false);
+      setItems([]);
+      await loadTopic(0, true);
+      setRefreshing(false);
+    }
+    setPull(0);
+  }, [pull, loadTopic]);
+
+  const handleFeedScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    reportScroll(el.scrollTop);
+
+    // Infinite scroll — when within ~3 viewport heights of bottom, pull next topic
+    if (loadingMore || exhausted) return;
+    const remaining = el.scrollHeight - (el.scrollTop + el.clientHeight);
+    if (remaining < el.clientHeight * 3) {
+      const next = topicCursor + 1;
+      if (next < TOPIC_QUEUE.length) {
+        setTopicCursor(next);
+        loadTopic(next, false);
+      } else {
+        setExhausted(true);
+      }
+    }
+  }, [reportScroll, loadingMore, exhausted, topicCursor, loadTopic]);
+
+  return (
+    <div style={{
+      height: '100%', position: 'relative',
+      background: 'radial-gradient(at 0% 0%, #1a1a2e44 0%, transparent 50%), #050507',
+      color: '#fff',
+      overflow: 'hidden',
+    }}>
+      {/* Header */}
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
+        padding: 'max(14px, calc(env(safe-area-inset-top, 0px) + 8px)) 16px 14px',
+        background: 'linear-gradient(180deg, rgba(5,5,7,0.85) 0%, transparent 100%)',
+      }}>
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '6px 12px', borderRadius: 999,
+          background: 'rgba(20,20,28,0.65)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
+          color: '#fff', fontSize: 11, fontWeight: 800, letterSpacing: 1.4,
+        }}>
+          <SparkleIcon color="#b994ff" size={12} />
+          AI FEED · BREAKING
+        </div>
+      </div>
+
+      {/* Pull-to-refresh indicator (renders during pull/refresh, fades out otherwise) */}
+      {(pull > 0 || refreshing) && (
+        <div style={{
+          position: 'absolute', top: 'calc(env(safe-area-inset-top, 0px) + 64px)',
+          left: 0, right: 0, zIndex: 6,
+          display: 'flex', justifyContent: 'center',
+          pointerEvents: 'none',
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '8px 16px', borderRadius: 999,
+            background: 'rgba(20,20,28,0.75)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
+            color: '#fff', fontSize: 11, fontWeight: 700, letterSpacing: 0.8,
+            transform: `scale(${Math.min(1, pull / PULL_THRESHOLD || 1)})`,
+          }}>
+            <div style={{
+              width: 14, height: 14, borderRadius: '50%',
+              border: '2px solid rgba(255,255,255,0.15)', borderTopColor: VIOLET,
+              animation: refreshing ? 'aifspin 0.8s linear infinite' : 'none',
+              transform: !refreshing ? `rotate(${(pull / PULL_THRESHOLD) * 360}deg)` : undefined,
+              transition: refreshing ? undefined : 'transform 0.05s linear',
+            }} />
+            {refreshing ? 'REFRESHING…' : pull >= PULL_THRESHOLD ? 'RELEASE TO REFRESH' : 'PULL TO REFRESH'}
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <CenteredLoading text="Loading breaking news…" />
+      ) : error ? (
+        <CenteredError text={error} />
+      ) : items.length === 0 ? (
+        <CenteredLoading text="No stories available." />
+      ) : (
+        <div
+          ref={scrollRef}
+          onScroll={handleFeedScroll}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          style={{
+            height: '100%', overflowY: 'auto',
+            scrollSnapType: 'y mandatory',
+            WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none',
+            // Block Chrome's native pull-to-refresh from intercepting our gesture
+            overscrollBehaviorY: 'contain',
+            transform: `translateY(${pull}px)`,
+            transition: pullStartY.current == null ? 'transform 0.25s ease-out' : 'none',
+            willChange: 'transform',
+          }}
+        >
+          {items.map((item, i) => (
+            <FullPreviewCard
+              key={item.primary.id}
+              item={item}
+              index={i}
+              total={items.length}
+              onOpen={() => setOpenedItem(item)}
+            />
+          ))}
+          {loadingMore && (
+            <div style={{
+              height: '100%', minHeight: '100%',
+              scrollSnapAlign: 'start',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexDirection: 'column', gap: 12,
+              background: '#050507',
+            }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: '50%',
+                border: '3px solid rgba(255,255,255,0.08)', borderTopColor: VIOLET,
+                animation: 'aifspin 0.8s linear infinite',
+              }} />
+              <div style={{ color: '#888', fontSize: 12, fontWeight: 600, letterSpacing: 0.4 }}>
+                Loading more stories…
+              </div>
+            </div>
+          )}
+          {exhausted && (
+            <div style={{
+              height: '100%', minHeight: '100%',
+              scrollSnapAlign: 'start',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexDirection: 'column', gap: 8, padding: 24, textAlign: 'center',
+              background: '#050507',
+            }}>
+              <div style={{ fontSize: 28 }}>🎉</div>
+              <div style={{ color: '#fff', fontSize: 15, fontWeight: 700 }}>You're all caught up</div>
+              <div style={{ color: '#666', fontSize: 12 }}>Swipe back to revisit any story.</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Full-screen deep dive overlay */}
+      {openedItem && (
+        <DeepDiveOverlay item={openedItem} onClose={() => setOpenedItem(null)} />
+      )}
+    </div>
+  );
+}
+
+// ── Full-bleed image card — one per swipe, whole card tappable ──────────────
+
+function FullPreviewCard({ item, index, total, onOpen }: {
+  item: FeedItem; index: number; total: number; onOpen: () => void;
+}) {
+  const story = item.primary;
+  const dominant = useMemo(() => getArticleColor(story.id || story.headline), [story.id, story.headline]);
+  const accent = useMemo(() => lighten(dominant, 0.55), [dominant]);
+  const sourceName = item.sources[0]?.name ?? story.sources?.[0]?.name ?? 'Unknown';
+  const extraSources = Math.max(0, item.sources.length - 1);
+  const hasCachedDeepDive = !!readCache(story.id);
+
+  // Track touch displacement so a vertical swipe doesn't fire a tap.
+  const touchRef = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchRef.current = { x: t.clientX, y: t.clientY, moved: false };
+  }, []);
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!touchRef.current) return;
+    const t = e.touches[0];
+    const dx = Math.abs(t.clientX - touchRef.current.x);
+    const dy = Math.abs(t.clientY - touchRef.current.y);
+    if (dx > 10 || dy > 10) touchRef.current.moved = true;
+  }, []);
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    // Click suppression if the user actually swiped
+    if (touchRef.current?.moved) {
+      e.preventDefault();
+      e.stopPropagation();
+      touchRef.current = null;
+      return;
+    }
+    onOpen();
+  }, [onOpen]);
+
+  return (
+    <div
+      onClick={handleClick}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      style={{
+        height: '100%', minHeight: '100%',
+        scrollSnapAlign: 'start', scrollSnapStop: 'always',
+        position: 'relative',
+        overflow: 'hidden',
+        background: dominant,
+        cursor: 'pointer',
+        userSelect: 'none',
+        WebkitTapHighlightColor: 'transparent',
+      }}
+    >
+      {/* Full-bleed image (or gradient fallback) */}
+      {story.imageUrl ? (
+        <img src={story.imageUrl} alt="" style={{
+          position: 'absolute', inset: 0,
+          width: '100%', height: '100%', objectFit: 'cover',
+        }} />
+      ) : (
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: `linear-gradient(135deg, ${lighten(dominant, 0.2)}, ${dominant}, ${darken(dominant, 0.4)})`,
+        }} />
+      )}
+
+      {/* Scrim — dark at top + heavier at bottom for text readability */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: 'linear-gradient(180deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.1) 25%, rgba(0,0,0,0.15) 50%, rgba(5,5,7,0.75) 80%, rgba(5,5,7,0.95) 100%)',
+      }} />
+
+      {/* Counter pill — respects safe-area-top so it never sits under the notch */}
+      <div style={{
+        position: 'absolute', top: 'max(14px, calc(env(safe-area-inset-top, 0px) + 10px))', right: 14, zIndex: 5,
+        padding: '5px 10px', borderRadius: 999,
+        background: 'rgba(20,20,28,0.55)',
+        border: '1px solid rgba(255,255,255,0.12)',
+        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+        color: '#fff', fontSize: 10, fontWeight: 700, letterSpacing: 0.6,
+      }}>
+        {index + 1} / {total}
+      </div>
+
+      {/* Cached badge — top-left if deep dive ready */}
+      {hasCachedDeepDive && (
+        <div style={{
+          position: 'absolute', top: 'max(14px, calc(env(safe-area-inset-top, 0px) + 10px))', left: 14, zIndex: 5,
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+          padding: '5px 10px', borderRadius: 999,
+          background: 'rgba(34,197,94,0.18)',
+          border: '1px solid rgba(34,197,94,0.4)',
+          backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+          color: '#86efac', fontSize: 9, fontWeight: 800, letterSpacing: 1.2,
+        }}>
+          <SparkleIcon color="#86efac" size={9} /> READY
+        </div>
+      )}
+
+      {/* Text overlay — bottom */}
+      <div style={{
+        position: 'absolute', left: 0, right: 0, bottom: 0,
+        padding: '0 22px 110px',
+        display: 'flex', flexDirection: 'column', gap: 12,
+        zIndex: 2,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, color: accent, fontSize: 11, fontWeight: 800, letterSpacing: 1.4 }}>
+          <span>{sourceName.toUpperCase()}</span>
+          {extraSources > 0 && (
+            <span style={{
+              padding: '2px 8px', borderRadius: 999,
+              background: 'rgba(255,255,255,0.15)',
+              color: '#fff', fontSize: 9, fontWeight: 800, letterSpacing: 0.8,
+              backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+            }}>
+              +{extraSources} {extraSources === 1 ? 'SOURCE' : 'SOURCES'}
+            </span>
+          )}
+          <span style={{ color: 'rgba(255,255,255,0.4)' }}>·</span>
+          <span style={{ color: 'rgba(255,255,255,0.65)' }}>{timeAgo(story.publishedAt)}</span>
+        </div>
+
+        <h2 style={{
+          margin: 0, color: '#fff', fontSize: 26, fontWeight: 800,
+          lineHeight: 1.2, letterSpacing: -0.5,
+          textShadow: '0 4px 24px rgba(0,0,0,0.7)',
+        }}>{story.headline}</h2>
+
+        {story.summary && (
+          <p style={{
+            margin: 0, color: '#e5e5e5', fontSize: 15, lineHeight: 1.55,
+            display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+            textShadow: '0 2px 12px rgba(0,0,0,0.55)',
+          }}>{story.summary}</p>
+        )}
+
+      </div>
+
+      {/* Swipe hint — bottom centered, very subtle */}
+      <div style={{
+        position: 'absolute', left: 0, right: 0, bottom: 18,
+        textAlign: 'center', zIndex: 2,
+        color: 'rgba(255,255,255,0.35)', fontSize: 10, fontWeight: 700, letterSpacing: 1.4,
+      }}>↑ SWIPE FOR NEXT</div>
+    </div>
+  );
+}
+
+// ── Deep dive overlay (renders only on tap) ──────────────────────────────────
+
+function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => void }) {
+  const story = item.primary;
+  const dominant = useMemo(() => getArticleColor(story.id || story.headline), [story.id, story.headline]);
+  const accent = useMemo(() => lighten(dominant, 0.55), [dominant]);
+  const [data, setData] = useState<DeepDiveData | null>(() => readCache(story.id));
+  const [stage, setStage] = useState<'generating' | 'done' | 'error'>(data ? 'done' : 'generating');
+  const [error, setError] = useState<string | null>(null);
+  const [showColdHint, setShowColdHint] = useState(false);
+
+  useEffect(() => {
+    if (data) return;
+    let cancelled = false;
+    const startedAt = Date.now();
+    (async () => {
+      try {
+        setError(null);
+        setStage('generating');
+        // eslint-disable-next-line no-console
+        console.log('[AIFeed] deepdive →', story.headline.slice(0, 60), `(${item.allStories.length} source${item.allStories.length === 1 ? '' : 's'})`);
+        // Combine context from all clustered stories — richer prompt
+        const paragraphs = [
+          story.headline + '. ' + (story.summary ?? story.headline),
+          ...item.allStories
+            .slice(1, 5)
+            .filter(s => s.summary && s.summary !== story.summary)
+            .map(s => `[${s.sources?.[0]?.name ?? 'Source'}]: ${s.summary}`),
+        ];
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 20000);
+        let dd: Response;
+        try {
+          dd = await fetch(DEEPDIVE_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              url: story.sources?.[0]?.url ?? '',
+              headline: story.headline,
+              paragraphs,
+            }),
+            signal: ctrl.signal,
+          });
+        } finally { clearTimeout(t); }
+        // eslint-disable-next-line no-console
+        console.log('[AIFeed] response', dd.status, `${Date.now() - startedAt}ms`);
+        if (!dd.ok) throw new Error(`Deep Dive ${dd.status}`);
+        const json: DeepDiveData = await dd.json();
+        if (cancelled) return;
+        setData(json);
+        writeCache(story.id, json);
+        setStage('done');
+      } catch (e) {
+        if (cancelled) return;
+        const msg = e instanceof Error && e.name === 'AbortError'
+          ? 'Timed out. Backend may be warming up — try again in a few seconds.'
+          : String(e instanceof Error ? e.message : e);
+        setError(msg);
+        setStage('error');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [data, story.id, story.summary, story.headline, story.sources, item.allStories]);
+
+  useEffect(() => {
+    if (stage !== 'generating') { setShowColdHint(false); return; }
+    const t = setTimeout(() => setShowColdHint(true), 5000);
+    return () => clearTimeout(t);
+  }, [stage]);
+
+  // Close on ESC + browser/system back-swipe (push history entry on open,
+  // close when popstate fires from the user popping it).
+  useEffect(() => {
+    // Push a synthetic history entry so back-swipe / Android back button
+    // has something to pop without leaving the app.
+    window.history.pushState({ deepdive: true }, '');
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onPop = () => onClose();
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('popstate', onPop);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('popstate', onPop);
+      // If the overlay was closed via the X button (not popstate), pop the
+      // synthetic entry so history depth stays consistent.
+      if (window.history.state?.deepdive) {
+        window.history.back();
+      }
+    };
+  }, [onClose]);
+
+  const sourceName = item.sources[0]?.name ?? story.sources?.[0]?.name ?? 'Unknown';
+  const extraSources = Math.max(0, item.sources.length - 1);
+  const bgGradient = `radial-gradient(at 0% 0%, ${dominant}55, transparent 60%), linear-gradient(180deg, #050507 0%, #08080c 50%, #050507 100%)`;
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 200,
+      background: bgGradient,
+      overflowY: 'auto',
+      WebkitOverflowScrolling: 'touch',
+      animation: 'ddOverlayIn 0.25s ease-out',
+    }}>
+      <style>{`@keyframes ddOverlayIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+
+      {/* Top bar — floats over the hero (absolute, not sticky) */}
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: 'calc(env(safe-area-inset-top, 0px) + 10px) 16px 14px',
+        background: 'linear-gradient(180deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 60%, transparent 100%)',
+        pointerEvents: 'none',
+      }}>
+        <button onClick={onClose} style={{
+          pointerEvents: 'auto',
+          width: 38, height: 38, borderRadius: 19,
+          background: 'rgba(20,20,28,0.7)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
+          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+        <div style={{
+          pointerEvents: 'auto',
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '6px 12px', borderRadius: 999,
+          background: 'rgba(20,20,28,0.7)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
+          color: accent, fontSize: 11, fontWeight: 800, letterSpacing: 1.4,
+        }}>
+          <SparkleIcon color={accent} size={11} /> AI DEEP DIVE
+        </div>
+      </div>
+
+      {/* Hero image — starts at y=0, full bleed (image goes under status bar) */}
+      <div style={{
+        position: 'relative', height: '42vh', minHeight: 280,
+        overflow: 'hidden',
+      }}>
+        {story.imageUrl ? (
+          <img src={story.imageUrl} alt="" style={{
+            width: '100%', height: '100%', objectFit: 'cover', display: 'block',
+            filter: 'brightness(0.85)',
+          }} />
+        ) : (
+          <div style={{
+            width: '100%', height: '100%',
+            background: `linear-gradient(135deg, ${lighten(dominant, 0.15)}, ${dominant}, ${darken(dominant, 0.4)})`,
+          }} />
+        )}
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'linear-gradient(180deg, rgba(0,0,0,0.35) 0%, transparent 25%, transparent 55%, rgba(5,5,7,0.6) 88%, #050507 100%)',
+        }} />
+        {/* Tags overlay */}
+        {data && data.tags.length > 0 && (
+          <div style={{
+            position: 'absolute', left: 16, right: 16, bottom: 18,
+            display: 'flex', flexWrap: 'wrap', gap: 6,
+          }}>
+            {data.tags.slice(0, 4).map(t => (
+              <span key={t} style={{
+                padding: '5px 11px', borderRadius: 999,
+                background: 'rgba(20,20,28,0.75)',
+                border: '1px solid rgba(255,255,255,0.18)',
+                backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
+                color: '#eee', fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+              }}>{t}</span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Content */}
+      <div style={{ padding: '4px 20px 80px', display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 720, margin: '0 auto' }}>
+        <h1 style={{
+          margin: 0, color: '#fff', fontSize: 24, fontWeight: 800,
+          lineHeight: 1.22, letterSpacing: -0.4,
+        }}>{story.headline}</h1>
+
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, color: accent, fontSize: 10, fontWeight: 800, letterSpacing: 1.4 }}>
+          <span>{sourceName.toUpperCase()}</span>
+          {extraSources > 0 && (
+            <span style={{
+              padding: '2px 8px', borderRadius: 999,
+              background: 'rgba(255,255,255,0.1)',
+              color: '#fff', fontSize: 9, fontWeight: 800, letterSpacing: 0.8,
+            }}>+{extraSources} {extraSources === 1 ? 'SOURCE' : 'SOURCES'}</span>
+          )}
+          <span style={{ color: 'rgba(255,255,255,0.3)' }}>·</span>
+          <span>{timeAgo(story.publishedAt)}</span>
+        </div>
+
+        {stage === 'generating' ? (
+          <InlineLoader accent={accent} showColdHint={showColdHint} />
+        ) : stage === 'error' ? (
+          <InlineError text={error || 'Failed'} />
+        ) : data ? (
+          <>
+            {data.tldr.length > 0 && (
+              <div style={{
+                background: 'rgba(15,15,22,0.5)',
+                border: '1px solid rgba(255,255,255,0.06)',
+                borderRadius: 16, padding: '20px 22px',
+                backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+                boxShadow: `0 6px 24px ${dominant}22`,
+                borderTop: `2px solid ${VIOLET}`,
+              }}>
+                <div style={{
+                  color: VIOLET, fontSize: 10, fontWeight: 800, letterSpacing: 2,
+                  display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14,
+                }}>
+                  <span>TL;DR BY CURIOUSCATS.AI</span>
+                  <div style={{ flex: 1, height: 1, background: `${VIOLET}33` }} />
+                </div>
+                {data.tldr.map((b, i) => (
+                  <div key={i} style={{
+                    display: 'flex', gap: 14,
+                    padding: '14px 0',
+                    borderTop: i > 0 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                    alignItems: 'flex-start',
+                  }}>
+                    <div style={{
+                      width: 6, height: 6, borderRadius: 4, marginTop: 10,
+                      background: VIOLET, flexShrink: 0,
+                    }} />
+                    <div style={{
+                      flex: 1, color: '#cfcfd8', fontSize: 15.5, lineHeight: 1.6,
+                    }}>
+                      {highlightEntities(b, [...(data.tags ?? []), ...(data.keyPeople ?? []), ...(data.keyCompanies ?? [])], accent)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {data.insight && (
+              <div style={{
+                position: 'relative',
+                padding: '20px 20px 20px 26px',
+                borderRadius: 14,
+                background: 'linear-gradient(135deg, rgba(255,197,66,0.10) 0%, rgba(15,15,22,0.7) 70%)',
+                border: '1px solid rgba(255,197,66,0.18)',
+                backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+              }}>
+                <div style={{
+                  position: 'absolute', left: 0, top: 14, bottom: 14, width: 3,
+                  background: 'linear-gradient(180deg, #FFC542, #FF9A00)',
+                  borderRadius: 999,
+                }} />
+                <div style={{ color: '#FFC542', fontSize: 9, fontWeight: 800, letterSpacing: 1.6, marginBottom: 8 }}>
+                  KEY INSIGHT
+                </div>
+                <p style={{
+                  margin: 0, color: '#fff', fontSize: 15.5, lineHeight: 1.55,
+                  fontWeight: 500, fontStyle: 'italic',
+                }}>{data.insight}</p>
+              </div>
+            )}
+
+            {data.narrative && (
+              <div style={{ marginTop: 4 }}>
+                <div style={{
+                  color: VIOLET, fontSize: 10, fontWeight: 800, letterSpacing: 2,
+                  marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8,
+                }}>
+                  <span>CURIOUSCATS FULL STORY</span>
+                  <div style={{ flex: 1, height: 1, background: `${VIOLET}33` }} />
+                </div>
+                {data.narrative.split(/\n\n+/).map((p, i) => (
+                  <p key={i} style={{
+                    margin: '0 0 20px',
+                    color: '#c8c8d4', fontSize: 16, lineHeight: 1.7, letterSpacing: 0.05,
+                  }}>{highlightEntities(p, [...(data.tags ?? []), ...(data.keyPeople ?? []), ...(data.keyCompanies ?? [])], accent)}</p>
+                ))}
+              </div>
+            )}
+
+            {/* ── Follow the Story — entity index (violet accents) ──────── */}
+            {(data.keyPeople?.length || data.keyCompanies?.length || data.topics?.length) ? (
+              <div style={{ marginTop: 4 }}>
+                <div style={{ color: VIOLET, fontSize: 10, fontWeight: 800, letterSpacing: 1.8, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <SparkleIcon color={VIOLET} size={10} /> FOLLOW THE STORY
+                </div>
+                {data.keyPeople && data.keyPeople.length > 0 && (
+                  <EntityBlock label="KEY PEOPLE" items={data.keyPeople} accent={VIOLET} dominant={dominant} />
+                )}
+                {data.keyCompanies && data.keyCompanies.length > 0 && (
+                  <EntityBlock label="KEY ORGANIZATIONS" items={data.keyCompanies} accent={VIOLET} dominant={dominant} />
+                )}
+                {data.topics && data.topics.length > 0 && (
+                  <EntityBlock label="TOPICS" items={data.topics} accent={VIOLET} dominant={dominant} subtle />
+                )}
+              </div>
+            ) : null}
+
+            {/* ── Curious? — Q&A in violet ─────────────────────────────── */}
+            {data.questions.length > 0 && (
+              <Section label="CURIOUS?" accent={VIOLET}>
+                <QuestionsList
+                  questions={data.questions}
+                  story={story}
+                  narrative={data.narrative}
+                  accent={VIOLET}
+                />
+              </Section>
+            )}
+
+            {/* ── Sources — violet label ───────────────────────────────── */}
+            {item.sources.length > 0 && (
+              <div style={{ marginTop: 4 }}>
+                <div style={{ color: VIOLET, fontSize: 10, fontWeight: 800, letterSpacing: 1.8, marginBottom: 12 }}>
+                  COVERED BY {item.sources.length} {item.sources.length === 1 ? 'SOURCE' : 'SOURCES'}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {item.sources.slice(0, 8).map((s, i) => (
+                    <a key={i} href={s.url || '#'} target="_blank" rel="noopener noreferrer" style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '10px 14px', borderRadius: 12,
+                      background: 'rgba(185,148,255,0.05)',
+                      border: '1px solid rgba(185,148,255,0.12)',
+                      color: '#e8e8e8', fontSize: 13, fontWeight: 600,
+                      textDecoration: 'none',
+                    }}>
+                      <span style={{ flex: 1 }}>{s.name}</span>
+                      <span style={{ color: VIOLET, fontSize: 11 }}>↗</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+// ── Q&A list with inline expandable answers ─────────────────────────────────
+
+const ASK_API = 'https://ireader.onrender.com/api/news/ask';
+const ASK_CACHE_PREFIX = '@ask_v1_';
+
+function readAskCache(key: string): string | null {
+  try {
+    const raw = localStorage.getItem(ASK_CACHE_PREFIX + key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Date.now() - parsed.at > CACHE_TTL_MS) return null;
+    return parsed.answer;
+  } catch { return null; }
+}
+function writeAskCache(key: string, answer: string) {
+  try { localStorage.setItem(ASK_CACHE_PREFIX + key, JSON.stringify({ answer, at: Date.now() })); } catch {}
+}
+function askKey(headline: string, question: string): string {
+  // simple djb2-ish hash for cache key length sanity
+  let h = 5381;
+  const s = headline + '::' + question;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
+  return (h >>> 0).toString(36);
+}
+
+function QuestionsList({ questions, story, narrative, accent }: {
+  questions: string[]; story: Story; narrative?: string; accent: string;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {questions.slice(0, 4).map((q, i) => (
+        <QuestionItem
+          key={i}
+          question={q}
+          story={story}
+          narrative={narrative}
+          accent={accent}
+        />
+      ))}
+    </div>
+  );
+}
+
+function QuestionItem({ question, story, narrative, accent }: {
+  question: string; story: Story; narrative?: string; accent: string;
+}) {
+  const key = useMemo(() => askKey(story.headline, question), [story.headline, question]);
+  const [open, setOpen] = useState(false);
+  const [answer, setAnswer] = useState<string | null>(() => readAskCache(key));
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchAnswer = useCallback(async () => {
+    if (answer || loading) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 20000);
+      const r = await fetch(ASK_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question,
+          headline: story.headline,
+          summary: story.summary,
+          narrative,
+        }),
+        signal: ctrl.signal,
+      });
+      clearTimeout(t);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data: { answer?: string } = await r.json();
+      if (!data.answer) throw new Error('No answer');
+      setAnswer(data.answer);
+      writeAskCache(key, data.answer);
+    } catch (e) {
+      setError(e instanceof Error && e.name === 'AbortError'
+        ? 'Timed out — try again.'
+        : String(e instanceof Error ? e.message : e));
+    } finally {
+      setLoading(false);
+    }
+  }, [answer, key, loading, narrative, question, story.headline, story.summary]);
+
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (next && !answer && !loading) fetchAnswer();
+  };
+
+  return (
+    <div style={{
+      borderRadius: 12, overflow: 'hidden',
+      background: 'rgba(255,255,255,0.04)',
+      border: '1px solid rgba(255,255,255,0.08)',
+    }}>
+      <button
+        onClick={toggle}
+        style={{
+          width: '100%', textAlign: 'left',
+          padding: '12px 14px',
+          background: 'transparent', border: 'none',
+          color: '#e8e8e8', fontSize: 13, lineHeight: 1.4, fontWeight: 500,
+          cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}
+      >
+        <SparkleIcon color={accent} size={12} />
+        <span style={{ flex: 1 }}>{question}</span>
+        <span style={{
+          color: accent, fontSize: 16, transition: 'transform 0.2s',
+          transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
+        }}>›</span>
+      </button>
+
+      {open && (
+        <div style={{
+          padding: '0 14px 14px',
+          borderTop: '1px solid rgba(255,255,255,0.05)',
+          paddingTop: 12,
+        }}>
+          {loading ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#888', fontSize: 12 }}>
+              <div style={{
+                width: 14, height: 14, borderRadius: '50%',
+                border: '2px solid rgba(255,255,255,0.1)', borderTopColor: accent,
+                animation: 'aifspin 0.8s linear infinite',
+              }} />
+              Thinking…
+            </div>
+          ) : error ? (
+            <div style={{ color: '#ff8888', fontSize: 12 }}>
+              {error}
+              <button onClick={() => { setError(null); fetchAnswer(); }} style={{
+                marginLeft: 8, padding: '2px 8px', borderRadius: 999,
+                background: 'transparent', border: '1px solid rgba(255,136,136,0.4)',
+                color: '#ff8888', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+              }}>RETRY</button>
+            </div>
+          ) : answer ? (
+            <p style={{
+              margin: 0, color: '#cfcfd8', fontSize: 13.5, lineHeight: 1.6,
+            }}>{answer}</p>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Atoms ────────────────────────────────────────────────────────────────────
+
+function EntityBlock({ label, items, accent, dominant, subtle }: {
+  label: string; items: string[]; accent: string; dominant: string; subtle?: boolean;
+}) {
+  return (
+    <div style={{
+      marginBottom: 12,
+      padding: '14px 16px', borderRadius: 14,
+      background: 'rgba(15,15,22,0.5)',
+      border: '1px solid rgba(255,255,255,0.06)',
+      backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+    }}>
+      <div style={{ color: '#666', fontSize: 9, fontWeight: 800, letterSpacing: 1.4, marginBottom: 10 }}>
+        {label}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {items.map((it, i) => (
+          <span key={i} style={{
+            padding: '5px 11px', borderRadius: 999,
+            background: subtle ? `${accent}1a` : 'rgba(255,255,255,0.05)',
+            border: subtle
+              ? `1px solid ${accent}33`
+              : '1px solid rgba(255,255,255,0.1)',
+            color: subtle ? accent : '#e8e8e8',
+            fontSize: 11.5, fontWeight: subtle ? 700 : 500,
+            letterSpacing: subtle ? 0.3 : 0,
+          }}>{it}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Section({ label, accent, dominant, children }: { label: string; accent: string; dominant?: string; children: React.ReactNode }) {
+  return (
+    <div style={{
+      background: 'rgba(15,15,22,0.6)',
+      border: '1px solid rgba(255,255,255,0.06)',
+      borderRadius: 16, padding: '16px 18px',
+      backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+      boxShadow: dominant ? `0 6px 24px ${dominant}22` : undefined,
+    }}>
+      <div style={{
+        color: accent, fontSize: 9, fontWeight: 800, letterSpacing: 1.6,
+        marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6,
+      }}>
+        <SparkleIcon color={accent} size={10} /> {label}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function SparkleIcon({ color, size }: { color: string; size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+      <path d="M12 0l1.5 5.5L19 7l-5.5 1.5L12 14l-1.5-5.5L5 7l5.5-1.5L12 0z M20 14l.8 2.7L23 17.5l-2.2.8L20 21l-.8-2.7L17 17.5l2.2-.8L20 14z" />
+    </svg>
+  );
+}
+
+function CenteredLoading({ text }: { text: string }) {
+  return (
+    <div style={{
+      position: 'absolute', inset: 0,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      gap: 14, color: '#888',
+    }}>
+      <div style={{
+        width: 32, height: 32, borderRadius: '50%',
+        border: '3px solid rgba(255,255,255,0.08)', borderTopColor: VIOLET,
+        animation: 'aifspin 0.8s linear infinite',
+      }} />
+      <style>{`@keyframes aifspin{to{transform:rotate(360deg)}}`}</style>
+      <div style={{ fontSize: 13, fontWeight: 500 }}>{text}</div>
+    </div>
+  );
+}
+
+function CenteredError({ text }: { text: string }) {
+  return (
+    <div style={{
+      position: 'absolute', inset: 0,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      gap: 8, color: '#ff8888', padding: 32, textAlign: 'center',
+    }}>
+      <div style={{ fontSize: 14, fontWeight: 600 }}>Couldn't load</div>
+      <div style={{ color: '#666', fontSize: 12 }}>{text}</div>
+    </div>
+  );
+}
+
+function InlineLoader({ accent, showColdHint }: { accent: string; showColdHint: boolean }) {
+  return (
+    <div style={{
+      padding: 18, borderRadius: 14,
+      background: 'rgba(15,15,22,0.7)',
+      border: '1px solid rgba(255,255,255,0.06)',
+      backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+      display: 'flex', flexDirection: 'column', gap: 10,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{
+          width: 18, height: 18, borderRadius: '50%',
+          border: '2px solid rgba(255,255,255,0.1)', borderTopColor: accent,
+          animation: 'aifspin 0.8s linear infinite',
+        }} />
+        <div style={{ color: '#ccc', fontSize: 12, fontWeight: 500 }}>Distilling story…</div>
+      </div>
+      {showColdHint && (
+        <div style={{
+          color: '#888', fontSize: 11, lineHeight: 1.5,
+          paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.05)',
+        }}>
+          Backend warming up (Render free tier). First request after idle takes ~20s.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InlineError({ text }: { text: string }) {
+  return (
+    <div style={{
+      padding: 16, borderRadius: 14,
+      background: 'rgba(40,20,20,0.4)', border: '1px solid rgba(255,80,80,0.15)',
+      color: '#ff8888', fontSize: 12,
+    }}>
+      <div style={{ fontWeight: 700, marginBottom: 4 }}>Couldn't generate</div>
+      <div style={{ color: '#aaa', fontSize: 11 }}>{text}</div>
+    </div>
+  );
+}
+
+// Editorial-style entity bolding (Curious Cats reference): named entities
+// render in white bold within the surrounding paragraph rather than a colored tint.
+function highlightEntities(text: string, tags: string[], _color: string): React.ReactNode {
+  if (!tags || tags.length === 0) return text;
+  const sorted = [...tags].sort((a, b) => b.length - a.length).map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const re = new RegExp(`\\b(${sorted.join('|')})\\b`, 'gi');
+  const parts = text.split(re);
+  return parts.map((p, i) => i % 2 === 1
+    ? <strong key={i} style={{ color: '#fff', fontWeight: 700 }}>{p}</strong>
+    : <React.Fragment key={i}>{p}</React.Fragment>);
+}

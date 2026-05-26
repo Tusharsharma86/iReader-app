@@ -26,6 +26,7 @@ export function RouterProvider({ children }: { children: React.ReactNode }) {
   const [stacks, setStacks] = useState<Record<TabName, NavScreen[]>>({
     feed: [{ name: 'Feed' }],
     digest: [{ name: 'Digest' }],
+    aifeed: [{ name: 'AIFeed' }],
     saved: [{ name: 'Saved' }],
     settings: [{ name: 'Settings' }],
   });
