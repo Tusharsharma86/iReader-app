@@ -66,6 +66,17 @@ interface ApiItem { type?: string; articles?: Story[]; topicTitle?: string; }
 // Each cluster from server = one feed item. Singletons also become items.
 // Then a second-pass headline similarity dedupes the singletons that share
 // most of their content with another item (server cluster missed them).
+// Drop Hindi/Devanagari headlines and mobile-phone discount/deal stories.
+const PHONE_RE = /\b(phone|smartphone|mobile|iphone|android|samsung|xiaomi|redmi|oneplus|oppo|vivo|realme|motorola|moto|nokia|pixel|infinix|tecno|poco|nothing phone)\b/i;
+const DEAL_RE = /\b(discount|deal|deals|offer|offers|sale|price drop|price cut|cashback|emi|exchange offer|bank offer|coupon|lowest price|best price|under ₹|under rs\.?|under inr|% off|percent off|flat \d+|flipkart|amazon (sale|prime day|great)|big billion)\b/i;
+function isExcluded(s?: { headline?: string; summary?: string }): boolean {
+  if (!s) return false;
+  const text = `${s.headline || ''} ${s.summary || ''}`;
+  if (/[ऀ-ॿ]/.test(text)) return true; // Devanagari (Hindi)
+  if (PHONE_RE.test(text) && DEAL_RE.test(text)) return true;
+  return false;
+}
+
 function dedupeFeed(items: ApiItem[]): FeedItem[] {
   const initial: FeedItem[] = items
     .map(it => {
@@ -157,7 +168,8 @@ export default function AIFeedScreen() {
       const raw = await r.json();
       const rawItems: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
       const incoming = dedupeFeed(rawItems)
-        .filter(it => it.primary.headline && it.primary.publishedAt);
+        .filter(it => it.primary.headline && it.primary.publishedAt)
+        .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded));
 
       // Dedupe against what we already have
       const existingIds = new Set(itemsRef.current.map(it => it.primary.id));

@@ -84,6 +84,17 @@ function dedupeSources(arr: { name: string; url: string }[]): { name: string; ur
   return out;
 }
 
+// Drop Hindi/Devanagari headlines and mobile-phone discount/deal stories.
+const PHONE_RE = /\b(phone|smartphone|mobile|iphone|android|samsung|xiaomi|redmi|oneplus|oppo|vivo|realme|motorola|moto|nokia|pixel|infinix|tecno|poco|nothing phone)\b/i;
+const DEAL_RE = /\b(discount|deal|deals|offer|offers|sale|price drop|price cut|cashback|emi|exchange offer|bank offer|coupon|lowest price|best price|under ₹|under rs\.?|under inr|% off|percent off|flat \d+|flipkart|amazon (sale|prime day|great)|big billion)\b/i;
+function isExcluded(s?: { headline?: string; summary?: string }): boolean {
+  if (!s) return false;
+  const text = `${s.headline || ''} ${s.summary || ''}`;
+  if (/[ऀ-ॿ]/.test(text)) return true; // Devanagari (Hindi)
+  if (PHONE_RE.test(text) && DEAL_RE.test(text)) return true;
+  return false;
+}
+
 function dedupeFeed(items: ApiItem[]): FeedItem[] {
   const initial = items.map(it => {
     if (it.type === 'cluster' && Array.isArray(it.articles) && it.articles.length > 0) {
@@ -165,7 +176,9 @@ export default function AIFeedScreen() {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const raw = await r.json();
       const rawItems: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
-      const incoming = dedupeFeed(rawItems).filter(it => it.primary.headline && it.primary.publishedAt);
+      const incoming = dedupeFeed(rawItems)
+        .filter(it => it.primary.headline && it.primary.publishedAt)
+        .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded));
       const existingIds = new Set(itemsRef.current.map(it => it.primary.id));
       const existingSigs = itemsRef.current.map(it => headlineSig(it.primary.headline));
       const newOnes = incoming.filter(it => {
