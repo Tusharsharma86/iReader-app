@@ -15,7 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSettings, FontSize } from '../contexts/SettingsContext';
 import { useSource } from '../contexts/SourceContext';
 import { SettingsStackParamList } from '../types/navigation';
-import { requestNotificationPermission, fireTestNotif, registerForPush, updatePushPreferences } from '../utils/notifications';
+import { requestNotificationPermission, fireTestNotif, registerForPush, updatePushPreferences, getCachedPushToken } from '../utils/notifications';
+import { Share } from 'react-native';
 import { useTabBarAutoHide } from '../utils/tabBarAnim';
 
 const FONT_SIZES: FontSize[] = ['Small', 'Medium', 'Large', 'XLarge'];
@@ -138,6 +139,20 @@ export default function SettingsScreen() {
               <Text style={styles.rowSub}>Verifies permission, channel, and handler</Text>
             </View>
             <Ionicons name="notifications-outline" size={18} color="#888" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.row, styles.rowBorder]}
+            onPress={async () => {
+              const t = await getCachedPushToken();
+              if (!t) { Alert.alert('No token', 'Enable a notification toggle first.'); return; }
+              await Share.share({ message: t }).catch(() => {});
+            }}
+          >
+            <View style={styles.rowTextCol}>
+              <Text style={styles.rowLabel}>Share Push Token</Text>
+              <Text style={styles.rowSub}>For testing via expo.dev/notifications</Text>
+            </View>
+            <Ionicons name="share-outline" size={18} color="#888" />
           </TouchableOpacity>
         </View>
 

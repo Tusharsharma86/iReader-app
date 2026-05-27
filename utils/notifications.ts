@@ -122,6 +122,10 @@ export async function updatePushPreferences(prefs: {
   } catch {}
 }
 
+export async function getCachedPushToken(): Promise<string | null> {
+  try { return await AsyncStorage.getItem(TOKEN_CACHE_KEY); } catch { return null; }
+}
+
 export async function unregisterPush(): Promise<void> {
   try {
     const token = await AsyncStorage.getItem(TOKEN_CACHE_KEY);
