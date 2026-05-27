@@ -50,6 +50,18 @@ function writeCache(id: string, data: DeepDiveData) {
   try { localStorage.setItem(CACHE_PREFIX + id, JSON.stringify({ ...data, at: Date.now() })); } catch {}
 }
 
+// Favicon URL from source name (mapped) or first article URL.
+const AIF_SOURCE_DOMAINS: Record<string, string> = {
+  'TechCrunch':'techcrunch.com','The Verge':'theverge.com','Ars Technica':'arstechnica.com','Wired':'wired.com','Hacker News':'news.ycombinator.com','9to5Mac':'9to5mac.com','9to5Google':'9to5google.com','MIT Tech Review':'technologyreview.com','Engadget':'engadget.com','VentureBeat':'venturebeat.com','The Next Web':'thenextweb.com','BBC World':'bbc.co.uk','NYT World':'nytimes.com','The Guardian':'theguardian.com','NPR World':'npr.org','Al Jazeera':'aljazeera.com','NDTV':'ndtv.com','India Today':'indiatoday.in','The Print':'theprint.in','The Quint':'thequint.com','CNBC TV18':'cnbctv18.com','Scroll.in':'scroll.in','Economic Times':'economictimes.indiatimes.com','Livemint':'livemint.com','Mint':'livemint.com','Inc42':'inc42.com','Indian Express':'indianexpress.com','Reuters':'reuters.com','Bloomberg':'bloomberg.com','CNN':'cnn.com',
+};
+function aifFaviconFromStory(name: string, url?: string): string {
+  const mapped = AIF_SOURCE_DOMAINS[name];
+  let fromUrl = '';
+  if (url) { try { fromUrl = new URL(url).hostname.replace(/^www\./, ''); } catch {} }
+  const domain = mapped || fromUrl;
+  return domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=128` : '';
+}
+
 function timeAgo(iso: string): string {
   if (!iso) return '';
   try {
@@ -480,10 +492,50 @@ function FullPreviewCard({ item, index, total, onOpen }: {
           }}
         />
       ) : (
-        <div style={{
-          position: 'absolute', inset: 0,
-          background: `linear-gradient(135deg, ${lighten(dominant, 0.2)}, ${dominant}, ${darken(dominant, 0.4)})`,
-        }} />
+        <div style={{ position: 'absolute', inset: 0 }}>
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: `linear-gradient(135deg, ${lighten(dominant, 0.25)} 0%, ${dominant} 55%, ${darken(dominant, 0.3)} 100%)`,
+          }} />
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: `linear-gradient(135deg, transparent 35%, ${accent}22 55%, transparent 75%)`,
+          }} />
+          <div style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24,
+          }}>
+            {(() => {
+              const fav = aifFaviconFromStory(sourceName, story.sources?.[0]?.url);
+              return (
+                <div style={{
+                  width: 72, height: 72, borderRadius: 36,
+                  border: `2px solid ${accent}AA`,
+                  background: 'rgba(0,0,0,0.25)',
+                  overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {fav ? (
+                    <img src={fav} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{
+                      width: '100%', height: '100%',
+                      background: lighten(dominant, 0.15),
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: accent, fontSize: 28, fontWeight: 800,
+                    }}>
+                      {(sourceName ?? '?').charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+            <div style={{ color: accent, fontSize: 16, fontWeight: 800, letterSpacing: 0.4 }}>{sourceName.toUpperCase()}</div>
+            <div style={{ width: 36, height: 1, background: `${accent}55`, borderRadius: 1 }} />
+            <div style={{ color: `${accent}CC`, fontSize: 10, fontWeight: 700, letterSpacing: 1.8 }}>
+              BREAKING · NO PREVIEW
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Scrim — dark at top + heavier at bottom for text readability */}
@@ -752,10 +804,46 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
             filter: 'brightness(0.85)',
           }} />
         ) : (
-          <div style={{
-            width: '100%', height: '100%',
-            background: `linear-gradient(135deg, ${lighten(dominant, 0.15)}, ${dominant}, ${darken(dominant, 0.4)})`,
-          }} />
+          <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
+            <div style={{
+              position: 'absolute', inset: 0,
+              background: `linear-gradient(135deg, ${lighten(dominant, 0.25)} 0%, ${dominant} 55%, ${darken(dominant, 0.3)} 100%)`,
+            }} />
+            <div style={{
+              position: 'absolute', inset: 0,
+              background: `linear-gradient(135deg, transparent 35%, ${accent}22 55%, transparent 75%)`,
+            }} />
+            <div style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 20,
+            }}>
+              {(() => {
+                const fav = aifFaviconFromStory(sourceName, story.sources?.[0]?.url);
+                return (
+                  <div style={{
+                    width: 64, height: 64, borderRadius: 32,
+                    border: `2px solid ${accent}AA`,
+                    background: 'rgba(0,0,0,0.25)',
+                    overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {fav ? (
+                      <img src={fav} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{
+                        width: '100%', height: '100%',
+                        background: lighten(dominant, 0.15),
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: accent, fontSize: 24, fontWeight: 800,
+                      }}>
+                        {(sourceName ?? '?').charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+              <div style={{ color: accent, fontSize: 14, fontWeight: 800, letterSpacing: 0.5 }}>{sourceName.toUpperCase()}</div>
+            </div>
+          </div>
         )}
         <div style={{
           position: 'absolute', inset: 0,

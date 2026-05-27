@@ -112,7 +112,7 @@ function HeadlineWithEntities({ text, accentColor }: { text: string; accentColor
   );
 }
 
-function getSourceDomain(name: string): string {
+export function getSourceDomain(name: string): string {
   const domains: Record<string, string> = {
     'TechCrunch': 'techcrunch.com', 'The Verge': 'theverge.com',
     'Ars Technica': 'arstechnica.com', 'Wired': 'wired.com',
@@ -127,7 +127,7 @@ function getSourceDomain(name: string): string {
 
 // Pull the hostname out of an article URL so unknown sources still get a real
 // favicon instead of the Google "G" placeholder.
-function domainFromUrl(url: string | undefined): string {
+export function domainFromUrl(url: string | undefined): string {
   if (!url) return '';
   try {
     return new URL(url).hostname.replace(/^www\./, '');

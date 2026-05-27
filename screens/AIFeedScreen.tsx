@@ -21,7 +21,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Story } from '../components/StoryCard';
+import { type Story, getSourceDomain, domainFromUrl } from '../components/StoryCard';
 import { tabBarTranslateY, useTabBarAutoHide } from '../utils/tabBarAnim';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 
@@ -380,12 +380,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width, height, topInset, 
           />
         </Animated.View>
       ) : (
-        <LinearGradient
-          colors={[lighten(dominant, 0.2), dominant, darken(dominant, 0.4)]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
+        <NoImageFallback dominant={dominant} accent={accent} source={sourceName} url={story.sources?.[0]?.url} />
       )}
       <LinearGradient
         colors={['rgba(0,0,0,0.45)', 'rgba(0,0,0,0.1)', 'rgba(0,0,0,0.15)', 'rgba(5,5,7,0.75)', 'rgba(5,5,7,0.95)']}
@@ -500,11 +495,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
             {story.imageUrl ? (
               <DDHero uri={story.imageUrl} />
             ) : (
-              <LinearGradient
-                colors={[lighten(dominant, 0.2), dominant, darken(dominant, 0.4)]}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFill}
-              />
+              <NoImageFallback dominant={dominant} accent={accent} source={sourceName} url={story.sources?.[0]?.url} />
             )}
             <LinearGradient
               colors={['rgba(0,0,0,0.35)', 'transparent', 'transparent', 'rgba(5,5,7,0.7)', '#050507']}
@@ -840,6 +831,59 @@ function TypingDots({ color = VIOLET }: { color?: string }) {
       <Animated.View style={dot(d1)} />
       <Animated.View style={dot(d2)} />
       <Animated.View style={dot(d3)} />
+    </View>
+  );
+}
+
+function NoImageFallback({ dominant, accent, source, url }: {
+  dominant: string; accent: string; source: string; url?: string;
+}) {
+  const mapped = getSourceDomain(source);
+  const fromUrl = domainFromUrl(url);
+  const domain = mapped || fromUrl;
+  const faviconUri = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=128` : '';
+  return (
+    <View style={StyleSheet.absoluteFill}>
+      <LinearGradient
+        colors={[lighten(dominant, 0.25), dominant, darken(dominant, 0.3)]}
+        locations={[0, 0.55, 1]}
+        style={StyleSheet.absoluteFill}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      />
+      <LinearGradient
+        colors={['transparent', accent + '22', 'transparent']}
+        locations={[0.35, 0.55, 0.75]}
+        style={StyleSheet.absoluteFill}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      />
+      <View style={{
+        position: 'absolute', left: 0, right: 0, top: '38%',
+        alignItems: 'center', gap: 12, padding: 24,
+      }}>
+        <View style={{
+          width: 80, height: 80, borderRadius: 40,
+          borderWidth: 2, borderColor: accent + 'AA',
+          backgroundColor: 'rgba(0,0,0,0.25)',
+          overflow: 'hidden', alignItems: 'center', justifyContent: 'center',
+        }}>
+          {faviconUri ? (
+            <Image source={{ uri: faviconUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+          ) : (
+            <Text style={{ color: accent, fontSize: 32, fontWeight: '800' }}>
+              {(source ?? '?').charAt(0).toUpperCase()}
+            </Text>
+          )}
+        </View>
+        <Text style={{ color: accent, fontSize: 16, fontWeight: '800', letterSpacing: 0.4 }}>
+          {source.toUpperCase()}
+        </Text>
+        <View style={{ width: 36, height: 1, backgroundColor: accent + '55' }} />
+        <Text style={{ color: accent + 'CC', fontSize: 10, fontWeight: '700', letterSpacing: 1.8 }}>
+          BREAKING · NO PREVIEW
+        </Text>
+      </View>
     </View>
   );
 }
