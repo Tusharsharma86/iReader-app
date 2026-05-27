@@ -409,6 +409,13 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
     return () => { save(); window.removeEventListener('beforeunload', save); };
   }, []);
 
+  // Tapping Feed tab while already on Feed → scroll to top
+  useEffect(() => {
+    const scrollTop = () => containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    window.addEventListener('feed-scroll-top', scrollTop);
+    return () => window.removeEventListener('feed-scroll-top', scrollTop);
+  }, []);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true); setPendingFeed(null); setNewCount(0);
     try {
