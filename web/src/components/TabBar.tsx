@@ -96,10 +96,11 @@ export function TabBar() {
           padding: '8px',
           borderRadius: 999,
           background: 'rgba(15,15,15,0.78)',
-          backdropFilter: 'blur(24px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+          backdropFilter: visible ? 'blur(24px) saturate(180%)' : 'blur(0px) saturate(100%)',
+          WebkitBackdropFilter: visible ? 'blur(24px) saturate(180%)' : 'blur(0px) saturate(100%)',
           border: '1px solid rgba(255,255,255,0.08)',
           boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+          transition: 'backdrop-filter 0.35s ease, -webkit-backdrop-filter 0.35s ease',
         }}
       >
         {TAB_ITEMS.map(item => {

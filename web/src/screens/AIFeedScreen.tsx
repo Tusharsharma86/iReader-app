@@ -913,7 +913,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
             {item.sources.length > 0 && (
               <div style={{ marginTop: 4 }}>
                 <div style={{ color: VIOLET, fontSize: 10, fontWeight: 800, letterSpacing: 1.8, marginBottom: 12 }}>
-                  COVERED BY {item.sources.length} {item.sources.length === 1 ? 'SOURCE' : 'SOURCES'}
+                  COVERED BY <TickNumber to={item.sources.length} /> {item.sources.length === 1 ? 'SOURCE' : 'SOURCES'}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {item.sources.slice(0, 8).map((s, i) => (
@@ -1221,23 +1221,45 @@ function CenteredError({ text }: { text: string }) {
   );
 }
 
+// Tick-up number: animates from 0 → `to` over `dur` ms on mount.
+function TickNumber({ to, dur = 600 }: { to: number; dur?: number }) {
+  const [v, setV] = useState(0);
+  useEffect(() => {
+    const start = performance.now();
+    let raf = 0;
+    const step = (t: number) => {
+      const p = Math.min(1, (t - start) / dur);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setV(Math.round(eased * to));
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [to, dur]);
+  return <span style={{ fontVariantNumeric: 'tabular-nums' }}>{v}</span>;
+}
+
 function InlineLoader({ accent, showColdHint }: { accent: string; showColdHint: boolean }) {
   return (
     <div style={{
-      padding: 18, borderRadius: 14,
+      padding: 18, borderRadius: 14, position: 'relative', overflow: 'hidden',
       background: 'rgba(15,15,22,0.7)',
       border: '1px solid rgba(255,255,255,0.06)',
       backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
       display: 'flex', flexDirection: 'column', gap: 10,
     }}>
+      {/* Gradient sweep progress bar (top) */}
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0, height: 2,
+        background: `linear-gradient(90deg, transparent 0%, ${accent} 30%, ${accent}cc 50%, ${accent} 70%, transparent 100%)`,
+        backgroundSize: '50% 100%',
+        animation: 'progSweep 1.6s ease-in-out infinite',
+      }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{
-          width: 18, height: 18, borderRadius: '50%',
-          border: '2px solid rgba(255,255,255,0.1)', borderTopColor: accent,
-          animation: 'aifspin 0.8s linear infinite',
-        }} />
+        <span className="typing-dots" style={{ transform: 'scale(1.2)' }}><span style={{ background: accent }} /><span style={{ background: accent }} /><span style={{ background: accent }} /></span>
         <div style={{ color: '#ccc', fontSize: 12, fontWeight: 500 }}>Distilling story…</div>
       </div>
+      <style>{`@keyframes progSweep { 0% { background-position: -100% 0; } 100% { background-position: 200% 0; } }`}</style>
       {showColdHint && (
         <div style={{
           color: '#888', fontSize: 11, lineHeight: 1.5,
