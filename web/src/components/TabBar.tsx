@@ -65,9 +65,14 @@ function TabIcon({ name, active }: { name: IconName; active: boolean }) {
   );
 }
 
+const HIDDEN_ROUTES = new Set(['Article', 'Sources', 'Topics', 'FavSources', 'Usage', 'StoryTimeline']);
+
 export function TabBar() {
-  const { activeTab, setTab } = useRouter();
+  const { activeTab, setTab, currentScreen } = useRouter();
   const { visible } = useTabBar();
+
+  // Always hide on Article reader and any Settings sub-screen.
+  if (HIDDEN_ROUTES.has(currentScreen.name)) return null;
 
   return (
     <div

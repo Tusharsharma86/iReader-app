@@ -22,7 +22,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Story } from '../components/StoryCard';
-import { tabBarTranslateY } from '../utils/tabBarAnim';
+import { tabBarTranslateY, useTabBarAutoHide } from '../utils/tabBarAnim';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 
 const FEED_API_BASE = 'https://ireader.onrender.com/api/news/feed';
@@ -160,13 +160,12 @@ export default function AIFeedScreen() {
   const itemsRef = useRef<FeedItem[]>([]);
   itemsRef.current = items;
 
-  // Auto-hide tab bar (always hidden while AI Feed is open since it's full-bleed)
+  // Auto-hide tab bar on scroll; restore on blur.
+  const { onScroll: onScrollHide, restore: restoreTabBar } = useTabBarAutoHide();
   useFocusEffect(useCallback(() => {
-    Animated.timing(tabBarTranslateY, { toValue: 0, duration: 200, useNativeDriver: true }).start();
-    return () => {
-      Animated.timing(tabBarTranslateY, { toValue: 0, duration: 200, useNativeDriver: true }).start();
-    };
-  }, []));
+    restoreTabBar();
+    return () => { restoreTabBar(); };
+  }, [restoreTabBar]));
 
   const loadTopic = useCallback(async (topicIdx: number, isInitial: boolean) => {
     const topic = TOPIC_QUEUE[topicIdx % TOPIC_QUEUE.length];
@@ -288,6 +287,8 @@ export default function AIFeedScreen() {
         showsVerticalScrollIndicator={false}
         viewabilityConfig={viewabilityConfig}
         onViewableItemsChanged={onViewableItemsChanged}
+        onScroll={onScrollHide}
+        scrollEventThrottle={16}
         onEndReached={onEndReached}
         onEndReachedThreshold={1.5}
         refreshControl={

@@ -49,11 +49,14 @@ const TAB_ITEMS: { route: keyof RootTabParamList; label: string; icon: IoniconsN
 function ParticleTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
 
-  // Hide tab bar when Article screen is active inside a nested stack
+  // Hide tab bar when on Article screen, or on any Settings sub-screen
+  // (anything beyond SettingsHome inside the Settings stack).
   const focusedRoute = state.routes[state.index];
   const nestedState = focusedRoute?.state as { routes?: { name: string }[]; index?: number } | undefined;
   const nestedRouteName = nestedState?.routes?.[nestedState.index ?? 0]?.name;
   if (nestedRouteName === 'Article') return null;
+  const SETTINGS_SUB = new Set(['Topics', 'Sources', 'FavSources', 'Usage', 'CostDashboard', 'TopicInterests']);
+  if (focusedRoute?.name === 'Settings' && nestedRouteName && SETTINGS_SUB.has(nestedRouteName)) return null;
 
   return (
     <Animated.View
