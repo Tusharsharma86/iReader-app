@@ -515,7 +515,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px', paddingTop: 'calc(16px + env(safe-area-inset-top, 0px))' }}>
-        <img src="/icons/header-logo.png" alt="iReader" style={{ width: 55, height: 55, objectFit: 'contain', background: 'transparent' }} />
+        <img src="/icons/header-logo.png" alt="iReader" style={{ width: 82, height: 82, objectFit: 'contain', background: 'transparent', margin: '-12px -8px -12px -8px' }} />
         <div>
           <div style={{ color: '#fff', fontSize: 26, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.2 }}>{greeting()}</div>
           <div style={{ color: '#555', fontSize: 13, fontWeight: 500, marginTop: 2 }}>{formattedDate()}</div>

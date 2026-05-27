@@ -1024,7 +1024,7 @@ export default function FeedScreen() {
       {/* Header — scrolls with feed; paddingTop accounts for transparent status bar */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.headerRow}>
-          <Image source={require('../assets/icon.png')} style={styles.appIcon} contentFit="cover" />
+          <Image source={require('../assets/header-logo.png')} style={styles.appIcon} contentFit="contain" />
           <View>
             <Text style={styles.greeting}>{greeting()}</Text>
             <Text style={styles.date}>{formattedDate()}</Text>
@@ -1403,8 +1403,9 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   appIcon: {
-    width: 58, height: 58,
-    borderRadius: 16,
+    width: 87, height: 87,
+    marginVertical: -12, marginHorizontal: -8,
+    backgroundColor: 'transparent',
   },
   greeting: { color: '#FFFFFF', fontSize: 26, fontWeight: '800', letterSpacing: -0.5, lineHeight: 32 },
   date: { color: '#555555', fontSize: 13, fontWeight: '500', marginTop: 2 },
