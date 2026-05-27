@@ -112,6 +112,9 @@ export async function updatePushPreferences(prefs: {
   digestEnabled?: boolean;
   digestHour?: number;
   digestMinute?: number;
+  digestEveningEnabled?: boolean;
+  digestEveningHour?: number;
+  digestEveningMinute?: number;
   favSourcesEnabled?: boolean;
   favSources?: string[];
 }): Promise<void> {

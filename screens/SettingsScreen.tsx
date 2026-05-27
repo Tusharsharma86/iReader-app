@@ -44,7 +44,7 @@ export default function SettingsScreen() {
       setter(false);
       if (prefKey === 'breaking') updatePushPreferences({ breakingEnabled: false });
       if (prefKey === 'topics') updatePushPreferences({ topicsEnabled: false });
-      if (prefKey === 'digest') updatePushPreferences({ digestEnabled: false });
+      if (prefKey === 'digest') updatePushPreferences({ digestEnabled: false, digestEveningEnabled: false });
       return;
     }
     const granted = await requestNotificationPermission();
@@ -53,7 +53,25 @@ export default function SettingsScreen() {
       registerForPush().then(() => {
         if (prefKey === 'breaking') updatePushPreferences({ breakingEnabled: true });
         if (prefKey === 'topics') updatePushPreferences({ topicsEnabled: true, topicsKeywords: TECH_KWS });
-        if (prefKey === 'digest') updatePushPreferences({ digestEnabled: true, digestHour: 8, digestMinute: 0 });
+        if (prefKey === 'digest') {
+        // Twice daily: morning + evening. Convert local 8:00 / 18:00 to UTC.
+        const offsetMin = new Date().getTimezoneOffset(); // minutes added to local to get UTC
+        const toUTC = (h: number, m: number) => {
+          const total = h * 60 + m + offsetMin;
+          const norm = ((total % 1440) + 1440) % 1440;
+          return { hour: Math.floor(norm / 60), minute: norm % 60 };
+        };
+        const morning = toUTC(8, 0);
+        const evening = toUTC(18, 0);
+        updatePushPreferences({
+          digestEnabled: true,
+          digestHour: morning.hour,
+          digestMinute: morning.minute,
+          digestEveningEnabled: true,
+          digestEveningHour: evening.hour,
+          digestEveningMinute: evening.minute,
+        });
+      }
       });
     }
   }, []);
@@ -118,7 +136,7 @@ export default function SettingsScreen() {
           <View style={[styles.row, styles.rowBorder]}>
             <View style={styles.rowTextCol}>
               <Text style={styles.rowLabel}>Daily Digest</Text>
-              <Text style={styles.rowSub}>Morning summary of top stories</Text>
+              <Text style={styles.rowSub}>Morning (8am) + evening (6pm) top stories</Text>
             </View>
             <Switch value={notifDigest} onValueChange={v => handleNotifToggle(v, setNotifDigest, 'digest')}
               trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }}
