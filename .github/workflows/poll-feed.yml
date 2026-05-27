@@ -1,0 +1,23 @@
+name: Poll feed for push fan-out
+
+# Hits the news feed every 10 minutes so Render stays awake and the push
+# fan-out path runs whenever new clusters arrive. Free tier keeps notifications
+# flowing even when nobody has the app open.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  poke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Poke breaking feed
+        run: |
+          for topic in breaking technology india-politics geopolitics business; do
+            echo "=== $topic ==="
+            curl -sS --max-time 60 \
+              "https://ireader.onrender.com/api/news/feed?topic=$topic&refresh=1" \
+              -o /dev/null -w "%{http_code} %{time_total}s\n" || true
+          done
