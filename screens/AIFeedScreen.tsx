@@ -324,6 +324,14 @@ export default function AIFeedScreen() {
 
 // ── Header ─────────────────────────────────────────────────────────────────
 function Header({ topInset, counter }: { topInset: number; counter?: string }) {
+  const counterScale = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (!counter) return;
+    Animated.sequence([
+      Animated.timing(counterScale, { toValue: 1.15, duration: 140, useNativeDriver: true }),
+      Animated.spring(counterScale, { toValue: 1, friction: 4, tension: 100, useNativeDriver: true }),
+    ]).start();
+  }, [counter, counterScale]);
   return (
     <View style={[styles.header, { paddingTop: topInset + 10 }]} pointerEvents="box-none">
       <View style={styles.pill}>
@@ -331,9 +339,9 @@ function Header({ topInset, counter }: { topInset: number; counter?: string }) {
         <Text style={styles.pillText}>AI FEED · BREAKING</Text>
       </View>
       {counter && (
-        <View style={[styles.pill, { paddingHorizontal: 10 }]}>
+        <Animated.View style={[styles.pill, { paddingHorizontal: 10, transform: [{ scale: counterScale }] }]}>
           <Text style={[styles.pillText, { letterSpacing: 0.6, color: '#aaa' }]}>{counter}</Text>
-        </View>
+        </Animated.View>
       )}
     </View>
   );
@@ -351,15 +359,26 @@ function FullPreviewCard({ item, index: _i, total: _t, width, height, topInset, 
   const [hasCached, setHasCached] = useState(false);
   useEffect(() => { readDeepDiveCache(story.id).then(d => setHasCached(!!d)); }, [story.id]);
 
+  // Hero zoom-in when card mounts/lands on screen
+  const heroScale = useRef(new Animated.Value(1.08)).current;
+  useEffect(() => {
+    Animated.timing(heroScale, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+  }, [heroScale]);
+
   return (
-    <Pressable onPress={onOpen} style={{ width, height, backgroundColor: dominant }}>
+    <Pressable
+      onPress={onOpen}
+      style={({ pressed }) => ({ width, height, backgroundColor: dominant, transform: [{ scale: pressed ? 0.985 : 1 }] })}
+    >
       {story.imageUrl ? (
-        <Image
-          source={{ uri: story.imageUrl }}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          transition={150}
-        />
+        <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: heroScale }] }]}>
+          <Image
+            source={{ uri: story.imageUrl }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            transition={150}
+          />
+        </Animated.View>
       ) : (
         <LinearGradient
           colors={[lighten(dominant, 0.2), dominant, darken(dominant, 0.4)]}
@@ -477,9 +496,9 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
         {/* No top SafeAreaView — image goes edge-to-edge under status bar. */}
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 60 }} showsVerticalScrollIndicator={false}>
           {/* Hero — starts at y=0, behind status bar */}
-          <View style={{ height: 360, position: 'relative', backgroundColor: dominant }}>
+          <View style={{ height: 360, position: 'relative', backgroundColor: dominant, overflow: 'hidden' }}>
             {story.imageUrl ? (
-              <Image source={{ uri: story.imageUrl }} style={StyleSheet.absoluteFill} contentFit="cover" />
+              <DDHero uri={story.imageUrl} />
             ) : (
               <LinearGradient
                 colors={[lighten(dominant, 0.2), dominant, darken(dominant, 0.4)]}
@@ -527,7 +546,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
                 <>
                   {/* TL;DR */}
                   {data.tldr.length > 0 && (
-                    <View style={[overlayStyles.card, { borderTopColor: VIOLET, borderTopWidth: 2 }]}>
+                    <Stagger delay={0}><View style={[overlayStyles.card, { borderTopColor: VIOLET, borderTopWidth: 2 }]}>
                       <View style={overlayStyles.sectionLabelRow}>
                         <Text style={overlayStyles.sectionLabel}>TL;DR BY CURIOUSCATS.AI</Text>
                         <View style={overlayStyles.labelDivider} />
@@ -540,21 +559,21 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
                           </Text>
                         </View>
                       ))}
-                    </View>
+                    </View></Stagger>
                   )}
 
                   {/* Key Insight (gold) */}
                   {data.insight && (
-                    <View style={overlayStyles.insightCard}>
+                    <Stagger delay={80}><View style={overlayStyles.insightCard}>
                       <View style={overlayStyles.insightBar} />
                       <Text style={overlayStyles.insightLabel}>KEY INSIGHT</Text>
                       <Text style={overlayStyles.insightText}>{data.insight}</Text>
-                    </View>
+                    </View></Stagger>
                   )}
 
                   {/* Story */}
                   {data.narrative && (
-                    <View style={{ marginTop: 4 }}>
+                    <Stagger delay={160}><View style={{ marginTop: 4 }}>
                       <View style={overlayStyles.sectionLabelRow}>
                         <Text style={overlayStyles.sectionLabel}>CURIOUSCATS FULL STORY</Text>
                         <View style={overlayStyles.labelDivider} />
@@ -564,12 +583,12 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
                           {renderHighlighted(p, allTags(data))}
                         </Text>
                       ))}
-                    </View>
+                    </View></Stagger>
                   )}
 
                   {/* Follow the Story */}
                   {(data.keyPeople?.length || data.keyCompanies?.length || data.topics?.length) ? (
-                    <View style={{ marginTop: 4 }}>
+                    <Stagger delay={240}><View style={{ marginTop: 4 }}>
                       <View style={overlayStyles.sectionLabelRow}>
                         <Ionicons name="sparkles" size={11} color={VIOLET} />
                         <Text style={[overlayStyles.sectionLabel, { marginLeft: 6 }]}>FOLLOW THE STORY</Text>
@@ -578,12 +597,12 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
                       {!!data.keyPeople?.length && <EntityBlock label="KEY PEOPLE" items={data.keyPeople} />}
                       {!!data.keyCompanies?.length && <EntityBlock label="KEY ORGANIZATIONS" items={data.keyCompanies} />}
                       {!!data.topics?.length && <EntityBlock label="TOPICS" items={data.topics} subtle />}
-                    </View>
+                    </View></Stagger>
                   ) : null}
 
                   {/* Curious? Questions */}
                   {data.questions.length > 0 && (
-                    <View style={{ marginTop: 4 }}>
+                    <Stagger delay={320}><View style={{ marginTop: 4 }}>
                       <View style={overlayStyles.sectionLabelRow}>
                         <Ionicons name="sparkles" size={11} color={VIOLET} />
                         <Text style={[overlayStyles.sectionLabel, { marginLeft: 6 }]}>CURIOUS?</Text>
@@ -597,15 +616,15 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
                           narrative={data.narrative}
                         />
                       ))}
-                    </View>
+                    </View></Stagger>
                   )}
 
                   {/* Sources */}
                   {item.sources.length > 0 && (
-                    <View style={{ marginTop: 4 }}>
+                    <Stagger delay={400}><View style={{ marginTop: 4 }}>
                       <View style={overlayStyles.sectionLabelRow}>
                         <Text style={overlayStyles.sectionLabel}>
-                          COVERED BY {item.sources.length} {item.sources.length === 1 ? 'SOURCE' : 'SOURCES'}
+                          COVERED BY <TickNumber to={item.sources.length} /> {item.sources.length === 1 ? 'SOURCE' : 'SOURCES'}
                         </Text>
                         <View style={overlayStyles.labelDivider} />
                       </View>
@@ -619,7 +638,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
                           <Text style={[overlayStyles.sourceArrow, { color: VIOLET }]}>↗</Text>
                         </Pressable>
                       ))}
-                    </View>
+                    </View></Stagger>
                   )}
                 </>
               ) : null}
@@ -724,8 +743,8 @@ function QuestionItem({ question, story, narrative }: {
         <View style={overlayStyles.answerWrap}>
           {loading ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <ActivityIndicator size="small" color={VIOLET} />
-              <Text style={{ color: '#888', fontSize: 12 }}>Thinking…</Text>
+              <TypingDots color={VIOLET} />
+              <Text style={{ color: '#aaa', fontSize: 12 }}>Thinking…</Text>
             </View>
           ) : error ? (
             <View>
@@ -768,7 +787,7 @@ function InlineLoader({ showColdHint }: { showColdHint: boolean }) {
   return (
     <View style={overlayStyles.loaderCard}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <ActivityIndicator size="small" color={VIOLET} />
+        <TypingDots color={VIOLET} />
         <Text style={{ color: '#ccc', fontSize: 12, fontWeight: '500' }}>Distilling story…</Text>
       </View>
       {showColdHint && (
@@ -778,6 +797,80 @@ function InlineLoader({ showColdHint }: { showColdHint: boolean }) {
       )}
     </View>
   );
+}
+
+// ── Animation helpers ───────────────────────────────────────────────────────
+function Stagger({ delay, children }: { delay: number; children: React.ReactNode }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(10)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 450, delay, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 450, delay, useNativeDriver: true }),
+    ]).start();
+  }, [opacity, translateY, delay]);
+  return <Animated.View style={{ opacity, transform: [{ translateY }] }}>{children}</Animated.View>;
+}
+
+function TypingDots({ color = VIOLET }: { color?: string }) {
+  const d1 = useRef(new Animated.Value(0)).current;
+  const d2 = useRef(new Animated.Value(0)).current;
+  const d3 = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const seq = (v: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(v, { toValue: 1, duration: 330, useNativeDriver: true }),
+          Animated.timing(v, { toValue: 0, duration: 330, useNativeDriver: true }),
+          Animated.delay(440 - delay),
+        ])
+      );
+    const animations = [seq(d1, 0), seq(d2, 180), seq(d3, 360)];
+    animations.forEach(a => a.start());
+    return () => animations.forEach(a => a.stop());
+  }, [d1, d2, d3]);
+  const dot = (v: Animated.Value) => ({
+    width: 6, height: 6, borderRadius: 3, backgroundColor: color,
+    opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }),
+    transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }],
+  });
+  return (
+    <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
+      <Animated.View style={dot(d1)} />
+      <Animated.View style={dot(d2)} />
+      <Animated.View style={dot(d3)} />
+    </View>
+  );
+}
+
+function DDHero({ uri }: { uri: string }) {
+  const scale = useRef(new Animated.Value(1.1)).current;
+  useEffect(() => {
+    Animated.timing(scale, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+  }, [scale]);
+  return (
+    <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale }] }]}>
+      <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+    </Animated.View>
+  );
+}
+
+function TickNumber({ to, dur = 600 }: { to: number; dur?: number }) {
+  const [v, setV] = useState(0);
+  useEffect(() => {
+    const start = Date.now();
+    let raf = 0;
+    const tick = () => {
+      const p = Math.min(1, (Date.now() - start) / dur);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setV(Math.round(eased * to));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [to, dur]);
+  return <>{v}</>;
 }
 
 function InlineError({ text }: { text: string }) {

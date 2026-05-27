@@ -4,7 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Animated, Pressable, Text, View, StyleSheet } from 'react-native';
 import { tabBarTranslateY } from './utils/tabBarAnim';
@@ -75,8 +75,10 @@ function ParticleTabBar({ state, navigation }: BottomTabBarProps) {
         {TAB_ITEMS.map((item, index) => {
           const focused = state.index === index;
           return (
-            <Pressable
+            <TabItem
               key={item.route}
+              focused={focused}
+              item={item}
               onPress={() => {
                 const event = navigation.emit({
                   type: 'tabPress',
@@ -87,21 +89,36 @@ function ParticleTabBar({ state, navigation }: BottomTabBarProps) {
                   navigation.navigate(item.route);
                 }
               }}
-              style={tabStyles.tabItem}
-              hitSlop={4}
-            >
-              <View style={[tabStyles.iconWrap, focused && tabStyles.iconWrapActive]}>
-                <Ionicons
-                  name={focused ? item.iconActive : item.icon}
-                  size={focused ? 22 : 20}
-                  color={focused ? '#FFFFFF' : 'rgba(255,255,255,0.55)'}
-                />
-              </View>
-            </Pressable>
+            />
           );
         })}
       </View>
     </Animated.View>
+  );
+}
+
+function TabItem({ focused, item, onPress }: {
+  focused: boolean;
+  item: { route: keyof RootTabParamList; label: string; icon: IoniconsName; iconActive: IoniconsName };
+  onPress: () => void;
+}) {
+  const scale = useRef(new Animated.Value(focused ? 1 : 0.92)).current;
+  useEffect(() => {
+    Animated.sequence([
+      Animated.timing(scale, { toValue: focused ? 1.15 : 0.92, duration: 140, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: focused ? 1 : 0.92, friction: 4, tension: 90, useNativeDriver: true }),
+    ]).start();
+  }, [focused, scale]);
+  return (
+    <Pressable onPress={onPress} style={tabStyles.tabItem} hitSlop={4}>
+      <Animated.View style={[tabStyles.iconWrap, focused && tabStyles.iconWrapActive, { transform: [{ scale }] }]}>
+        <Ionicons
+          name={focused ? item.iconActive : item.icon}
+          size={focused ? 22 : 20}
+          color={focused ? '#FFFFFF' : 'rgba(255,255,255,0.55)'}
+        />
+      </Animated.View>
+    </Pressable>
   );
 }
 

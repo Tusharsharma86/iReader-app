@@ -762,8 +762,9 @@ export default function ArticleScreen() {
           <Ionicons name="chevron-back" size={22} color="#FFF" />
         </Pressable>
         <View style={styles.topBarRight}>
-          <Pressable
-            style={[styles.glassBtn, { backgroundColor: dominant + '59' }]}
+          <BookmarkButton
+            saved={savedNow}
+            bg={dominant + '59'}
             onPress={() => toggleSave({
               id: params.id,
               headline: params.headline,
@@ -773,9 +774,7 @@ export default function ArticleScreen() {
               sources: (() => { try { return JSON.parse(params.sources ?? '[]'); } catch { return []; } })(),
               sourceBias: params.sourceBias as BiasRating | undefined,
             } as never)}
-          >
-            <Ionicons name={savedNow ? 'bookmark' : 'bookmark-outline'} size={20} color="#FFF" />
-          </Pressable>
+          />
           <Pressable
             style={[styles.glassBtn, { backgroundColor: dominant + '59' }]}
             onPress={() => params.url && WebBrowser.openBrowserAsync(params.url)}
@@ -848,13 +847,8 @@ export default function ArticleScreen() {
             />
           </View>
         ) : (
-          <View style={styles.heroContainer}>
-            <Image
-              source={{ uri: params.image }}
-              style={styles.heroImage}
-              contentFit="cover"
-              onError={() => setHeroImageFailed(true)}
-            />
+          <View style={[styles.heroContainer, { overflow: 'hidden' }]}>
+            <HeroImage uri={params.image} onError={() => setHeroImageFailed(true)} />
             <View style={[StyleSheet.absoluteFill, { backgroundColor: dominant + '33' }]} />
             <LinearGradient
               colors={['transparent', 'transparent', darken(dominant, 0.4)]}
@@ -1223,6 +1217,40 @@ const RICH_RE = new RegExp(
   ].join('|'),
   'g',
 );
+
+function BookmarkButton({ saved, bg, onPress }: { saved: boolean; bg: string; onPress: () => void }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const handle = () => {
+    Animated.sequence([
+      Animated.timing(scale, { toValue: 1.35, duration: 130, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, friction: 4, tension: 100, useNativeDriver: true }),
+    ]).start();
+    onPress();
+  };
+  return (
+    <Pressable style={[styles.glassBtn, { backgroundColor: bg }]} onPress={handle}>
+      <Animated.View style={{ transform: [{ scale }] }}>
+        <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={20} color="#FFF" />
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+function HeroImage({ uri, onError }: { uri: string; onError: () => void }) {
+  const scale = useRef(new Animated.Value(1.12)).current;
+  const opacity = useRef(new Animated.Value(0.5)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(scale, { toValue: 1, duration: 600, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 1, duration: 500, useNativeDriver: true }),
+    ]).start();
+  }, [scale, opacity]);
+  return (
+    <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale }], opacity }]}>
+      <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" onError={onError} />
+    </Animated.View>
+  );
+}
 
 function tokenize(text: string): Seg[] {
   const out: Seg[] = [];

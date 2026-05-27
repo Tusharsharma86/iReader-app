@@ -196,7 +196,17 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight:
 
   return (
     <Pressable
-      style={[styles.card, { width: cardWidth, shadowColor: dominant }]}
+      android_ripple={undefined}
+      style={({ pressed }) => [
+        styles.card,
+        {
+          width: cardWidth,
+          shadowColor: dominant,
+          shadowOpacity: pressed ? 0.9 : 0.55,
+          shadowRadius: pressed ? 28 : 18,
+          transform: [{ scale: pressed ? 0.97 : 1 }],
+        },
+      ]}
       onPress={handlePress}
     >
       {/* ── IMAGE ─────────────────────────────────── */}
