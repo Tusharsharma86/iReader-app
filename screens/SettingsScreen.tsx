@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import {
   Alert,
   ScrollView,
@@ -39,6 +39,7 @@ export default function SettingsScreen() {
   const { resetSources } = useSource();
 
   const handleNotifToggle = useCallback(async (value: boolean, setter: (v: boolean) => void, prefKey?: 'breaking' | 'topics' | 'digest') => {
+    const TECH_KWS = ['tech', 'ai', 'apple', 'google', 'meta', 'openai', 'microsoft', 'amazon', 'startup', 'software', 'chip', 'iphone', 'android', 'app', 'cyber', 'crypto'];
     if (!value) {
       setter(false);
       if (prefKey === 'breaking') updatePushPreferences({ breakingEnabled: false });
@@ -49,14 +50,21 @@ export default function SettingsScreen() {
     const granted = await requestNotificationPermission();
     if (granted) {
       setter(true);
-      // Ensure token is registered + push pref synced to backend.
       registerForPush().then(() => {
         if (prefKey === 'breaking') updatePushPreferences({ breakingEnabled: true });
-        if (prefKey === 'topics') updatePushPreferences({ topicsEnabled: true });
-        if (prefKey === 'digest') updatePushPreferences({ digestEnabled: true });
+        if (prefKey === 'topics') updatePushPreferences({ topicsEnabled: true, topicsKeywords: TECH_KWS });
+        if (prefKey === 'digest') updatePushPreferences({ digestEnabled: true, digestHour: 8, digestMinute: 0 });
       });
     }
   }, []);
+
+  // Sync favSources to backend whenever the user changes their favorites list.
+  useEffect(() => {
+    updatePushPreferences({
+      favSourcesEnabled: favSources.length > 0,
+      favSources,
+    });
+  }, [favSources]);
 
   const enabledTopicsCount = Object.values(activeTopics).filter(Boolean).length;
   const { onScroll, restore } = useTabBarAutoHide();

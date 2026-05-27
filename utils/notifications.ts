@@ -110,6 +110,10 @@ export async function updatePushPreferences(prefs: {
   topicsEnabled?: boolean;
   topicsKeywords?: string[];
   digestEnabled?: boolean;
+  digestHour?: number;
+  digestMinute?: number;
+  favSourcesEnabled?: boolean;
+  favSources?: string[];
 }): Promise<void> {
   try {
     const token = await AsyncStorage.getItem(TOKEN_CACHE_KEY);
