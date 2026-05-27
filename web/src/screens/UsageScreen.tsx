@@ -123,7 +123,7 @@ export default function UsageScreen() {
   return (
     <div style={{ height: '100%', overflowY: 'auto', background: '#000', WebkitOverflowScrolling: 'touch' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px 24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px 24px', paddingTop: 'calc(16px + env(safe-area-inset-top, 0px))' }}>
         <button onClick={goBack} style={{ width: 36, height: 36, borderRadius: 10, background: '#0E0E0E', border: '1px solid #1A1A1A', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#DDD" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
         </button>
