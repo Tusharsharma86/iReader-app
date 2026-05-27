@@ -3,6 +3,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback } from 'react';
 import {
+  Alert,
   ScrollView,
   StyleSheet,
   Switch,
@@ -14,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSettings, FontSize } from '../contexts/SettingsContext';
 import { useSource } from '../contexts/SourceContext';
 import { SettingsStackParamList } from '../types/navigation';
-import { requestNotificationPermission } from '../utils/notifications';
+import { requestNotificationPermission, fireTestNotif } from '../utils/notifications';
 import { useTabBarAutoHide } from '../utils/tabBarAnim';
 
 const FONT_SIZES: FontSize[] = ['Small', 'Medium', 'Large', 'XLarge'];
@@ -108,6 +109,21 @@ export default function SettingsScreen() {
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#444" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.row, styles.rowBorder]}
+            onPress={async () => {
+              const ok = await requestNotificationPermission();
+              if (!ok) { Alert.alert('Permission needed', 'Enable notifications in system settings.'); return; }
+              try { await fireTestNotif(); Alert.alert('Sent', 'Test notification scheduled — should appear shortly.'); }
+              catch (e) { Alert.alert('Failed', String(e instanceof Error ? e.message : e)); }
+            }}
+          >
+            <View style={styles.rowTextCol}>
+              <Text style={styles.rowLabel}>Send Test Notification</Text>
+              <Text style={styles.rowSub}>Verifies permission, channel, and handler</Text>
+            </View>
+            <Ionicons name="notifications-outline" size={18} color="#888" />
           </TouchableOpacity>
         </View>
 

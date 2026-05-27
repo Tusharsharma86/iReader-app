@@ -42,8 +42,11 @@ export async function setupNotificationChannels(): Promise<void> {
     });
     await N.setNotificationChannelAsync(CHANNEL_SOURCES, {
       name: 'Favorite Sources',
-      importance: N.AndroidImportance.DEFAULT,
-      enableVibrate: false,
+      importance: N.AndroidImportance.HIGH,
+      vibrationPattern: [0, 200, 150, 200],
+      lightColor: '#4A90D9',
+      lockscreenVisibility: N.AndroidNotificationVisibility.PUBLIC,
+      enableVibrate: true,
       showBadge: false,
     });
   } catch {}
@@ -54,16 +57,32 @@ export async function requestNotificationPermission(): Promise<boolean> {
   try {
     const { status: existing } = await N.getPermissionsAsync();
     if (existing === 'granted') return true;
-    if (existing === 'undetermined') {
-      const { status } = await N.requestPermissionsAsync();
-      return status === 'granted';
-    }
-    // Permission was previously denied — send user to system settings
+    // Try requesting regardless of current state — Android sometimes returns
+    // 'denied' on first cold launch even when the runtime prompt hasn't shown yet.
+    const { status } = await N.requestPermissionsAsync();
+    if (status === 'granted') return true;
+    // Truly denied (or 'never_ask_again'). Send to system settings.
     await Linking.openSettings();
     return false;
   } catch {
     return false;
   }
+}
+
+// Test notification — verifies permission, channel, and handler are wired.
+export async function fireTestNotif(): Promise<void> {
+  if (!N) throw new Error('expo-notifications not available (Expo Go?)');
+  const trigger = Platform.OS === 'android'
+    ? { type: N.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 1, channelId: CHANNEL_BREAKING }
+    : null;
+  await N.scheduleNotificationAsync({
+    content: {
+      title: '🔔 Test Notification',
+      body: 'If you see this, notifications are wired correctly.',
+      data: { type: 'test' },
+    },
+    trigger,
+  });
 }
 
 async function getSeenIds(): Promise<Set<string>> {
