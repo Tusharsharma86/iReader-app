@@ -153,10 +153,7 @@ export default function AIFeedScreen() {
   const [openedItem, setOpenedItem] = useState<FeedItem | null>(null);
   const [topicCursor, setTopicCursor] = useState(0);
   const [exhausted, setExhausted] = useState(false);
-  const { hide, show } = useTabBar();
-  // Lock tab bar hidden while AI Feed is open. Avoids per-scroll setState that
-  // was rerendering the whole feed and causing tap lag after a snap.
-  useEffect(() => { hide(); return () => show(); }, [hide, show]);
+  const { reportScroll } = useTabBar();
   const scrollRef = useRef<HTMLDivElement>(null);
   const itemsRef = useRef<FeedItem[]>([]);
   itemsRef.current = items;
@@ -251,14 +248,12 @@ export default function AIFeedScreen() {
     setPull(0);
   }, [pull, loadTopic]);
 
-  // Throttle infinite-scroll check — only run once per ~200ms.
-  const lastScrollCheck = useRef(0);
   const handleFeedScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    if (loadingMore || exhausted) return;
-    const now = Date.now();
-    if (now - lastScrollCheck.current < 200) return;
-    lastScrollCheck.current = now;
     const el = e.currentTarget;
+    reportScroll(el.scrollTop);
+
+    // Infinite scroll — when within ~3 viewport heights of bottom, pull next topic
+    if (loadingMore || exhausted) return;
     const remaining = el.scrollHeight - (el.scrollTop + el.clientHeight);
     if (remaining < el.clientHeight * 3) {
       const next = topicCursor + 1;
@@ -269,7 +264,7 @@ export default function AIFeedScreen() {
         setExhausted(true);
       }
     }
-  }, [loadingMore, exhausted, topicCursor, loadTopic]);
+  }, [reportScroll, loadingMore, exhausted, topicCursor, loadTopic]);
 
   return (
     <div style={{
@@ -399,12 +394,8 @@ export default function AIFeedScreen() {
       )}
 
       <style>{`
-        @keyframes aifImgIn { from { transform: scale(1.08); opacity: 0.6; } to { transform: scale(1); opacity: 1; } }
-        .aif-card-img { animation: aifImgIn 0.6s cubic-bezier(0.22, 1, 0.36, 1); transform-origin: center 40%; }
         @keyframes aifTextBounce { 0% { transform: translateY(24px); opacity: 0; } 60% { transform: translateY(-4px); opacity: 1; } 100% { transform: translateY(0); opacity: 1; } }
         .aif-text-bounce { animation: aifTextBounce 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
-        .aif-card { transition: transform 0.16s cubic-bezier(0.4, 0, 0.2, 1); }
-        .aif-card:active { transform: scale(0.985); }
         @keyframes aifCelebrate { 0% { transform: scale(0.5) rotate(-20deg); opacity: 0; } 60% { transform: scale(1.25) rotate(8deg); opacity: 1; } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }
         .aif-celebrate { animation: aifCelebrate 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
         @keyframes aifCounterPop { 0% { transform: scale(0.85); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
@@ -455,7 +446,6 @@ function FullPreviewCard({ item, index, total, onOpen }: {
       onClick={handleClick}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
-      className="aif-card"
       style={{
         height: '100%', minHeight: '100%',
         scrollSnapAlign: 'start', scrollSnapStop: 'always',
@@ -469,7 +459,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
     >
       {/* Full-bleed image (or gradient fallback) */}
       {story.imageUrl ? (
-        <img src={story.imageUrl} alt="" className="aif-card-img" style={{
+        <img src={story.imageUrl} alt="" style={{
           position: 'absolute', inset: 0,
           width: '100%', height: '100%', objectFit: 'cover',
         }} />
