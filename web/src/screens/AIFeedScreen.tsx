@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Story } from '../types';
-import { useTabBar } from '../contexts/TabBarContext';
+import { useTabBarActions } from '../contexts/TabBarContext';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 
 const FEED_API_BASE = 'https://ireader.onrender.com/api/news/feed';
@@ -165,10 +165,9 @@ export default function AIFeedScreen() {
   const [openedItem, setOpenedItem] = useState<FeedItem | null>(null);
   const [topicCursor, setTopicCursor] = useState(0);
   const [exhausted, setExhausted] = useState(false);
-  const { hide, show } = useTabBar();
-  // Lock tab bar hidden while AI Feed is open. Avoids per-scroll setState that
-  // rerenders the whole feed and collapses scroll FPS.
-  useEffect(() => { hide(); return () => show(); }, [hide, show]);
+  const { reportScroll } = useTabBarActions();
+  // useTabBarActions returns a stable reference — calling reportScroll on every
+  // scroll tick no longer re-renders this component (only TabBar consumes visible).
   const scrollRef = useRef<HTMLDivElement>(null);
   const itemsRef = useRef<FeedItem[]>([]);
   itemsRef.current = items;
@@ -263,14 +262,16 @@ export default function AIFeedScreen() {
     setPull(0);
   }, [pull, loadTopic]);
 
-  // Throttle infinite-scroll check — only run once per ~200ms.
+  // Tab-bar visibility runs every frame (cheap — stable callback, no rerenders).
+  // Infinite-scroll bottom check throttled to 200ms.
   const lastScrollCheck = useRef(0);
   const handleFeedScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    reportScroll(el.scrollTop);
     if (loadingMore || exhausted) return;
     const now = Date.now();
     if (now - lastScrollCheck.current < 200) return;
     lastScrollCheck.current = now;
-    const el = e.currentTarget;
     const remaining = el.scrollHeight - (el.scrollTop + el.clientHeight);
     if (remaining < el.clientHeight * 3) {
       const next = topicCursor + 1;
@@ -281,7 +282,7 @@ export default function AIFeedScreen() {
         setExhausted(true);
       }
     }
-  }, [loadingMore, exhausted, topicCursor, loadTopic]);
+  }, [reportScroll, loadingMore, exhausted, topicCursor, loadTopic]);
 
   return (
     <div style={{
