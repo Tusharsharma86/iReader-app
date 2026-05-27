@@ -1,5 +1,5 @@
 import { createBottomTabNavigator, BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { NavigationContainer, DarkTheme } from '@react-navigation/native';
+import { NavigationContainer, DarkTheme, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import * as SplashScreen from 'expo-splash-screen';
@@ -31,6 +31,31 @@ import { setupNotificationChannels, registerForPush } from './utils/notification
 
 SplashScreen.preventAutoHideAsync();
 setTimeout(() => SplashScreen.hideAsync(), 3000);
+
+const navigationRef = createNavigationContainerRef<RootTabParamList>();
+
+// Open Article from a tapped push payload. Called once nav is ready.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function handleNotificationTap(data: any) {
+  const a = data?.article;
+  if (!a || !navigationRef.isReady()) return;
+  try {
+    navigationRef.navigate('Feed', {
+      screen: 'Article',
+      params: {
+        id: String(a.id ?? ''),
+        url: String(a.url ?? ''),
+        image: String(a.imageUrl ?? ''),
+        headline: String(a.headline ?? ''),
+        summary: String(a.summary ?? ''),
+        source: String(a.source ?? ''),
+        publishedAt: String(a.publishedAt ?? ''),
+        dominantColor: '#1A1A1A',
+        sources: JSON.stringify(a.url ? [{ name: a.source, url: a.url }] : []),
+      },
+    } as never);
+  } catch {}
+}
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const FeedStack = createNativeStackNavigator<FeedStackParamList>();
@@ -237,6 +262,23 @@ export default function App() {
     setupNotificationChannels()
       .then(() => registerForPush())
       .catch(() => {});
+
+    // Wire push-tap → open article. Handles both cold start (app launched by
+    // tap) and warm (app already running). Dynamic require so Expo Go is safe.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let N: any = null;
+    try { N = require('expo-notifications'); } catch {}
+    if (!N) return;
+    const sub = N.addNotificationResponseReceivedListener((response: { notification: { request: { content: { data: unknown } } } }) => {
+      handleNotificationTap(response.notification.request.content.data);
+    });
+    // Cold start path — if app was launched by tapping a notification.
+    N.getLastNotificationResponseAsync?.().then((resp: unknown) => {
+      const r = resp as { notification?: { request?: { content?: { data?: unknown } } } } | null;
+      const d = r?.notification?.request?.content?.data;
+      if (d) setTimeout(() => handleNotificationTap(d), 400);
+    });
+    return () => { try { sub?.remove?.(); } catch {} };
   }, []);
 
   if (!navReady) return null;
@@ -248,6 +290,7 @@ export default function App() {
     <SafeAreaProvider>
       <StatusBar style="light" backgroundColor="transparent" translucent />
       <NavigationContainer
+          ref={navigationRef}
           initialState={navInitState}
           onStateChange={state => {
             AsyncStorage.setItem('@ireader_nav_state', JSON.stringify({ state, ts: Date.now() })).catch(() => {});
