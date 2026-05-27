@@ -120,10 +120,10 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
       style={{
         width: cardWidth, height: CARD_HEIGHT, borderRadius: 20, overflow: 'hidden',
         position: 'relative', flexShrink: 0, cursor: 'pointer',
-        boxShadow: `0 4px 20px ${dominant}66`,
+        boxShadow: `0 6px 16px rgba(0,0,0,0.5), 0 0 ${pressed ? 50 : 28}px ${dominant}${pressed ? '99' : '55'}, 0 4px 20px ${dominant}66`,
         WebkitTapHighlightColor: 'transparent',
         transform: pressed ? 'scale(0.97)' : 'scale(1)',
-        transition: 'transform 0.16s cubic-bezier(0.4, 0, 0.2, 1)',
+        transition: 'transform 0.16s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.24s ease',
       }}
     >
       {/* Background image or typographic fallback */}

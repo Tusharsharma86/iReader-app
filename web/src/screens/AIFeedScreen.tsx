@@ -398,6 +398,8 @@ export default function AIFeedScreen() {
         .aif-card-img { animation: aifImgIn 0.6s cubic-bezier(0.22, 1, 0.36, 1); transform-origin: center 40%; }
         @keyframes aifCelebrate { 0% { transform: scale(0.5) rotate(-20deg); opacity: 0; } 60% { transform: scale(1.25) rotate(8deg); opacity: 1; } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }
         .aif-celebrate { animation: aifCelebrate 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+        @keyframes aifCounterPop { 0% { transform: scale(0.85); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+        .aif-counter-pop { animation: aifCounterPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
       `}</style>
     </div>
   );
@@ -483,7 +485,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
       }} />
 
       {/* Counter pill — respects safe-area-top so it never sits under the notch */}
-      <div style={{
+      <div key={`counter-${index}`} className="aif-counter-pop" style={{
         position: 'absolute', top: 'max(14px, calc(env(safe-area-inset-top, 0px) + 10px))', right: 14, zIndex: 5,
         padding: '5px 10px', borderRadius: 999,
         background: 'rgba(20,20,28,0.55)',
@@ -653,14 +655,51 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
   const extraSources = Math.max(0, item.sources.length - 1);
   const bgGradient = `radial-gradient(at 0% 0%, ${dominant}55, transparent 60%), linear-gradient(180deg, #050507 0%, #08080c 50%, #050507 100%)`;
 
+  // Swipe-down-to-close: track drag only when scroll is at top.
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ startY: number; active: boolean } | null>(null);
+  const [dragY, setDragY] = useState(0);
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    if ((overlayRef.current?.scrollTop ?? 0) > 0) return;
+    dragRef.current = { startY: e.touches[0].clientY, active: true };
+  }, []);
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!dragRef.current?.active) return;
+    const dy = e.touches[0].clientY - dragRef.current.startY;
+    if (dy > 0) setDragY(dy);
+  }, []);
+  const onTouchEnd = useCallback(() => {
+    if (!dragRef.current?.active) return;
+    if (dragY > 130) {
+      try { navigator.vibrate?.(12); } catch {}
+      onClose();
+    } else setDragY(0);
+    dragRef.current = null;
+  }, [dragY, onClose]);
+
+  const dragOpacity = Math.max(0, 1 - dragY / 500);
+  const dragScale = Math.max(0.92, 1 - dragY / 1800);
+
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 200,
-      background: bgGradient,
-      overflowY: 'auto',
-      WebkitOverflowScrolling: 'touch',
-      animation: 'ddOverlayIn 0.25s ease-out',
-    }}>
+    <div
+      ref={overlayRef}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onTouchCancel={onTouchEnd}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 200,
+        background: bgGradient,
+        overflowY: 'auto',
+        WebkitOverflowScrolling: 'touch',
+        animation: dragY === 0 ? 'ddOverlayIn 0.25s ease-out' : undefined,
+        transform: `translateY(${dragY}px) scale(${dragScale})`,
+        opacity: dragOpacity,
+        transition: dragRef.current?.active ? 'none' : 'transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.28s ease',
+        transformOrigin: 'center top',
+        borderRadius: dragY > 8 ? 24 : 0,
+        overflow: dragY > 8 ? 'hidden' : 'auto',
+      }}>
       <style>{`@keyframes ddOverlayIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }`}</style>
 
       {/* Top bar — floats over the hero (absolute, not sticky) */}

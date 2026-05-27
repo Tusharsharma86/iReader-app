@@ -426,7 +426,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
                 const cfg = BIAS_CONFIG[params.sourceBias as BiasRating];
                 return (
                   <button onClick={() => setBiasModalVisible(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 4, display: 'flex', alignItems: 'center', padding: 0 }}>
-                    <div style={{ width: 6, height: 6, borderRadius: 3, background: cfg?.color, flexShrink: 0 }} />
+                    <div className="bias-dot-in" style={{ width: 8, height: 8, borderRadius: 4, background: cfg?.color, flexShrink: 0, boxShadow: `0 0 8px ${cfg?.color}99` }} />
                   </button>
                 );
               })()}
@@ -501,6 +501,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
           const color = active ? '#fff' : 'rgba(255,255,255,0.4)';
           return (
             <button key={tab} onClick={() => setActiveTab(tab)}
+              className={active ? 'tab-active-pill' : undefined}
               style={{
                 flex: 1, padding: '9px 0', borderRadius: 999, border: 'none', cursor: 'pointer',
                 background: active ? lighten(dominant, 0.05) : 'transparent',
@@ -508,6 +509,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
                 fontSize: 12, fontWeight: 600,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
                 transition: 'all 0.2s',
+                WebkitTapHighlightColor: 'transparent',
               }}>
               <TabIcon tab={tab} color={color} />
               <span>{tab}</span>
@@ -707,6 +709,15 @@ function Spinner() {
           100% { background: rgba(185, 148, 255, 0.10); }
         }
         .entity-pulse { animation: entityPulse 1.4s ease-out 0.4s both; border-radius: 3px; padding: 0 2px; }
+        @keyframes biasDotIn {
+          0% { transform: scale(0); opacity: 0; }
+          50% { transform: scale(1.6); opacity: 1; }
+          80% { transform: scale(0.92); }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        .bias-dot-in { animation: biasDotIn 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s both; }
+        @keyframes tabActiveSlide { from { transform: scaleX(0.85); opacity: 0.6; } to { transform: scaleX(1); opacity: 1; } }
+        .tab-active-pill { animation: tabActiveSlide 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
       `}</style>
     </div>
   );
