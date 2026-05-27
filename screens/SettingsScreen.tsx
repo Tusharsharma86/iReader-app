@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSettings, FontSize } from '../contexts/SettingsContext';
 import { useSource } from '../contexts/SourceContext';
 import { SettingsStackParamList } from '../types/navigation';
-import { requestNotificationPermission, fireTestNotif } from '../utils/notifications';
+import { requestNotificationPermission, fireTestNotif, registerForPush, updatePushPreferences } from '../utils/notifications';
 import { useTabBarAutoHide } from '../utils/tabBarAnim';
 
 const FONT_SIZES: FontSize[] = ['Small', 'Medium', 'Large', 'XLarge'];
@@ -37,10 +37,24 @@ export default function SettingsScreen() {
 
   const { resetSources } = useSource();
 
-  const handleNotifToggle = useCallback(async (value: boolean, setter: (v: boolean) => void) => {
-    if (!value) { setter(false); return; }
+  const handleNotifToggle = useCallback(async (value: boolean, setter: (v: boolean) => void, prefKey?: 'breaking' | 'topics' | 'digest') => {
+    if (!value) {
+      setter(false);
+      if (prefKey === 'breaking') updatePushPreferences({ breakingEnabled: false });
+      if (prefKey === 'topics') updatePushPreferences({ topicsEnabled: false });
+      if (prefKey === 'digest') updatePushPreferences({ digestEnabled: false });
+      return;
+    }
     const granted = await requestNotificationPermission();
-    if (granted) setter(true);
+    if (granted) {
+      setter(true);
+      // Ensure token is registered + push pref synced to backend.
+      registerForPush().then(() => {
+        if (prefKey === 'breaking') updatePushPreferences({ breakingEnabled: true });
+        if (prefKey === 'topics') updatePushPreferences({ topicsEnabled: true });
+        if (prefKey === 'digest') updatePushPreferences({ digestEnabled: true });
+      });
+    }
   }, []);
 
   const enabledTopicsCount = Object.values(activeTopics).filter(Boolean).length;
@@ -79,7 +93,7 @@ export default function SettingsScreen() {
               <Text style={styles.rowLabel}>Breaking News</Text>
               <Text style={styles.rowSub}>Instant alerts for major stories</Text>
             </View>
-            <Switch value={notifBreaking} onValueChange={v => handleNotifToggle(v, setNotifBreaking)}
+            <Switch value={notifBreaking} onValueChange={v => handleNotifToggle(v, setNotifBreaking, 'breaking')}
               trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }}
               thumbColor={notifBreaking ? '#4A90D9' : '#444'} />
           </View>
@@ -88,7 +102,7 @@ export default function SettingsScreen() {
               <Text style={styles.rowLabel}>Tech News</Text>
               <Text style={styles.rowSub}>Alerts for new technology stories</Text>
             </View>
-            <Switch value={notifTech} onValueChange={v => handleNotifToggle(v, setNotifTech)}
+            <Switch value={notifTech} onValueChange={v => handleNotifToggle(v, setNotifTech, 'topics')}
               trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }}
               thumbColor={notifTech ? '#4A90D9' : '#444'} />
           </View>
@@ -97,7 +111,7 @@ export default function SettingsScreen() {
               <Text style={styles.rowLabel}>Daily Digest</Text>
               <Text style={styles.rowSub}>Morning summary of top stories</Text>
             </View>
-            <Switch value={notifDigest} onValueChange={v => handleNotifToggle(v, setNotifDigest)}
+            <Switch value={notifDigest} onValueChange={v => handleNotifToggle(v, setNotifDigest, 'digest')}
               trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }}
               thumbColor={notifDigest ? '#4A90D9' : '#444'} />
           </View>

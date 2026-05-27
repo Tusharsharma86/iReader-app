@@ -69,6 +69,72 @@ export async function requestNotificationPermission(): Promise<boolean> {
   }
 }
 
+// ── Expo push token registration ───────────────────────────────────────────
+const PUSH_API = 'https://ireader.onrender.com/api/push';
+const TOKEN_CACHE_KEY = '@expo_push_token_v1';
+
+export async function registerForPush(): Promise<string | null> {
+  if (!N) return null;
+  try {
+    const granted = await requestNotificationPermission();
+    if (!granted) return null;
+
+    // Expo SDK 49+ wants the projectId explicitly.
+    const projectId =
+      Constants.expoConfig?.extra?.eas?.projectId ??
+      Constants.easConfig?.projectId;
+    const tokenRes = projectId
+      ? await N.getExpoPushTokenAsync({ projectId })
+      : await N.getExpoPushTokenAsync();
+    const token: string | undefined = tokenRes?.data;
+    if (!token) return null;
+
+    // Cache locally to avoid hitting the backend on every cold launch.
+    const cached = await AsyncStorage.getItem(TOKEN_CACHE_KEY);
+    if (cached === token) return token;
+
+    await fetch(`${PUSH_API}/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, platform: Platform.OS }),
+    }).catch(() => {});
+    await AsyncStorage.setItem(TOKEN_CACHE_KEY, token);
+    return token;
+  } catch {
+    return null;
+  }
+}
+
+export async function updatePushPreferences(prefs: {
+  breakingEnabled?: boolean;
+  topicsEnabled?: boolean;
+  topicsKeywords?: string[];
+  digestEnabled?: boolean;
+}): Promise<void> {
+  try {
+    const token = await AsyncStorage.getItem(TOKEN_CACHE_KEY);
+    if (!token) return;
+    await fetch(`${PUSH_API}/preferences`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, ...prefs }),
+    }).catch(() => {});
+  } catch {}
+}
+
+export async function unregisterPush(): Promise<void> {
+  try {
+    const token = await AsyncStorage.getItem(TOKEN_CACHE_KEY);
+    if (!token) return;
+    await fetch(`${PUSH_API}/unregister`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    }).catch(() => {});
+    await AsyncStorage.removeItem(TOKEN_CACHE_KEY);
+  } catch {}
+}
+
 // Test notification — verifies permission, channel, and handler are wired.
 export async function fireTestNotif(): Promise<void> {
   if (!N) throw new Error('expo-notifications not available (Expo Go?)');

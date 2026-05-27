@@ -27,7 +27,7 @@ import UsageScreen from './screens/UsageScreen';
 import CostDashboardScreen from './screens/CostDashboardScreen';
 import TopicInterestsScreen from './screens/TopicInterestsScreen';
 import StoryTimelineScreen from './screens/StoryTimelineScreen';
-import { setupNotificationChannels, requestNotificationPermission } from './utils/notifications';
+import { setupNotificationChannels, registerForPush } from './utils/notifications';
 
 SplashScreen.preventAutoHideAsync();
 setTimeout(() => SplashScreen.hideAsync(), 3000);
@@ -235,7 +235,7 @@ export default function App() {
       });
 
     setupNotificationChannels()
-      .then(() => requestNotificationPermission())
+      .then(() => registerForPush())
       .catch(() => {});
   }, []);
 
