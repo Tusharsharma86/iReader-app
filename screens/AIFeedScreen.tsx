@@ -930,8 +930,27 @@ function renderHighlighted(text: string, tags: string[]): React.ReactNode[] {
   const re = new RegExp(`\\b(${escaped.join('|')})\\b`, 'gi');
   const parts = text.split(re);
   return parts.map((p, i) => i % 2 === 1
-    ? <Text key={i} style={{ color: '#fff', fontWeight: '700' }}>{p}</Text>
+    ? <EntityPulse key={i} text={p} />
     : p);
+}
+
+// Inline animated text — flashes a violet background once, then settles to a
+// subtle steady tint. Matches the web .dd-entity-pulse keyframe.
+function EntityPulse({ text }: { text: string }) {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.sequence([
+      Animated.delay(500),
+      Animated.timing(v, { toValue: 1, duration: 450, useNativeDriver: false }),
+      Animated.timing(v, { toValue: 0.25, duration: 900, useNativeDriver: false }),
+    ]).start();
+  }, [v]);
+  const bg = v.interpolate({ inputRange: [0, 1], outputRange: ['rgba(185,148,255,0)', 'rgba(185,148,255,0.32)'] });
+  return (
+    <Animated.Text style={{ color: '#fff', fontWeight: '700', backgroundColor: bg }}>
+      {text}
+    </Animated.Text>
+  );
 }
 
 function allTags(d: DeepDiveData): string[] {
