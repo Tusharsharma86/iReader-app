@@ -396,6 +396,10 @@ export default function AIFeedScreen() {
       <style>{`
         @keyframes aifTextBounce { 0% { transform: translateY(24px); opacity: 0; } 60% { transform: translateY(-4px); opacity: 1; } 100% { transform: translateY(0); opacity: 1; } }
         .aif-text-bounce { animation: aifTextBounce 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+        /* Tap feedback — dim + tiny scale on press. CSS-only so no React rerenders.
+           Scale stays small (0.992) to keep scroll-snap settled. */
+        .aif-card { transition: filter 0.18s ease, transform 0.18s cubic-bezier(0.4, 0, 0.2, 1); will-change: filter; }
+        .aif-card:active { filter: brightness(0.88); transform: scale(0.992); }
         @keyframes aifCelebrate { 0% { transform: scale(0.5) rotate(-20deg); opacity: 0; } 60% { transform: scale(1.25) rotate(8deg); opacity: 1; } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }
         .aif-celebrate { animation: aifCelebrate 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
         @keyframes aifCounterPop { 0% { transform: scale(0.85); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
@@ -446,6 +450,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
       onClick={handleClick}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
+      className="aif-card"
       style={{
         height: '100%', minHeight: '100%',
         scrollSnapAlign: 'start', scrollSnapStop: 'always',
