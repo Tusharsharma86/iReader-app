@@ -502,8 +502,8 @@ function FullPreviewCard({ item, index, total, onOpen }: {
             background: `linear-gradient(135deg, transparent 35%, ${accent}22 55%, transparent 75%)`,
           }} />
           <div style={{
-            position: 'absolute', inset: 0,
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24,
+            position: 'absolute', left: 0, right: 0, top: '18%',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: 24,
           }}>
             {(() => {
               const fav = aifFaviconFromStory(sourceName, story.sources?.[0]?.url);
@@ -529,10 +529,9 @@ function FullPreviewCard({ item, index, total, onOpen }: {
                 </div>
               );
             })()}
-            <div style={{ color: accent, fontSize: 16, fontWeight: 800, letterSpacing: 0.4 }}>{sourceName.toUpperCase()}</div>
-            <div style={{ width: 36, height: 1, background: `${accent}55`, borderRadius: 1 }} />
-            <div style={{ color: `${accent}CC`, fontSize: 10, fontWeight: 700, letterSpacing: 1.8 }}>
-              BREAKING · NO PREVIEW
+            <div style={{ width: 28, height: 1, background: `${accent}55`, borderRadius: 1 }} />
+            <div style={{ color: `${accent}CC`, fontSize: 9, fontWeight: 700, letterSpacing: 1.6 }}>
+              NO PREVIEW
             </div>
           </div>
         </div>

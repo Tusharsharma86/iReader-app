@@ -859,11 +859,11 @@ function NoImageFallback({ dominant, accent, source, url }: {
         end={{ x: 1, y: 1 }}
       />
       <View style={{
-        position: 'absolute', left: 0, right: 0, top: '38%',
-        alignItems: 'center', gap: 12, padding: 24,
+        position: 'absolute', left: 0, right: 0, top: '18%',
+        alignItems: 'center', gap: 10, padding: 24,
       }}>
         <View style={{
-          width: 80, height: 80, borderRadius: 40,
+          width: 72, height: 72, borderRadius: 36,
           borderWidth: 2, borderColor: accent + 'AA',
           backgroundColor: 'rgba(0,0,0,0.25)',
           overflow: 'hidden', alignItems: 'center', justifyContent: 'center',
@@ -871,17 +871,14 @@ function NoImageFallback({ dominant, accent, source, url }: {
           {faviconUri ? (
             <Image source={{ uri: faviconUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
           ) : (
-            <Text style={{ color: accent, fontSize: 32, fontWeight: '800' }}>
+            <Text style={{ color: accent, fontSize: 28, fontWeight: '800' }}>
               {(source ?? '?').charAt(0).toUpperCase()}
             </Text>
           )}
         </View>
-        <Text style={{ color: accent, fontSize: 16, fontWeight: '800', letterSpacing: 0.4 }}>
-          {source.toUpperCase()}
-        </Text>
-        <View style={{ width: 36, height: 1, backgroundColor: accent + '55' }} />
-        <Text style={{ color: accent + 'CC', fontSize: 10, fontWeight: '700', letterSpacing: 1.8 }}>
-          BREAKING · NO PREVIEW
+        <View style={{ width: 28, height: 1, backgroundColor: accent + '55' }} />
+        <Text style={{ color: accent + 'CC', fontSize: 9, fontWeight: '700', letterSpacing: 1.6 }}>
+          NO PREVIEW
         </Text>
       </View>
     </View>
