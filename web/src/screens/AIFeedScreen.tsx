@@ -380,7 +380,7 @@ export default function AIFeedScreen() {
               flexDirection: 'column', gap: 8, padding: 24, textAlign: 'center',
               background: '#050507',
             }}>
-              <div style={{ fontSize: 28 }}>🎉</div>
+              <div className="aif-celebrate" style={{ fontSize: 38 }}>🎉</div>
               <div style={{ color: '#fff', fontSize: 15, fontWeight: 700 }}>You're all caught up</div>
               <div style={{ color: '#666', fontSize: 12 }}>Swipe back to revisit any story.</div>
             </div>
@@ -392,6 +392,13 @@ export default function AIFeedScreen() {
       {openedItem && (
         <DeepDiveOverlay item={openedItem} onClose={() => setOpenedItem(null)} />
       )}
+
+      <style>{`
+        @keyframes aifImgIn { from { transform: scale(1.08); opacity: 0.6; } to { transform: scale(1); opacity: 1; } }
+        .aif-card-img { animation: aifImgIn 0.6s cubic-bezier(0.22, 1, 0.36, 1); transform-origin: center 40%; }
+        @keyframes aifCelebrate { 0% { transform: scale(0.5) rotate(-20deg); opacity: 0; } 60% { transform: scale(1.25) rotate(8deg); opacity: 1; } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }
+        .aif-celebrate { animation: aifCelebrate 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+      `}</style>
     </div>
   );
 }
@@ -410,17 +417,20 @@ function FullPreviewCard({ item, index, total, onOpen }: {
 
   // Track touch displacement so a vertical swipe doesn't fire a tap.
   const touchRef = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const [pressed, setPressed] = useState(false);
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     const t = e.touches[0];
     touchRef.current = { x: t.clientX, y: t.clientY, moved: false };
+    setPressed(true);
   }, []);
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!touchRef.current) return;
     const t = e.touches[0];
     const dx = Math.abs(t.clientX - touchRef.current.x);
     const dy = Math.abs(t.clientY - touchRef.current.y);
-    if (dx > 10 || dy > 10) touchRef.current.moved = true;
+    if (dx > 10 || dy > 10) { touchRef.current.moved = true; setPressed(false); }
   }, []);
+  const handleTouchEnd = useCallback(() => { setPressed(false); }, []);
   const handleClick = useCallback((e: React.MouseEvent) => {
     // Click suppression if the user actually swiped
     if (touchRef.current?.moved) {
@@ -429,6 +439,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
       touchRef.current = null;
       return;
     }
+    try { navigator.vibrate?.(10); } catch {}
     onOpen();
   }, [onOpen]);
 
@@ -437,6 +448,8 @@ function FullPreviewCard({ item, index, total, onOpen }: {
       onClick={handleClick}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
       style={{
         height: '100%', minHeight: '100%',
         scrollSnapAlign: 'start', scrollSnapStop: 'always',
@@ -446,11 +459,13 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         cursor: 'pointer',
         userSelect: 'none',
         WebkitTapHighlightColor: 'transparent',
+        transform: pressed ? 'scale(0.98)' : 'scale(1)',
+        transition: 'transform 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
       }}
     >
       {/* Full-bleed image (or gradient fallback) */}
       {story.imageUrl ? (
-        <img src={story.imageUrl} alt="" style={{
+        <img src={story.imageUrl} alt="" className="aif-card-img" style={{
           position: 'absolute', inset: 0,
           width: '100%', height: '100%', objectFit: 'cover',
         }} />
@@ -1119,18 +1134,37 @@ function SparkleIcon({ color, size }: { color: string; size: number }) {
 
 function CenteredLoading({ text }: { text: string }) {
   return (
-    <div style={{
-      position: 'absolute', inset: 0,
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      gap: 14, color: '#888',
-    }}>
+    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}>
+      {/* full-screen shimmer card skeleton */}
       <div style={{
-        width: 32, height: 32, borderRadius: '50%',
-        border: '3px solid rgba(255,255,255,0.08)', borderTopColor: VIOLET,
-        animation: 'aifspin 0.8s linear infinite',
-      }} />
-      <style>{`@keyframes aifspin{to{transform:rotate(360deg)}}`}</style>
-      <div style={{ fontSize: 13, fontWeight: 500 }}>{text}</div>
+        flex: 1, position: 'relative', overflow: 'hidden',
+        background: 'linear-gradient(180deg, #0d0d12 0%, #0a0a0e 100%)',
+      }}>
+        <div className="aif-skel-shimmer" style={{
+          position: 'absolute', inset: 0,
+          background: 'linear-gradient(90deg, transparent 0%, rgba(185,148,255,0.06) 50%, transparent 100%)',
+          backgroundSize: '200% 100%',
+        }} />
+        {/* fake content blocks */}
+        <div style={{ position: 'absolute', left: 22, right: 22, bottom: 110, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ height: 14, width: '40%', borderRadius: 4, background: 'rgba(255,255,255,0.06)' }} />
+          <div style={{ height: 28, width: '90%', borderRadius: 6, background: 'rgba(255,255,255,0.08)' }} />
+          <div style={{ height: 28, width: '70%', borderRadius: 6, background: 'rgba(255,255,255,0.08)' }} />
+          <div style={{ height: 12, width: '55%', borderRadius: 4, background: 'rgba(255,255,255,0.05)', marginTop: 6 }} />
+        </div>
+      </div>
+      <div style={{
+        position: 'absolute', left: 0, right: 0, top: '50%', transform: 'translateY(-50%)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, color: '#aaa',
+      }}>
+        <span className="typing-dots" style={{ transform: 'scale(1.4)' }}><span /><span /><span /></span>
+        <div style={{ fontSize: 13, fontWeight: 500 }}>{text}</div>
+      </div>
+      <style>{`
+        @keyframes aifspin{to{transform:rotate(360deg)}}
+        @keyframes aifShimmerSweep { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        .aif-skel-shimmer { animation: aifShimmerSweep 1.6s ease-in-out infinite; }
+      `}</style>
     </div>
   );
 }
