@@ -153,7 +153,10 @@ export default function AIFeedScreen() {
   const [openedItem, setOpenedItem] = useState<FeedItem | null>(null);
   const [topicCursor, setTopicCursor] = useState(0);
   const [exhausted, setExhausted] = useState(false);
-  const { reportScroll } = useTabBar();
+  const { hide, show } = useTabBar();
+  // Lock tab bar hidden while AI Feed is open. Avoids per-scroll setState that
+  // rerenders the whole feed and collapses scroll FPS.
+  useEffect(() => { hide(); return () => show(); }, [hide, show]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const itemsRef = useRef<FeedItem[]>([]);
   itemsRef.current = items;
@@ -248,12 +251,14 @@ export default function AIFeedScreen() {
     setPull(0);
   }, [pull, loadTopic]);
 
+  // Throttle infinite-scroll check — only run once per ~200ms.
+  const lastScrollCheck = useRef(0);
   const handleFeedScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    const el = e.currentTarget;
-    reportScroll(el.scrollTop);
-
-    // Infinite scroll — when within ~3 viewport heights of bottom, pull next topic
     if (loadingMore || exhausted) return;
+    const now = Date.now();
+    if (now - lastScrollCheck.current < 200) return;
+    lastScrollCheck.current = now;
+    const el = e.currentTarget;
     const remaining = el.scrollHeight - (el.scrollTop + el.clientHeight);
     if (remaining < el.clientHeight * 3) {
       const next = topicCursor + 1;
@@ -264,7 +269,7 @@ export default function AIFeedScreen() {
         setExhausted(true);
       }
     }
-  }, [reportScroll, loadingMore, exhausted, topicCursor, loadTopic]);
+  }, [loadingMore, exhausted, topicCursor, loadTopic]);
 
   return (
     <div style={{
@@ -397,8 +402,8 @@ export default function AIFeedScreen() {
         @keyframes aifTextBounce { 0% { transform: translateY(24px); opacity: 0; } 60% { transform: translateY(-4px); opacity: 1; } 100% { transform: translateY(0); opacity: 1; } }
         .aif-text-bounce { animation: aifTextBounce 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
         /* Tap feedback — dim + tiny scale on press. CSS-only so no React rerenders.
-           Scale stays small (0.992) to keep scroll-snap settled. */
-        .aif-card { transition: filter 0.18s ease, transform 0.18s cubic-bezier(0.4, 0, 0.2, 1); will-change: filter; }
+           Skip off-screen card paint with content-visibility. */
+        .aif-card { transition: filter 0.18s ease, transform 0.18s cubic-bezier(0.4, 0, 0.2, 1); content-visibility: auto; contain-intrinsic-size: 100vh; }
         .aif-card:active { filter: brightness(0.88); transform: scale(0.992); }
         @keyframes aifCelebrate { 0% { transform: scale(0.5) rotate(-20deg); opacity: 0; } 60% { transform: scale(1.25) rotate(8deg); opacity: 1; } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }
         .aif-celebrate { animation: aifCelebrate 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
@@ -464,10 +469,16 @@ function FullPreviewCard({ item, index, total, onOpen }: {
     >
       {/* Full-bleed image (or gradient fallback) */}
       {story.imageUrl ? (
-        <img src={story.imageUrl} alt="" style={{
-          position: 'absolute', inset: 0,
-          width: '100%', height: '100%', objectFit: 'cover',
-        }} />
+        <img
+          src={story.imageUrl}
+          alt=""
+          loading={index < 2 ? 'eager' : 'lazy'}
+          decoding="async"
+          style={{
+            position: 'absolute', inset: 0,
+            width: '100%', height: '100%', objectFit: 'cover',
+          }}
+        />
       ) : (
         <div style={{
           position: 'absolute', inset: 0,
@@ -481,13 +492,12 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         background: 'linear-gradient(180deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.1) 25%, rgba(0,0,0,0.15) 50%, rgba(5,5,7,0.75) 80%, rgba(5,5,7,0.95) 100%)',
       }} />
 
-      {/* Counter pill — respects safe-area-top so it never sits under the notch */}
+      {/* Counter pill — solid rgba so we skip backdrop-filter cost while scrolling */}
       <div key={`counter-${index}`} className="aif-counter-pop" style={{
         position: 'absolute', top: 'max(14px, calc(env(safe-area-inset-top, 0px) + 10px))', right: 14, zIndex: 5,
         padding: '5px 10px', borderRadius: 999,
-        background: 'rgba(20,20,28,0.55)',
+        background: 'rgba(15,15,20,0.78)',
         border: '1px solid rgba(255,255,255,0.12)',
-        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
         color: '#fff', fontSize: 10, fontWeight: 700, letterSpacing: 0.6,
       }}>
         {index + 1} / {total}
@@ -499,9 +509,8 @@ function FullPreviewCard({ item, index, total, onOpen }: {
           position: 'absolute', top: 'max(14px, calc(env(safe-area-inset-top, 0px) + 10px))', left: 14, zIndex: 5,
           display: 'inline-flex', alignItems: 'center', gap: 5,
           padding: '5px 10px', borderRadius: 999,
-          background: 'rgba(34,197,94,0.18)',
+          background: 'rgba(20,50,30,0.78)',
           border: '1px solid rgba(34,197,94,0.4)',
-          backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
           color: '#86efac', fontSize: 9, fontWeight: 800, letterSpacing: 1.2,
         }}>
           <SparkleIcon color="#86efac" size={9} /> READY
