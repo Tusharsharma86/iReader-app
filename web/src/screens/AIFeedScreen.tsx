@@ -687,7 +687,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
         overflow: 'hidden',
       }}>
         {story.imageUrl ? (
-          <img src={story.imageUrl} alt="" style={{
+          <img src={story.imageUrl} alt="" className="dd-hero-in" style={{
             width: '100%', height: '100%', objectFit: 'cover', display: 'block',
             filter: 'brightness(0.85)',
           }} />
@@ -890,6 +890,19 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
         .dd-stagger > *:nth-child(4) { animation-delay: 240ms; }
         .dd-stagger > *:nth-child(5) { animation-delay: 320ms; }
         .dd-stagger > *:nth-child(6) { animation-delay: 400ms; }
+        @keyframes ddHeroIn { from { transform: scale(1.10); opacity: 0.55; } to { transform: scale(1); opacity: 1; } }
+        .dd-hero-in { animation: ddHeroIn 0.55s cubic-bezier(0.22, 1, 0.36, 1); transform-origin: center 40%; }
+        @keyframes typingDot { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-5px); opacity: 1; } }
+        .typing-dots { display: inline-flex; gap: 4px; align-items: center; }
+        .typing-dots span { width: 6px; height: 6px; border-radius: 50%; background: #b994ff; animation: typingDot 1.1s ease-in-out infinite; }
+        .typing-dots span:nth-child(2) { animation-delay: 0.18s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.36s; }
+        @keyframes ddEntityPulse {
+          0% { background: transparent; }
+          30% { background: rgba(185, 148, 255, 0.32); }
+          100% { background: rgba(185, 148, 255, 0.08); }
+        }
+        .dd-entity-pulse { animation: ddEntityPulse 1.5s ease-out 0.5s both; border-radius: 3px; padding: 0 2px; }
       `}</style>
     </div>
   );
@@ -1018,12 +1031,8 @@ function QuestionItem({ question, story, narrative, accent }: {
           paddingTop: 12,
         }}>
           {loading ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#888', fontSize: 12 }}>
-              <div style={{
-                width: 14, height: 14, borderRadius: '50%',
-                border: '2px solid rgba(255,255,255,0.1)', borderTopColor: accent,
-                animation: 'aifspin 0.8s linear infinite',
-              }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#aaa', fontSize: 12 }}>
+              <span className="typing-dots"><span /><span /><span /></span>
               Thinking…
             </div>
           ) : error ? (
@@ -1189,6 +1198,6 @@ function highlightEntities(text: string, tags: string[], _color: string): React.
   const re = new RegExp(`\\b(${sorted.join('|')})\\b`, 'gi');
   const parts = text.split(re);
   return parts.map((p, i) => i % 2 === 1
-    ? <strong key={i} style={{ color: '#fff', fontWeight: 700 }}>{p}</strong>
+    ? <strong key={i} className="dd-entity-pulse" style={{ color: '#fff', fontWeight: 700 }}>{p}</strong>
     : <React.Fragment key={i}>{p}</React.Fragment>);
 }

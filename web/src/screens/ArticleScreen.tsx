@@ -50,7 +50,7 @@ function renderEntities(text: string, entities: string[]): React.ReactNode {
   const re = new RegExp(`\\b(${escaped.join('|')})\\b`, 'g');
   const parts = text.split(re);
   return parts.map((p, i) => i % 2 === 1
-    ? <strong key={i} style={{ color: '#fff', fontWeight: 700 }}>{p}</strong>
+    ? <strong key={i} className="entity-pulse" style={{ color: '#fff', fontWeight: 700 }}>{p}</strong>
     : <React.Fragment key={i}>{p}</React.Fragment>);
 }
 
@@ -372,6 +372,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
               src={params.image}
               alt=""
               onError={() => setHeroImageFailed(true)}
+              className="hero-zoom-in"
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
             />
             <div style={{ position: 'absolute', inset: 0, background: `${dominant}33` }} />
@@ -696,7 +697,17 @@ function Spinner() {
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', paddingBlock: 48 }}>
       <div style={{ width: 36, height: 36, border: '3px solid #333', borderTopColor: '#888', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <style>{`
+        @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes heroZoomIn { from { transform: scale(1.12); opacity: 0.4; } to { transform: scale(1); opacity: 1; } }
+        .hero-zoom-in { animation: heroZoomIn 0.6s cubic-bezier(0.22, 1, 0.36, 1); transform-origin: center 35%; }
+        @keyframes entityPulse {
+          0% { background: transparent; }
+          30% { background: rgba(185, 148, 255, 0.30); }
+          100% { background: rgba(185, 148, 255, 0.10); }
+        }
+        .entity-pulse { animation: entityPulse 1.4s ease-out 0.4s both; border-radius: 3px; padding: 0 2px; }
+      `}</style>
     </div>
   );
 }
