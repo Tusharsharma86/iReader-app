@@ -251,10 +251,7 @@ export default function AIFeedScreen() {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <Header topInset={insets.top} />
-        <View style={styles.centered}>
-          <ActivityIndicator color={VIOLET} />
-          <Text style={styles.loadingText}>Loading breaking news…</Text>
-        </View>
+        <AIFeedSkeleton />
       </View>
     );
   }
@@ -307,7 +304,7 @@ export default function AIFeedScreen() {
             </View>
           ) : exhausted ? (
             <View style={[styles.footerCard, { height: screenH }]}>
-              <Text style={{ fontSize: 32, marginBottom: 8 }}>🎉</Text>
+              <CelebratePop />
               <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700', marginBottom: 4 }}>You're all caught up</Text>
               <Text style={{ color: '#666', fontSize: 12 }}>Pull down to refresh.</Text>
             </View>
@@ -395,7 +392,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width, height, topInset, 
         </View>
       )}
 
-      <View style={styles.cardTextBlock}>
+      <CardTextBounce>
         <View style={styles.metaRow}>
           <Text style={[styles.metaText, { color: accent }]}>{sourceName.toUpperCase()}</Text>
           {extraSources > 0 && (
@@ -410,7 +407,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width, height, topInset, 
         {story.summary ? (
           <Text style={styles.cardSummary} numberOfLines={4}>{story.summary}</Text>
         ) : null}
-      </View>
+      </CardTextBounce>
 
       <Text style={styles.swipeHint}>↑ SWIPE FOR NEXT</Text>
     </Pressable>
@@ -776,7 +773,8 @@ function EntityBlock({ label, items, subtle }: { label: string; items: string[];
 
 function InlineLoader({ showColdHint }: { showColdHint: boolean }) {
   return (
-    <View style={overlayStyles.loaderCard}>
+    <View style={[overlayStyles.loaderCard, { overflow: 'hidden' }]}>
+      <SweepBar />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <TypingDots color={VIOLET} />
         <Text style={{ color: '#ccc', fontSize: 12, fontWeight: '500' }}>Distilling story…</Text>
@@ -786,6 +784,26 @@ function InlineLoader({ showColdHint }: { showColdHint: boolean }) {
           Backend warming up (Render free tier). First request after idle takes ~20s.
         </Text>
       )}
+    </View>
+  );
+}
+
+// Top-edge violet sweep bar — animated translateX of a gradient strip.
+function SweepBar() {
+  const x = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(Animated.timing(x, { toValue: 1, duration: 1600, useNativeDriver: true })).start();
+  }, [x]);
+  const tx = x.interpolate({ inputRange: [0, 1], outputRange: [-200, 400] });
+  return (
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, overflow: 'hidden' }}>
+      <Animated.View style={{ position: 'absolute', top: 0, height: 2, width: 200, transform: [{ translateX: tx }] }}>
+        <LinearGradient
+          colors={['transparent', VIOLET, 'transparent']}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+          style={{ flex: 1 }}
+        />
+      </Animated.View>
     </View>
   );
 }
@@ -832,6 +850,64 @@ function TypingDots({ color = VIOLET }: { color?: string }) {
       <Animated.View style={dot(d2)} />
       <Animated.View style={dot(d3)} />
     </View>
+  );
+}
+
+// Bounce-in for card text overlay — spring slide-up when card mounts.
+function CardTextBounce({ children }: { children: React.ReactNode }) {
+  const ty = useRef(new Animated.Value(24)).current;
+  const op = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(ty, { toValue: 0, friction: 5, tension: 80, useNativeDriver: true }),
+      Animated.timing(op, { toValue: 1, duration: 350, useNativeDriver: true }),
+    ]).start();
+  }, [ty, op]);
+  return (
+    <Animated.View style={[styles.cardTextBlock, { opacity: op, transform: [{ translateY: ty }] }]}>
+      {children}
+    </Animated.View>
+  );
+}
+
+// Initial-load shimmer skeleton — full-screen with violet typing dots overlay.
+function AIFeedSkeleton() {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(Animated.timing(v, { toValue: 1, duration: 1400, useNativeDriver: false })).start();
+  }, [v]);
+  const opacity = v.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.35, 0.7, 0.35] });
+  return (
+    <View style={{ flex: 1, paddingHorizontal: 22, justifyContent: 'flex-end', paddingBottom: 140 }}>
+      <Animated.View style={{ height: 14, width: '40%', borderRadius: 4, backgroundColor: '#1a1a22', opacity, marginBottom: 14 }} />
+      <Animated.View style={{ height: 28, width: '92%', borderRadius: 6, backgroundColor: '#22222c', opacity, marginBottom: 8 }} />
+      <Animated.View style={{ height: 28, width: '72%', borderRadius: 6, backgroundColor: '#22222c', opacity, marginBottom: 18 }} />
+      <Animated.View style={{ height: 12, width: '60%', borderRadius: 4, backgroundColor: '#16161c', opacity }} />
+      <View style={{ position: 'absolute', left: 0, right: 0, top: '45%', alignItems: 'center', gap: 12 }}>
+        <TypingDots color={VIOLET} />
+        <Text style={{ color: '#888', fontSize: 13, fontWeight: '500' }}>Loading breaking news…</Text>
+      </View>
+    </View>
+  );
+}
+
+// Spring-pop emoji for "all caught up".
+function CelebratePop() {
+  const s = useRef(new Animated.Value(0.4)).current;
+  const r = useRef(new Animated.Value(-20)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.sequence([
+        Animated.timing(s, { toValue: 1.25, duration: 420, useNativeDriver: true }),
+        Animated.spring(s, { toValue: 1, friction: 4, tension: 100, useNativeDriver: true }),
+      ]),
+      Animated.timing(r, { toValue: 0, duration: 600, useNativeDriver: true }),
+    ]).start();
+  }, [s, r]);
+  return (
+    <Animated.Text style={{ fontSize: 38, marginBottom: 8, transform: [{ scale: s }, { rotate: r.interpolate({ inputRange: [-20, 0], outputRange: ['-20deg', '0deg'] }) }] }}>
+      🎉
+    </Animated.Text>
   );
 }
 

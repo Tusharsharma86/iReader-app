@@ -545,6 +545,27 @@ function groupBySource(stories: Story[]): Section[] {
 
 const BG_REFRESH_THRESHOLD_MS = 10 * 60 * 1000; // 10 min inactive → silently refresh
 
+// Shimmer skeleton — gradient sweep across pulsing card placeholders.
+function FeedSkeleton() {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(Animated.timing(v, { toValue: 1, duration: 1400, useNativeDriver: false })).start();
+  }, [v]);
+  const opacity = v.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.35, 0.7, 0.35] });
+  return (
+    <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+      {[0, 1, 2, 3].map(i => (
+        <Animated.View key={i} style={{
+          height: 180, borderRadius: 20, marginBottom: 16,
+          backgroundColor: '#1A1A1A', opacity,
+        }} />
+      ))}
+      <Animated.View style={{ height: 14, width: '40%', borderRadius: 4, marginBottom: 10, backgroundColor: '#1A1A1A', opacity }} />
+      <Animated.View style={{ height: 12, width: '70%', borderRadius: 4, backgroundColor: '#161616', opacity }} />
+    </View>
+  );
+}
+
 export default function FeedScreen() {
   const { activeSources } = useSource();
   const { notifBreaking, notifSources, favSources, favTopics, showSports, showEntertainment, activeSubTopics, topicInterests } = useSettings();
@@ -1151,9 +1172,7 @@ export default function FeedScreen() {
         ListHeaderComponent={feedHeader}
         ListEmptyComponent={
           loading ? (
-            <View style={[styles.center, { height: 300 }]}>
-              <ActivityIndicator size="large" color="#4A90D9" />
-            </View>
+            <FeedSkeleton />
           ) : error ? (
             <View style={[styles.center, { height: 300 }]}>
               <Text style={styles.errorText}>Failed to load</Text>

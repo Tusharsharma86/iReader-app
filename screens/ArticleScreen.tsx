@@ -893,7 +893,7 @@ export default function ArticleScreen() {
                     onPress={() => setBiasModalVisible(true)}
                     style={{ marginLeft: 6, flexDirection: 'row', alignItems: 'center', gap: 3 }}
                   >
-                    <BiasDot bias={params.sourceBias as BiasRating} size={6} />
+                    <BiasDotPop><BiasDot bias={params.sourceBias as BiasRating} size={8} /></BiasDotPop>
                   </TouchableOpacity>
                 )}
                 {allSources.length > 1 && (
@@ -944,9 +944,10 @@ export default function ArticleScreen() {
               tab === '5 Ws'      ? 'list-outline' :
                                     'happy-outline';
             return (
-              <TouchableOpacity
+              <ArticleTabBtn
                 key={tab}
-                style={[styles.tabBtn, active && [styles.tabBtnActive, { backgroundColor: lighten(dominant, 0.05) }]]}
+                active={active}
+                bg={lighten(dominant, 0.05)}
                 onPress={() => setActiveTab(tab)}
               >
                 <Ionicons
@@ -955,7 +956,7 @@ export default function ArticleScreen() {
                   color={active ? '#FFFFFF' : 'rgba(255,255,255,0.4)'}
                 />
                 <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{tab}</Text>
-              </TouchableOpacity>
+              </ArticleTabBtn>
             );
           })}
         </View>
@@ -1217,6 +1218,32 @@ const RICH_RE = new RegExp(
   ].join('|'),
   'g',
 );
+
+function BiasDotPop({ children }: { children: React.ReactNode }) {
+  const s = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.sequence([
+      Animated.delay(300),
+      Animated.timing(s, { toValue: 1.4, duration: 220, useNativeDriver: true }),
+      Animated.spring(s, { toValue: 1, friction: 3.5, tension: 120, useNativeDriver: true }),
+    ]).start();
+  }, [s]);
+  return <Animated.View style={{ transform: [{ scale: s }] }}>{children}</Animated.View>;
+}
+
+function ArticleTabBtn({ active, bg, onPress, children }: { active: boolean; bg: string; onPress: () => void; children: React.ReactNode }) {
+  const s = useRef(new Animated.Value(active ? 1 : 0.9)).current;
+  useEffect(() => {
+    Animated.spring(s, { toValue: active ? 1 : 0.9, friction: 6, tension: 110, useNativeDriver: true }).start();
+  }, [active, s]);
+  return (
+    <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={[styles.tabBtn, active && [styles.tabBtnActive, { backgroundColor: bg }]]}>
+      <Animated.View style={{ transform: [{ scale: s }], flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+        {children}
+      </Animated.View>
+    </TouchableOpacity>
+  );
+}
 
 function BookmarkButton({ saved, bg, onPress }: { saved: boolean; bg: string; onPress: () => void }) {
   const scale = useRef(new Animated.Value(1)).current;
