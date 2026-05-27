@@ -18,6 +18,7 @@
     },
     "android": {
       "package": "com.tushar.ireaderpro2",
+      "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.RECEIVE_BOOT_COMPLETED",

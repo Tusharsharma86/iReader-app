@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "768711652340",
+    "project_id": "ireader-pro",
+    "storage_bucket": "ireader-pro.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:768711652340:android:0d4a64e7ab003d86293fa1",
+        "android_client_info": {
+          "package_name": "com.tushar.ireaderpro2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDGjmNBcsNgfhbgmBhUymqfb_ZryQ0aXyE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
