@@ -745,7 +745,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
         ) : stage === 'error' ? (
           <InlineError text={error || 'Failed'} />
         ) : data ? (
-          <>
+          <div className="dd-stagger" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {data.tldr.length > 0 && (
               <div style={{
                 background: 'rgba(15,15,22,0.5)',
@@ -878,9 +878,19 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
                 </div>
               </div>
             )}
-          </>
+          </div>
         ) : null}
       </div>
+      <style>{`
+        @keyframes ddFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+        .dd-stagger > * { animation: ddFadeIn 0.45s cubic-bezier(0.4, 0, 0.2, 1) both; }
+        .dd-stagger > *:nth-child(1) { animation-delay: 0ms; }
+        .dd-stagger > *:nth-child(2) { animation-delay: 80ms; }
+        .dd-stagger > *:nth-child(3) { animation-delay: 160ms; }
+        .dd-stagger > *:nth-child(4) { animation-delay: 240ms; }
+        .dd-stagger > *:nth-child(5) { animation-delay: 320ms; }
+        .dd-stagger > *:nth-child(6) { animation-delay: 400ms; }
+      `}</style>
     </div>
   );
 }

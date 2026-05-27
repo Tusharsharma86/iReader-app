@@ -108,14 +108,22 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
 
   const gradient = `linear-gradient(to bottom, transparent 0%, ${dominant}55 25%, ${dominant}CC 60%, ${dominant} 100%)`;
 
+  const [pressed, setPressed] = useState(false);
+
   return (
     <div
       onClick={handleClick}
+      onPointerDown={() => { setPressed(true); try { navigator.vibrate?.(8); } catch {} }}
+      onPointerUp={() => setPressed(false)}
+      onPointerLeave={() => setPressed(false)}
+      onPointerCancel={() => setPressed(false)}
       style={{
         width: cardWidth, height: CARD_HEIGHT, borderRadius: 20, overflow: 'hidden',
         position: 'relative', flexShrink: 0, cursor: 'pointer',
         boxShadow: `0 4px 20px ${dominant}66`,
         WebkitTapHighlightColor: 'transparent',
+        transform: pressed ? 'scale(0.97)' : 'scale(1)',
+        transition: 'transform 0.16s cubic-bezier(0.4, 0, 0.2, 1)',
       }}
     >
       {/* Background image or typographic fallback */}
@@ -201,13 +209,14 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
           {isTrending && !isBreakingBadge && <span style={{ fontSize: 12 }}>🔥</span>}
           {isOngoing && <span style={{ fontSize: 12 }}>📍</span>}
           <div style={{ flex: 1 }} />
-          <button onClick={e => { e.stopPropagation(); toggleSave(story); }}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: saved ? '#4A90D9' : 'rgba(255,255,255,0.7)', fontSize: 18, lineHeight: 1 }}>
-            {saved ? '🔖' : '🔖'}
-            <svg width="19" height="19" viewBox="0 0 24 24" fill={saved ? '#4A90D9' : 'none'} stroke={saved ? '#4A90D9' : 'rgba(255,255,255,0.7)'} strokeWidth="2" style={{ display: 'block' }}>
+          <button onClick={e => { e.stopPropagation(); try { navigator.vibrate?.(10); } catch {} toggleSave(story); }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: saved ? '#4A90D9' : 'rgba(255,255,255,0.7)', fontSize: 18, lineHeight: 1, WebkitTapHighlightColor: 'transparent' }}>
+            <svg key={saved ? 'on' : 'off'} width="19" height="19" viewBox="0 0 24 24" fill={saved ? '#4A90D9' : 'none'} stroke={saved ? '#4A90D9' : 'rgba(255,255,255,0.7)'} strokeWidth="2"
+              style={{ display: 'block', animation: saved ? 'bookPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none' }}>
               <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" />
             </svg>
           </button>
+          <style>{`@keyframes bookPop { 0% { transform: scale(0.7); } 60% { transform: scale(1.35); } 100% { transform: scale(1); } }`}</style>
         </div>
 
         {/* Headline */}

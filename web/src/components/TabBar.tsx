@@ -107,20 +107,24 @@ export function TabBar() {
           return (
             <button
               key={item.tab}
-              onClick={() => setTab(item.tab)}
+              onClick={() => { try { navigator.vibrate?.(6); } catch {} setTab(item.tab); }}
               style={{
                 background: 'none', border: 'none', cursor: 'pointer',
                 padding: '6px 14px',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
+                WebkitTapHighlightColor: 'transparent',
               }}
               aria-label={item.label}
             >
               <div
+                key={`${item.tab}-${active}`}
                 style={{
                   width: 36, height: 36, borderRadius: 18,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   background: active ? 'rgba(255,255,255,0.12)' : 'transparent',
-                  transition: 'all 0.2s',
+                  transform: active ? 'scale(1)' : 'scale(0.92)',
+                  transition: 'background 0.2s, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                  animation: active ? 'tabBounce 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none',
                 }}
               >
                 <TabIcon name={item.icon} active={active} />
@@ -128,6 +132,7 @@ export function TabBar() {
             </button>
           );
         })}
+        <style>{`@keyframes tabBounce { 0% { transform: scale(0.85); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }`}</style>
       </div>
     </div>
   );

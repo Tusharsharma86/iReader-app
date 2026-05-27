@@ -574,8 +574,17 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
 
       {/* Feed content */}
       {loading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 300 }}>
-          <div style={{ width: 40, height: 40, border: '3px solid #222', borderTopColor: '#4A90D9', borderRadius: 50, animation: 'spin 0.8s linear infinite' }} />
+        <div style={{ padding: '0 16px' }}>
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} className="skel-card" style={{
+              height: 180, borderRadius: 20, marginBottom: 16,
+              background: 'linear-gradient(90deg, #0E0E0E 0%, #1A1A1A 50%, #0E0E0E 100%)',
+              backgroundSize: '200% 100%',
+              animation: 'shimmer 1.4s ease-in-out infinite',
+            }} />
+          ))}
+          <div style={{ height: 14, width: '40%', borderRadius: 4, marginBottom: 10, background: '#1A1A1A', animation: 'shimmer 1.4s ease-in-out infinite' }} />
+          <div style={{ height: 12, width: '70%', borderRadius: 4, background: '#161616', animation: 'shimmer 1.4s ease-in-out infinite' }} />
         </div>
       ) : error ? (
         <div style={{ textAlign: 'center', padding: 40 }}>
@@ -591,7 +600,8 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
         </>
       )}
 
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }`}</style>
     </div>
   );
 }
