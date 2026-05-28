@@ -140,6 +140,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
   const defaultTab: Tab = BLOCKED_LONGFORM_SOURCES.includes(params.source ?? '') ? 'Summary' : 'Long Form';
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
   const [paragraphs, setParagraphs] = useState<string[]>([]);
+  const [contentBlocks, setContentBlocks] = useState<Array<{ type: string; text?: string; src?: string; alt?: string }> | null>(null);
   const [originalParagraphs, setOriginalParagraphs] = useState<string[]>([]);
   const [dedupedFlag, setDedupedFlag] = useState(false);
   const [dedupModalVisible, setDedupModalVisible] = useState(false);
@@ -189,6 +190,15 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
         const origRaw: string[] = (data.originalParagraphs ?? paras) as string[];
         setOriginalParagraphs((origRaw || []).filter(Boolean));
         setDedupedFlag(Boolean(data.deduped));
+        // Inline images from article body — dedupe against hero image.
+        if (Array.isArray(data.contentBlocks)) {
+          const hero = (params.image || '').trim();
+          const blocks = (data.contentBlocks as Array<{ type: string; text?: string; src?: string; alt?: string }>)
+            .filter(b => !(b.type === 'img' && hero && b.src && (b.src === hero || b.src.split('?')[0] === hero.split('?')[0])));
+          setContentBlocks(blocks);
+        } else {
+          setContentBlocks(null);
+        }
         setParagraphs(filtered);
         setEntities(extractEntities(filtered.join(' ')));
         const fullText = filtered.join(' ');
@@ -243,11 +253,34 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
         {paragraphsLoading ? <Spinner /> : (
           <>
             {paragraphsError && <div style={{ color: '#FF6B6B', fontSize: 12, marginBottom: 12 }}>Full text unavailable from this publisher</div>}
-            {paragraphs.map((p, i) => (
-              <p key={i} style={{ color: '#DDD', fontSize: fontSizePx, lineHeight: 1.7, marginBottom: 16 }}>
-                {renderParagraphHighlights(p, [...entities.people, ...entities.companies], accent)}
-              </p>
-            ))}
+            {contentBlocks && contentBlocks.length > 0 ? (
+              contentBlocks.map((b, i) => b.type === 'img' && b.src ? (
+                <figure key={i} style={{ margin: '20px -16px' }}>
+                  <img
+                    src={b.src}
+                    alt={b.alt ?? ''}
+                    loading="lazy"
+                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    style={{ width: '100%', height: 'auto', display: 'block', borderRadius: 4 }}
+                  />
+                  {b.alt && (
+                    <figcaption style={{ color: '#888', fontSize: 12, padding: '6px 16px 0', lineHeight: 1.4 }}>
+                      {b.alt}
+                    </figcaption>
+                  )}
+                </figure>
+              ) : b.type === 'p' && b.text ? (
+                <p key={i} style={{ color: '#DDD', fontSize: fontSizePx, lineHeight: 1.7, marginBottom: 16 }}>
+                  {renderParagraphHighlights(b.text, [...entities.people, ...entities.companies], accent)}
+                </p>
+              ) : null)
+            ) : (
+              paragraphs.map((p, i) => (
+                <p key={i} style={{ color: '#DDD', fontSize: fontSizePx, lineHeight: 1.7, marginBottom: 16 }}>
+                  {renderParagraphHighlights(p, [...entities.people, ...entities.companies], accent)}
+                </p>
+              ))
+            )}
             <a href={params.url} target="_blank" rel="noopener noreferrer"
               style={{ display: 'block', marginTop: 20, padding: '14px', borderRadius: 12, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', textAlign: 'center', color: '#fff', fontSize: 15, fontWeight: 700, textDecoration: 'none' }}>
               Read Full Article →
