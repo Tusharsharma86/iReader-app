@@ -38,13 +38,23 @@ export default function SettingsScreen() {
 
   // Build keyword list from starred topics. Falls back to a tech default if
   // user hasn't starred anything so the toggle still does something.
+  // Build keyword|Label pairs from starred topics so backend can label pushes
+  // with which of the user's topics matched (e.g. "📌 Electric Vehicles").
   const starredKeywords = React.useMemo(() => {
-    // Lazy require to avoid import cycle.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { INTEREST_TOPICS } = require('../utils/interestTopics') as { INTEREST_TOPICS: { id: string; keywords: string[] }[] };
+    const { INTEREST_TOPICS } = require('../utils/interestTopics') as { INTEREST_TOPICS: { id: string; label: string; keywords: string[] }[] };
     const starred = INTEREST_TOPICS.filter(t => (topicInterests[t.id] ?? 0) > 0);
-    const all = starred.flatMap(t => t.keywords);
-    return [...new Set(all)].slice(0, 30);
+    const pairs: string[] = [];
+    const seen = new Set<string>();
+    for (const t of starred) {
+      for (const kw of t.keywords) {
+        const key = kw.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        pairs.push(`${kw}|${t.label}`);
+      }
+    }
+    return pairs.slice(0, 30);
   }, [topicInterests]);
 
   const favCount = favSources.length + favTopics.length;
