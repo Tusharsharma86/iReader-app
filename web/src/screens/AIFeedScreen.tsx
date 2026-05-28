@@ -169,6 +169,13 @@ export default function AIFeedScreen() {
   const [exhausted, setExhausted] = useState(false);
   const [activeTopic, setActiveTopic] = useState<string>(TOPIC_QUEUE[0]);
   const { reportScroll } = useTabBarActions();
+
+  // Listen for AI Feed tab-tap → jump to first card.
+  useEffect(() => {
+    const handler = () => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    window.addEventListener('aifeed-scroll-top', handler);
+    return () => window.removeEventListener('aifeed-scroll-top', handler);
+  }, []);
   // useTabBarActions returns a stable reference — calling reportScroll on every
   // scroll tick no longer re-renders this component (only TabBar consumes visible).
   const scrollRef = useRef<HTMLDivElement>(null);

@@ -112,6 +112,10 @@ export function TabBar() {
                 try { navigator.vibrate?.(6); } catch {}
                 if (active && item.tab === 'feed') {
                   window.dispatchEvent(new Event('feed-scroll-top'));
+                } else if (item.tab === 'aifeed') {
+                  // Always jump to first card when AI Feed tab tapped (fresh or active).
+                  setTab(item.tab);
+                  window.dispatchEvent(new Event('aifeed-scroll-top'));
                 } else {
                   setTab(item.tab);
                 }

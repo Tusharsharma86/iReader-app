@@ -19,7 +19,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { type Story, getSourceDomain, domainFromUrl } from '../components/StoryCard';
 import { tabBarTranslateY, useTabBarAutoHide } from '../utils/tabBarAnim';
@@ -156,6 +156,17 @@ export default function AIFeedScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openedItem, setOpenedItemState] = useState<FeedItem | null>(null);
+  const flatListRef = useRef<FlatList<FeedItem> | null>(null);
+  const navigation = useNavigation();
+  // Tab-tap → scroll to first card (and close any open Deep Dive).
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const unsub = (navigation as any).getParent?.()?.addListener?.('tabPress', () => {
+      setOpenedItemState(null);
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    });
+    return unsub;
+  }, [navigation]);
   // Persist Deep Dive open state so Activity recreation (fold/unfold) restores it.
   const setOpenedItem = useCallback((item: FeedItem | null) => {
     setOpenedItemState(item);
@@ -322,6 +333,7 @@ export default function AIFeedScreen() {
         }}
       />
       <FlatList
+        ref={flatListRef}
         data={items}
         keyExtractor={it => it.primary.id}
         renderItem={renderCard}
