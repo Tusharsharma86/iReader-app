@@ -8,7 +8,7 @@ const GREEN = '#34D399';
 const AMBER = '#F59E0B';
 const CARD = { background: '#0E0E0E', border: '1px solid #1A1A1A', borderRadius: 14, padding: '14px 16px', marginBottom: 24 } as const;
 const USAGE_API = 'https://ireader.onrender.com/api/news/usage';
-const CONSOLE_URL = 'https://platform.claude.com/cost?range=mtd';
+const CONSOLE_URL = 'https://console.groq.com/dashboard/usage';
 
 interface ServerUsage {
   range: { start: string; end: string; key: string };
@@ -217,7 +217,7 @@ export default function UsageScreen() {
             border: '1px solid #1A1A1A', textDecoration: 'none',
           }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={BLUE} strokeWidth="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" /></svg>
-            <span style={{ flex: 1, color: BLUE, fontSize: 13, fontWeight: 700 }}>Open Anthropic Console</span>
+            <span style={{ flex: 1, color: BLUE, fontSize: 13, fontWeight: 700 }}>Open Groq Console (free tier)</span>
             <span style={{ color: '#444', fontSize: 16 }}>›</span>
           </a>
 
