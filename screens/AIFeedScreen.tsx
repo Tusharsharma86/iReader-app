@@ -328,7 +328,7 @@ export default function AIFeedScreen() {
       topInset={insets.top}
       onOpen={() => setOpenedItem(item)}
     />
-  ), [items.length, screenW, screenH, insets.top]);
+  ), [items.length, screenW, screenH, insets.top, setOpenedItem]);
 
   if (loading && items.length === 0) {
     return (
@@ -478,9 +478,12 @@ function Header({ topInset, counter, currentTopic, onPickTopic }: {
 }
 
 // ── Full-bleed card ─────────────────────────────────────────────────────────
-function FullPreviewCard({ item, index: _i, total: _t, width, height, topInset, onOpen }: {
+function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: _h, topInset, onOpen }: {
   item: FeedItem; index: number; total: number; width: number; height: number; topInset: number; onOpen: () => void;
 }) {
+  // Always read live window dimensions inside the card — props can lag on
+  // foldable resize (fold close especially).
+  const { width, height } = useWindowDimensions();
   const story = item.primary;
   const dominant = useMemo(() => getArticleColor(story.id || story.headline), [story.id, story.headline]);
   const accent = useMemo(() => lighten(dominant, 0.55), [dominant]);
@@ -498,7 +501,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width, height, topInset, 
   return (
     <Pressable
       onPress={onOpen}
-      style={({ pressed }) => ({ width, height, backgroundColor: dominant, transform: [{ scale: pressed ? 0.985 : 1 }] })}
+      style={({ pressed }) => ({ width, height, backgroundColor: dominant, overflow: 'hidden', transform: [{ scale: pressed ? 0.985 : 1 }] })}
     >
       {story.imageUrl ? (
         <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: heroScale }] }]}>
