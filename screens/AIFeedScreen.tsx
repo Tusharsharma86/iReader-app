@@ -1113,13 +1113,38 @@ function InlineError({ text }: { text: string }) {
 
 // ── Highlight entities inline ───────────────────────────────────────────────
 function renderHighlighted(text: string, tags: string[]): React.ReactNode[] {
-  if (!tags || tags.length === 0) return [text];
-  const escaped = tags.sort((a, b) => b.length - a.length).map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const re = new RegExp(`\\b(${escaped.join('|')})\\b`, 'gi');
-  const parts = text.split(re);
-  return parts.map((p, i) => i % 2 === 1
-    ? <EntityPulse key={i} text={p} />
-    : p);
+  // Strip + capture **bold** markdown emitted by the AI for entity emphasis.
+  const boldRe = /\*\*([^*]+)\*\*/g;
+  const segs: Array<{ text: string; bold: boolean }> = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = boldRe.exec(text)) !== null) {
+    if (m.index > last) segs.push({ text: text.slice(last, m.index), bold: false });
+    segs.push({ text: m[1], bold: true });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) segs.push({ text: text.slice(last), bold: false });
+  if (segs.length === 0) segs.push({ text, bold: false });
+
+  const escaped = tags && tags.length > 0
+    ? tags.sort((a, b) => b.length - a.length).map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    : [];
+  const re = escaped.length > 0 ? new RegExp(`\\b(${escaped.join('|')})\\b`, 'gi') : null;
+
+  const out: React.ReactNode[] = [];
+  segs.forEach((seg, si) => {
+    if (seg.bold) {
+      out.push(<EntityPulse key={`b${si}`} text={seg.text} />);
+      return;
+    }
+    if (!re) { out.push(seg.text); return; }
+    const parts = seg.text.split(re);
+    parts.forEach((p, i) => {
+      if (i % 2 === 1) out.push(<EntityPulse key={`t${si}-${i}`} text={p} />);
+      else out.push(p);
+    });
+  });
+  return out;
 }
 
 // Inline animated text — flashes a violet background once, then settles to a

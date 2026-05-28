@@ -1462,11 +1462,33 @@ function InlineError({ text }: { text: string }) {
 // Editorial-style entity bolding (Curious Cats reference): named entities
 // render in white bold within the surrounding paragraph rather than a colored tint.
 function highlightEntities(text: string, tags: string[], _color: string): React.ReactNode {
-  if (!tags || tags.length === 0) return text;
-  const sorted = [...tags].sort((a, b) => b.length - a.length).map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const re = new RegExp(`\\b(${sorted.join('|')})\\b`, 'gi');
-  const parts = text.split(re);
-  return parts.map((p, i) => i % 2 === 1
-    ? <strong key={i} className="dd-entity-pulse" style={{ color: '#fff', fontWeight: 700 }}>{p}</strong>
-    : <React.Fragment key={i}>{p}</React.Fragment>);
+  // First pass: strip and capture **bold** markdown from AI output.
+  const boldRe = /\*\*([^*]+)\*\*/g;
+  const segments: Array<{ text: string; bold: boolean }> = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = boldRe.exec(text)) !== null) {
+    if (m.index > last) segments.push({ text: text.slice(last, m.index), bold: false });
+    segments.push({ text: m[1], bold: true });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) segments.push({ text: text.slice(last), bold: false });
+  if (segments.length === 0) segments.push({ text, bold: false });
+
+  // Second pass: highlight known tags inside each non-bold segment.
+  const sorted = tags && tags.length > 0
+    ? [...tags].sort((a, b) => b.length - a.length).map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    : [];
+  const re = sorted.length > 0 ? new RegExp(`\\b(${sorted.join('|')})\\b`, 'gi') : null;
+
+  return segments.map((seg, si) => {
+    if (seg.bold) {
+      return <strong key={`b${si}`} className="dd-entity-pulse" style={{ color: '#fff', fontWeight: 700 }}>{seg.text}</strong>;
+    }
+    if (!re) return <React.Fragment key={`t${si}`}>{seg.text}</React.Fragment>;
+    const parts = seg.text.split(re);
+    return parts.map((p, i) => i % 2 === 1
+      ? <strong key={`t${si}-${i}`} className="dd-entity-pulse" style={{ color: '#fff', fontWeight: 700 }}>{p}</strong>
+      : <React.Fragment key={`t${si}-${i}`}>{p}</React.Fragment>);
+  });
 }
