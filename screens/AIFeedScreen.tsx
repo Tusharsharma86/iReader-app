@@ -228,8 +228,43 @@ export default function AIFeedScreen() {
   useEffect(() => {
     // Pre-warm Render
     fetch('https://ireader.onrender.com/api/news/sources').catch(() => {});
-    loadTopic(0, true);
-  }, [loadTopic]);
+    // Restore cached feed instantly so fold/unfold (Activity recreation) doesn't
+    // re-fetch and reset scroll. Cache up to 30 min old.
+    AsyncStorage.getItem('@aifeed_cache_v1').then(raw => {
+      if (!raw) { loadTopic(0, true); return; }
+      try {
+        const c = JSON.parse(raw) as { items: FeedItem[]; topicCursor: number; activeIdx: number; at: number };
+        if (Date.now() - c.at < 30 * 60_000 && Array.isArray(c.items) && c.items.length > 0) {
+          setItems(c.items);
+          setTopicCursor(c.topicCursor ?? 0);
+          setActiveIdx(c.activeIdx ?? 0);
+          setLoading(false);
+          // Restore scroll after FlatList renders.
+          setTimeout(() => flatListRef.current?.scrollToOffset({ offset: (c.activeIdx ?? 0) * screenH, animated: false }), 0);
+          return;
+        }
+      } catch {}
+      loadTopic(0, true);
+    }).catch(() => loadTopic(0, true));
+  }, [loadTopic, screenH]);
+
+  // After unfold (screenH changes) the FlatList remounts via key — restore
+  // the previously-viewed card so user stays on the same article.
+  useEffect(() => {
+    if (items.length === 0) return;
+    const t = setTimeout(() => {
+      flatListRef.current?.scrollToOffset({ offset: activeIdx * screenH, animated: false });
+    }, 50);
+    return () => clearTimeout(t);
+  }, [screenH, items.length]);
+
+  // Persist feed cache whenever items or activeIdx change.
+  useEffect(() => {
+    if (items.length === 0) return;
+    AsyncStorage.setItem('@aifeed_cache_v1', JSON.stringify({
+      items, topicCursor, activeIdx, at: Date.now(),
+    })).catch(() => {});
+  }, [items, topicCursor, activeIdx]);
 
   // PUSH-TAP DEEPLINK — re-check on every focus so taps work even when the
   // AIFeedScreen is already mounted (tab switch doesn't remount).
@@ -334,12 +369,15 @@ export default function AIFeedScreen() {
         }}
       />
       <FlatList
+        key={`${screenW}x${screenH}`}
         ref={flatListRef}
         data={items}
         keyExtractor={it => it.primary.id}
         renderItem={renderCard}
+        extraData={`${screenW}x${screenH}`}
         pagingEnabled
         snapToInterval={screenH}
+        getItemLayout={(_d, i) => ({ length: screenH, offset: screenH * i, index: i })}
         snapToAlignment="start"
         decelerationRate="fast"
         showsVerticalScrollIndicator={false}

@@ -58,6 +58,7 @@ function handleNotificationTap(data: any) {
     }
     navigationRef.navigate('Feed', {
       screen: 'Article',
+      initial: false,
       params: {
         id: String(a.id ?? ''),
         url: String(a.url ?? ''),
