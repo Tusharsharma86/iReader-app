@@ -186,11 +186,6 @@ export default function AIFeedScreen() {
         return !existingSigs.some(es => jaccard(sig, es) >= 0.6);
       });
       if (newOnes.length === 0 && !isInitial) {
-        if (topicIdx + 1 < TOPIC_QUEUE.length) {
-          setTopicCursor(topicIdx + 1);
-          loadTopic(topicIdx + 1, false);
-          return;
-        }
         setExhausted(true);
         return;
       }
@@ -237,13 +232,8 @@ export default function AIFeedScreen() {
 
   const onEndReached = useCallback(() => {
     if (loadingMore || exhausted) return;
-    const next = topicCursor + 1;
-    if (next < TOPIC_QUEUE.length) {
-      setTopicCursor(next);
-      loadTopic(next, false);
-    } else {
-      setExhausted(true);
-    }
+    // Stay within the currently-selected topic — no auto-cycle into others.
+    loadTopic(topicCursor, false);
   }, [loadingMore, exhausted, topicCursor, loadTopic]);
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;

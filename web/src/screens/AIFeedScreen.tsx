@@ -196,12 +196,7 @@ export default function AIFeedScreen() {
       });
 
       if (newOnes.length === 0 && !isInitial) {
-        // This topic added nothing new — try the next one immediately
-        if (topicIdx + 1 < TOPIC_QUEUE.length) {
-          setTopicCursor(topicIdx + 1);
-          loadTopic(topicIdx + 1, false);
-          return;
-        }
+        // User picked a specific topic — don't auto-cycle into others.
         setExhausted(true);
         return;
       }
@@ -275,13 +270,8 @@ export default function AIFeedScreen() {
     lastScrollCheck.current = now;
     const remaining = el.scrollHeight - (el.scrollTop + el.clientHeight);
     if (remaining < el.clientHeight * 3) {
-      const next = topicCursor + 1;
-      if (next < TOPIC_QUEUE.length) {
-        setTopicCursor(next);
-        loadTopic(next, false);
-      } else {
-        setExhausted(true);
-      }
+      // Stay within the user's selected topic — no auto-cycle into others.
+      loadTopic(topicCursor, false);
     }
   }, [reportScroll, loadingMore, exhausted, topicCursor, loadTopic]);
 
