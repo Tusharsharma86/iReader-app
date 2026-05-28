@@ -4,96 +4,133 @@ import { getUsageStats, UsageStats, DayData } from '../utils/usageTracker';
 
 const BLUE = '#4A90D9';
 const PURPLE = '#8B5CF6';
-const GREEN = '#34D399';
+const GREEN = '#10B981';
 const AMBER = '#F59E0B';
-const CARD = { background: '#0E0E0E', border: '1px solid #1A1A1A', borderRadius: 14, padding: '14px 16px', marginBottom: 24 } as const;
-const USAGE_API = 'https://ireader.onrender.com/api/news/usage';
-const CONSOLE_URL = 'https://console.groq.com/dashboard/usage';
+const PINK = '#EC4899';
+const TEAL = '#14B8A6';
 
-interface ServerUsage {
-  range: { start: string; end: string; key: string };
-  totals: { cost: number; calls: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreateTokens: number };
-  days: Array<{ day: string; cost: number; calls: number }>;
-  byModel: Record<string, { cost: number; calls: number }>;
-  byFeature: Record<string, { cost: number; calls: number }>;
-  byApp: Record<string, { cost: number; calls: number }>;
-}
+const CATEGORY_COLORS: Record<string, string> = {
+  Tech: BLUE,
+  Markets: GREEN,
+  World: PURPLE,
+  India: AMBER,
+  News: TEAL,
+};
 
-type Range = 'mtd' | '7d' | '30d';
+const TOPIC_COLORS = [BLUE, PURPLE, GREEN, AMBER, PINK, TEAL, '#F97316', '#6366F1'];
 
-function fmtTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
+// ── Activity chart ────────────────────────────────────────────────────────────
 
-// ── Bar chart ────────────────────────────────────────────────────────────────
-
-function BarChart({ days }: { days: DayData[] }) {
-  const maxA = Math.max(...days.map(d => d.articles), 1);
-  const maxAi = Math.max(...days.map(d => d.aiTotal), 1);
-  const maxVal = Math.max(maxA, maxAi);
-  const BAR_H = 90;
+function ActivityChart({ days }: { days: DayData[] }) {
+  const maxVal = Math.max(...days.map(d => d.articles), 1);
+  const BAR_H = 70;
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
-        {[{ color: BLUE, label: 'Articles' }, { color: PURPLE, label: 'AI uses' }].map(l => (
-          <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 8, height: 8, borderRadius: 4, background: l.color }} />
-            <span style={{ color: '#666', fontSize: 11, fontWeight: 600 }}>{l.label}</span>
-          </div>
-        ))}
-      </div>
       <div style={{ display: 'flex', alignItems: 'flex-end', height: BAR_H + 4, gap: 0 }}>
         {days.map((d, i) => (
-          <div key={i} style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: 3 }}>
-            <div style={{ width: 9, height: Math.max(3, (d.articles / maxVal) * BAR_H), background: d.articles > 0 ? BLUE : '#1A1A1A', borderRadius: '3px 3px 0 0' }} />
-            <div style={{ width: 9, height: Math.max(3, (d.aiTotal / maxVal) * BAR_H), background: d.aiTotal > 0 ? PURPLE : '#1A1A1A', borderRadius: '3px 3px 0 0' }} />
+          <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
+            <span style={{ color: d.articles > 0 ? BLUE : 'transparent', fontSize: 9, fontWeight: 700 }}>{d.articles > 0 ? d.articles : ''}</span>
+            <div style={{
+              width: '60%',
+              height: Math.max(4, (d.articles / maxVal) * BAR_H),
+              background: d.articles > 0 ? `linear-gradient(to top, ${BLUE}88, ${BLUE})` : '#1A1A2E',
+              borderRadius: '4px 4px 0 0',
+            }} />
           </div>
         ))}
       </div>
       <div style={{ display: 'flex', marginTop: 8 }}>
         {days.map((d, i) => (
-          <div key={i} style={{ flex: 1, textAlign: 'center', color: '#555', fontSize: 10, fontWeight: 600 }}>{d.label}</div>
+          <div key={i} style={{ flex: 1, textAlign: 'center', color: '#3A3A55', fontSize: 10, fontWeight: 700 }}>{d.label}</div>
         ))}
       </div>
     </div>
   );
 }
 
-// ── Progress bar rows ─────────────────────────────────────────────────────────
+// ── Progress bar row ──────────────────────────────────────────────────────────
 
-function ProgressRow({ label, value, total, color, labelWidth = 70 }: { label: string; value: number; total: number; color: string; labelWidth?: number }) {
-  const pct = total > 0 ? (value / total) * 100 : 0;
+function ProgressRow({ label, value, maxVal, color, rank }: {
+  label: string; value: number; maxVal: number; color: string; rank?: number;
+}) {
+  const pct = maxVal > 0 ? (value / maxVal) * 100 : 0;
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0' }}>
-      <span style={{ color: '#888', fontSize: 13, width: labelWidth, flexShrink: 0 }}>{label}</span>
-      <div style={{ flex: 1, height: 6, background: '#1A1A1A', borderRadius: 3, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${Math.max(pct, value > 0 ? 4 : 0)}%`, background: color, borderRadius: 3 }} />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0' }}>
+      {rank !== undefined && (
+        <div style={{
+          width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+          background: `${color}22`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 10, fontWeight: 800, color,
+        }}>{rank}</div>
+      )}
+      <span style={{ color: '#888', fontSize: 13, minWidth: 80, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+      <div style={{ width: 100, height: 5, background: '#1A1A2E', borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
+        <div style={{
+          height: '100%',
+          width: `${Math.max(pct, value > 0 ? 6 : 0)}%`,
+          background: `linear-gradient(90deg, ${color}66, ${color})`,
+          borderRadius: 99,
+        }} />
       </div>
-      <span style={{ color: '#555', fontSize: 13, width: 28, textAlign: 'right', flexShrink: 0 }}>{value}</span>
+      <span style={{ color: color, fontSize: 13, fontWeight: 800, width: 28, textAlign: 'right', flexShrink: 0 }}>{value}</span>
     </div>
   );
 }
 
-// ── Stat tile ─────────────────────────────────────────────────────────────────
+// ── Big stat ──────────────────────────────────────────────────────────────────
 
-function StatTile({ value, label, color }: { value: string; label: string; color: string }) {
+function BigStat({ value, label, sub, color }: { value: string | number; label: string; sub?: string; color: string }) {
   return (
-    <div style={{ flex: 1, background: '#0E0E0E', borderRadius: 12, border: `1px solid ${color}33`, padding: '14px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-      <span style={{ color, fontSize: 22, fontWeight: 800, letterSpacing: -0.5 }}>{value}</span>
-      <span style={{ color: '#555', fontSize: 10, fontWeight: 600, textAlign: 'center' }}>{label}</span>
+    <div style={{
+      flex: 1, borderRadius: 16,
+      background: 'linear-gradient(145deg, #0E0E1C, #0B0B16)',
+      border: `1px solid ${color}22`,
+      padding: '16px 10px 12px',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+      boxShadow: `0 4px 20px ${color}0A`,
+    }}>
+      <span style={{ color, fontSize: 28, fontWeight: 900, letterSpacing: -1, lineHeight: 1 }}>{value}</span>
+      <span style={{ color: '#AAA', fontSize: 11, fontWeight: 700, textAlign: 'center' }}>{label}</span>
+      {sub && <span style={{ color: '#3A3A5A', fontSize: 10, textAlign: 'center' }}>{sub}</span>}
     </div>
   );
 }
 
-function SectionHeader({ title }: { title: string }) {
-  return <div style={{ color: '#444', fontSize: 11, fontWeight: 700, letterSpacing: 1.5, padding: '0 20px 10px' }}>{title}</div>;
+// ── Section label ─────────────────────────────────────────────────────────────
+
+function SectionLabel({ text, accent }: { text: string; accent: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 20px 10px' }}>
+      <div style={{ width: 3, height: 13, borderRadius: 2, background: accent }} />
+      <span style={{ color: '#3A3A5A', fontSize: 10, fontWeight: 800, letterSpacing: 1.8 }}>{text}</span>
+    </div>
+  );
 }
 
 function Divider() {
-  return <div style={{ height: 1, background: '#1A1A1A' }} />;
+  return <div style={{ height: 1, background: '#10101E' }} />;
+}
+
+function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <div style={{
+      margin: '0 16px 22px', borderRadius: 18,
+      background: 'linear-gradient(145deg, #0E0E1A, #0A0A14)',
+      border: '1px solid #12122A', padding: '4px 16px',
+      ...style,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+// ── Empty state ───────────────────────────────────────────────────────────────
+
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div style={{ color: '#2A2A45', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>{text}</div>
+  );
 }
 
 // ── Main screen ───────────────────────────────────────────────────────────────
@@ -101,199 +138,149 @@ function Divider() {
 export default function UsageScreen() {
   const { goBack } = useRouter();
   const [stats, setStats] = useState<UsageStats | null>(null);
-  const [range, setRange] = useState<Range>('mtd');
-  const [serverUsage, setServerUsage] = useState<ServerUsage | null>(null);
-  const [usageLoading, setUsageLoading] = useState(true);
-  const [usageError, setUsageError] = useState<string | null>(null);
 
   useEffect(() => { setStats(getUsageStats()); }, []);
 
-  useEffect(() => {
-    setUsageLoading(true);
-    setUsageError(null);
-    fetch(`${USAGE_API}?range=${range}`)
-      .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
-      .then((d: ServerUsage) => setServerUsage(d))
-      .catch(e => setUsageError(String(e)))
-      .finally(() => setUsageLoading(false));
-  }, [range]);
-
-  const fmt$ = (n: number) => n === 0 ? '$0.00' : n < 0.10 ? `$${n.toFixed(3)}` : `$${n.toFixed(2)}`;
-
   return (
-    <div style={{ height: '100%', overflowY: 'auto', background: '#000', WebkitOverflowScrolling: 'touch' }}>
+    <div style={{ height: '100%', overflowY: 'auto', background: '#080810', WebkitOverflowScrolling: 'touch' }}>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg) } }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: translateY(0) } }
+      `}</style>
+
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px 24px', paddingTop: 'calc(16px + env(safe-area-inset-top, 0px))' }}>
-        <button onClick={goBack} style={{ width: 36, height: 36, borderRadius: 10, background: '#0E0E0E', border: '1px solid #1A1A1A', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#DDD" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '16px 20px 20px',
+        paddingTop: 'calc(16px + env(safe-area-inset-top, 0px))',
+      }}>
+        <button onClick={goBack} style={{
+          width: 36, height: 36, borderRadius: 10, background: '#0E0E1A',
+          border: '1px solid #1A1A2E', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
         </button>
-        <span style={{ color: '#fff', fontSize: 24, fontWeight: 800 }}>My Stats</span>
+        <div>
+          <div style={{ color: '#FFF', fontSize: 22, fontWeight: 800, letterSpacing: -0.5 }}>Reading Stats</div>
+          <div style={{ color: '#3A3A5A', fontSize: 11, fontWeight: 600, marginTop: 1 }}>Articles · Categories · Topics</div>
+        </div>
       </div>
 
       {!stats ? (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
-          <div style={{ width: 32, height: 32, border: '3px solid #1A1A1A', borderTopColor: BLUE, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+          <div style={{ width: 28, height: 28, border: `3px solid #1E1E2E`, borderTopColor: BLUE, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
         </div>
       ) : (
-        <>
-          {/* ACTUAL CLAUDE COST (server aggregate) */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px 10px' }}>
-            <span style={{ color: '#444', fontSize: 11, fontWeight: 700, letterSpacing: 1.5 }}>ACTUAL CLAUDE COST</span>
-            <div style={{ display: 'flex', gap: 4, background: '#0E0E0E', border: '1px solid #1A1A1A', borderRadius: 999, padding: 3 }}>
-              {(['mtd','7d','30d'] as Range[]).map(r => (
-                <button key={r} onClick={() => setRange(r)} style={{
-                  padding: '4px 10px', borderRadius: 999, border: 'none', cursor: 'pointer',
-                  background: range === r ? GREEN + '22' : 'transparent',
-                  color: range === r ? GREEN : '#555',
-                  fontSize: 9, fontWeight: 800, letterSpacing: 1.2,
-                }}>
-                  {r === 'mtd' ? 'MONTH' : r.toUpperCase()}
-                </button>
+        <div style={{ animation: 'fadeUp 0.3s ease' }}>
+
+          {/* ── ALL TIME hero ── */}
+          <div style={{
+            margin: '0 16px 20px', borderRadius: 20,
+            background: 'linear-gradient(135deg, #0E0E1E 0%, #111128 100%)',
+            border: '1px solid #1A1A35',
+            padding: '20px',
+          }}>
+            <div style={{ color: '#3A3A5A', fontSize: 10, fontWeight: 800, letterSpacing: 1.8, marginBottom: 12 }}>ALL TIME</div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, marginBottom: 4 }}>
+              <span style={{ color: BLUE, fontSize: 52, fontWeight: 900, letterSpacing: -3, lineHeight: 1 }}>{stats.allTime.articles}</span>
+              <span style={{ color: '#555', fontSize: 16, fontWeight: 600, marginBottom: 6 }}>articles read</span>
+            </div>
+            <div style={{ display: 'flex', gap: 20, marginTop: 16 }}>
+              {[
+                { label: 'TODAY', value: stats.today.articles, color: GREEN },
+                { label: 'THIS WEEK', value: stats.week.articles, color: PURPLE },
+                { label: 'THIS MONTH', value: stats.month.articles, color: AMBER },
+              ].map(({ label, value, color }) => (
+                <div key={label}>
+                  <div style={{ color, fontSize: 20, fontWeight: 800, letterSpacing: -0.5 }}>{value}</div>
+                  <div style={{ color: '#2A2A45', fontSize: 9, fontWeight: 700, letterSpacing: 1.2, marginTop: 2 }}>{label}</div>
+                </div>
               ))}
             </div>
           </div>
-          <div style={{ ...CARD, margin: '0 16px 12px' }}>
-            {usageLoading ? (
-              <div style={{ textAlign: 'center', padding: 16 }}>
-                <div style={{ width: 24, height: 24, border: '3px solid #222', borderTopColor: GREEN, borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
-              </div>
-            ) : usageError ? (
-              <div style={{ color: '#444', fontSize: 14, textAlign: 'center', padding: '16px 0' }}>Could not load cost: {usageError}</div>
-            ) : !serverUsage ? (
-              <div style={{ color: '#444', fontSize: 14, textAlign: 'center', padding: '16px 0' }}>No data.</div>
+
+          {/* ── ACTIVITY CHART ── */}
+          <SectionLabel text="LAST 7 DAYS" accent={BLUE} />
+          <Card style={{ padding: '16px' }}>
+            <ActivityChart days={stats.last7Days} />
+          </Card>
+
+          {/* ── CATEGORIES ── */}
+          <SectionLabel text="TOP CATEGORIES" accent={PURPLE} />
+          <Card>
+            {stats.topCategories.length === 0 ? (
+              <EmptyState text="Read articles to see your top categories." />
             ) : (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '6px 0' }}>
-                  <span style={{ color: GREEN, fontSize: 36, fontWeight: 800, letterSpacing: -1 }}>
-                    ${serverUsage.totals.cost.toFixed(2)}
-                  </span>
-                  <div>
-                    <div style={{ color: '#DDD', fontSize: 14, fontWeight: 700 }}>{serverUsage.totals.calls} calls</div>
-                    <div style={{ color: '#555', fontSize: 10, fontWeight: 600, marginTop: 2 }}>
-                      {serverUsage.range.start} → {serverUsage.range.end}
-                    </div>
-                  </div>
-                </div>
-                <Divider />
-                <div style={{ display: 'flex', padding: '12px 0' }}>
-                  {[
-                    ['INPUT TOK', fmtTokens(serverUsage.totals.inputTokens)],
-                    ['OUTPUT TOK', fmtTokens(serverUsage.totals.outputTokens)],
-                    ['CACHE READ', fmtTokens(serverUsage.totals.cacheReadTokens)],
-                  ].map(([label, value]) => (
-                    <div key={label} style={{ flex: 1, textAlign: 'center' }}>
-                      <div style={{ color: '#DDD', fontSize: 14, fontWeight: 700 }}>{value}</div>
-                      <div style={{ color: '#555', fontSize: 9, fontWeight: 700, letterSpacing: 1.1, marginTop: 2 }}>{label}</div>
-                    </div>
-                  ))}
-                </div>
-                {Object.keys(serverUsage.byModel).length > 0 && (
-                  <>
-                    <Divider />
-                    {Object.entries(serverUsage.byModel)
-                      .sort((a, b) => b[1].cost - a[1].cost)
-                      .slice(0, 3)
-                      .map(([model, v]) => (
-                        <div key={model} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0' }}>
-                          <span style={{ flex: 1, color: '#BBB', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {model.replace(/^claude-/, '').replace(/-\d{8}$/, '')}
-                          </span>
-                          <span style={{ color: GREEN, fontSize: 13, fontWeight: 700 }}>${v.cost.toFixed(2)}</span>
-                          <span style={{ color: '#555', fontSize: 11, width: 36, textAlign: 'right' }}>{v.calls}</span>
-                        </div>
-                      ))}
-                  </>
-                )}
-              </>
+              stats.topCategories.map((cat, i) => (
+                <React.Fragment key={cat.name}>
+                  {i > 0 && <Divider />}
+                  <ProgressRow
+                    label={cat.name}
+                    value={cat.count}
+                    maxVal={stats.topCategories[0].count}
+                    color={CATEGORY_COLORS[cat.name] ?? PURPLE}
+                    rank={i + 1}
+                  />
+                </React.Fragment>
+              ))
             )}
-          </div>
+          </Card>
 
-          {/* Open live console dashboard */}
-          <a href={CONSOLE_URL} target="_blank" rel="noopener noreferrer" style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            margin: '0 16px 24px', padding: '14px 16px',
-            borderRadius: 12, background: '#0E0E0E',
-            border: '1px solid #1A1A1A', textDecoration: 'none',
-          }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={BLUE} strokeWidth="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" /></svg>
-            <span style={{ flex: 1, color: BLUE, fontSize: 13, fontWeight: 700 }}>Open Groq Console (free tier)</span>
-            <span style={{ color: '#444', fontSize: 16 }}>›</span>
-          </a>
-
-          {/* TODAY */}
-          <SectionHeader title="TODAY" />
-          <div style={{ display: 'flex', gap: 8, margin: '0 16px 24px' }}>
-            <StatTile value={String(stats.today.articles)} label="Articles" color={BLUE} />
-            <StatTile value={String(stats.today.ai.total)} label="AI Uses" color={PURPLE} />
-            <StatTile value={fmt$(stats.today.ai.total * stats.costPerAiCall)} label="Est. Cost" color={GREEN} />
-          </div>
-
-          {/* LAST 7 DAYS CHART */}
-          <SectionHeader title="LAST 7 DAYS" />
-          <div style={{ ...CARD, margin: '0 16px 24px' }}>
-            <BarChart days={stats.last7Days} />
-          </div>
-
-          {/* THIS WEEK */}
-          <SectionHeader title="THIS WEEK" />
-          <div style={{ display: 'flex', gap: 8, margin: '0 16px 24px' }}>
-            <StatTile value={String(stats.week.articles)} label="Articles" color={BLUE} />
-            <StatTile value={String(stats.week.ai.total)} label="AI Uses" color={PURPLE} />
-            <StatTile value={fmt$(stats.week.ai.total * stats.costPerAiCall)} label="Est. Cost" color={GREEN} />
-          </div>
-
-          {/* THIS MONTH */}
-          <SectionHeader title="THIS MONTH" />
-          <div style={{ display: 'flex', gap: 8, margin: '0 16px 24px' }}>
-            <StatTile value={String(stats.month.articles)} label="Articles" color={BLUE} />
-            <StatTile value={String(stats.month.ai.total)} label="AI Uses" color={PURPLE} />
-            <StatTile value={fmt$(stats.month.ai.total * stats.costPerAiCall)} label="Est. Cost" color={GREEN} />
-          </div>
-
-          {/* AI USAGE BREAKDOWN */}
-          <SectionHeader title="AI USAGE BREAKDOWN" />
-          <div style={{ ...CARD, margin: '0 16px 24px' }}>
-            {stats.allTime.ai.total === 0 ? (
-              <div style={{ color: '#444', fontSize: 14, textAlign: 'center', padding: '16px 0' }}>No AI features used yet.</div>
+          {/* ── TOPICS ── */}
+          <SectionLabel text="TOP TOPICS" accent={TEAL} />
+          <Card>
+            {stats.topTopics.length === 0 ? (
+              <EmptyState text="Read articles to see your top topics." />
             ) : (
-              <>
-                <ProgressRow label="Summary" value={stats.allTime.ai.summary} total={stats.allTime.ai.total} color={PURPLE} />
-                <Divider />
-                <ProgressRow label="5 Ws" value={stats.allTime.ai.fiveWs} total={stats.allTime.ai.total} color={AMBER} />
-                <Divider />
-                <ProgressRow label="ELI5" value={stats.allTime.ai.eli5} total={stats.allTime.ai.total} color={GREEN} />
-              </>
+              stats.topTopics.map((topic, i) => (
+                <React.Fragment key={topic.name}>
+                  {i > 0 && <Divider />}
+                  <ProgressRow
+                    label={topic.name}
+                    value={topic.count}
+                    maxVal={stats.topTopics[0].count}
+                    color={TOPIC_COLORS[i % TOPIC_COLORS.length]}
+                    rank={i + 1}
+                  />
+                </React.Fragment>
+              ))
             )}
-          </div>
+          </Card>
 
-          {/* READING MOST */}
-          <SectionHeader title="READING MOST" />
-          <div style={{ ...CARD, margin: '0 16px 24px' }}>
+          {/* ── TOP SOURCES ── */}
+          <SectionLabel text="TOP SOURCES" accent={GREEN} />
+          <Card>
             {stats.topSources.length === 0 ? (
-              <div style={{ color: '#444', fontSize: 14, textAlign: 'center', padding: '16px 0' }}>Start reading to see your top sources.</div>
+              <EmptyState text="Start reading to see your top sources." />
             ) : (
               stats.topSources.map((src, i) => (
                 <React.Fragment key={src.name}>
                   {i > 0 && <Divider />}
-                  <ProgressRow label={src.name} value={src.count} total={stats.topSources[0].count} color={BLUE} labelWidth={110} />
+                  <ProgressRow
+                    label={src.name}
+                    value={src.count}
+                    maxVal={stats.topSources[0].count}
+                    color={TOPIC_COLORS[i % TOPIC_COLORS.length]}
+                    rank={i + 1}
+                  />
                 </React.Fragment>
               ))
             )}
+          </Card>
+
+          {/* ── PERIOD BREAKDOWN ── */}
+          <SectionLabel text="BY PERIOD" accent={AMBER} />
+          <div style={{ display: 'flex', gap: 8, margin: '0 16px 22px' }}>
+            <BigStat value={stats.today.articles} label="Today" color={GREEN} />
+            <BigStat value={stats.week.articles} label="Week" color={PURPLE} />
+            <BigStat value={stats.month.articles} label="Month" color={AMBER} />
           </div>
 
-          {/* ALL TIME */}
-          <SectionHeader title="ALL TIME" />
-          <div style={{ display: 'flex', gap: 8, margin: '0 16px 24px' }}>
-            <StatTile value={String(stats.allTime.articles)} label="Articles Read" color={BLUE} />
-            <StatTile value={String(stats.allTime.ai.total)} label="AI Requests" color={PURPLE} />
-            <StatTile value={fmt$(stats.allTime.ai.total * stats.costPerAiCall)} label="Total Est." color={AMBER} />
+          <div style={{ color: '#1A1A30', fontSize: 11, textAlign: 'center', padding: '4px 24px 56px', lineHeight: 1.6 }}>
+            Stats stored locally · last 30 days
           </div>
-
-          <div style={{ color: '#333', fontSize: 11, textAlign: 'center', padding: '0 24px 48px', lineHeight: 1.5 }}>
-            Est. cost ~$0.016–0.018 per AI request (Claude Sonnet: ~3k input + ~500 output tokens).
-          </div>
-        </>
+        </div>
       )}
     </div>
   );

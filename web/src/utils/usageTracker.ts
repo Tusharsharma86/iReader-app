@@ -1,11 +1,12 @@
 const STORAGE_KEY = '@ireader_usage_v1';
 const KEEP_DAYS = 30;
-const COST_PER_AI_CALL = 0.018;
 
 interface DayStats {
   articles: number;
   ai: { summary: number; fiveWs: number; eli5: number };
   sources: Record<string, number>;
+  categories: Record<string, number>;
+  topics: Record<string, number>;
 }
 
 type UsageData = Record<string, DayStats>;
@@ -15,7 +16,7 @@ function dateKey(d: Date = new Date()): string {
 }
 
 function emptyDay(): DayStats {
-  return { articles: 0, ai: { summary: 0, fiveWs: 0, eli5: 0 }, sources: {} };
+  return { articles: 0, ai: { summary: 0, fiveWs: 0, eli5: 0 }, sources: {}, categories: {}, topics: {} };
 }
 
 function loadData(): UsageData {
@@ -31,12 +32,16 @@ function saveData(data: UsageData): void {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {}
 }
 
-export function trackArticleRead(source: string): void {
+export function trackArticleRead(source: string, category?: string, topic?: string): void {
   const data = loadData();
   const key = dateKey();
   if (!data[key]) data[key] = emptyDay();
+  if (!data[key].categories) data[key].categories = {};
+  if (!data[key].topics) data[key].topics = {};
   data[key].articles++;
   if (source) data[key].sources[source] = (data[key].sources[source] ?? 0) + 1;
+  if (category) data[key].categories[category] = (data[key].categories[category] ?? 0) + 1;
+  if (topic) data[key].topics[topic] = (data[key].topics[topic] ?? 0) + 1;
   saveData(data);
 }
 
@@ -69,6 +74,8 @@ export interface UsageStats {
   month: { articles: number; ai: AiBreakdown };
   allTime: { articles: number; ai: AiBreakdown };
   topSources: { name: string; count: number }[];
+  topCategories: { name: string; count: number }[];
+  topTopics: { name: string; count: number }[];
   costPerAiCall: number;
 }
 
@@ -83,6 +90,16 @@ function addAi(a: AiBreakdown, b: AiBreakdown): AiBreakdown {
 
 const ZERO_AI: AiBreakdown = { summary: 0, fiveWs: 0, eli5: 0, total: 0 };
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+const TOPIC_LABELS: Record<string, string> = {
+  'myspace': 'My Space',
+  'breaking': 'Breaking',
+  'technology': 'Technology',
+  'india-politics': 'India Politics',
+  'geopolitics': 'Geopolitics',
+  'markets': 'Markets',
+  'business': 'Business',
+};
 
 export function getUsageStats(): UsageStats {
   const data = loadData();
@@ -117,16 +134,22 @@ export function getUsageStats(): UsageStats {
     { articles: 0, ai: { ...ZERO_AI } },
   );
 
-  const sourceMap: Record<string, number> = {};
-  for (const day of Object.values(data)) {
-    for (const [src, cnt] of Object.entries(day.sources)) {
-      sourceMap[src] = (sourceMap[src] ?? 0) + cnt;
+  function buildRanking(extractor: (d: DayStats) => Record<string, number>, limit: number, labelMap?: Record<string, string>) {
+    const map: Record<string, number> = {};
+    for (const day of Object.values(data)) {
+      for (const [k, cnt] of Object.entries(extractor(day) ?? {})) {
+        map[k] = (map[k] ?? 0) + cnt;
+      }
     }
+    return Object.entries(map)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([name, count]) => ({ name: labelMap?.[name] ?? name, count }));
   }
-  const topSources = Object.entries(sourceMap)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
-    .map(([name, count]) => ({ name, count }));
 
-  return { last7Days, today: { articles: todayRaw.articles, ai: sumAi(todayRaw) }, week, month, allTime, topSources, costPerAiCall: COST_PER_AI_CALL };
+  const topSources = buildRanking(d => d.sources, 8);
+  const topCategories = buildRanking(d => d.categories, 6);
+  const topTopics = buildRanking(d => d.topics, 8, TOPIC_LABELS);
+
+  return { last7Days, today: { articles: todayRaw.articles, ai: sumAi(todayRaw) }, week, month, allTime, topSources, topCategories, topTopics, costPerAiCall: 0.018 };
 }

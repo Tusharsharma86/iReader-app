@@ -177,7 +177,10 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     } catch { return []; }
   }, [allStories, params.id, params.headline, params.summary, params.source]);
 
-  useEffect(() => { trackArticleRead(params.source ?? ''); }, []);
+  useEffect(() => {
+    const storyTopic = (allStories.find(x => x.id === params.id) as any)?.category ?? '';
+    trackArticleRead(params.source ?? '', articleCategory, storyTopic);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (hasBeenRead) return; const t = setTimeout(() => setHasBeenRead(true), 5000); return () => clearTimeout(t); }, []);
 
   useEffect(() => {
