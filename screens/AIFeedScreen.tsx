@@ -231,29 +231,30 @@ export default function AIFeedScreen() {
     loadTopic(0, true);
   }, [loadTopic]);
 
-  // Restore Deep Dive on mount — covers both push-tap deeplink and
-  // Activity recreation (fold/unfold) where in-memory state was lost.
+  // PUSH-TAP DEEPLINK — re-check on every focus so taps work even when the
+  // AIFeedScreen is already mounted (tab switch doesn't remount).
+  useFocusEffect(useCallback(() => {
+    AsyncStorage.getItem('@aifeed_pending_open').then(raw => {
+      if (!raw) return;
+      try {
+        const a = JSON.parse(raw) as { id: string; headline: string; summary: string; imageUrl: string; url: string; source: string; publishedAt: string; at: number };
+        // Honor pending opens up to 5 min old (covers slow nav + cold start).
+        if (Date.now() - a.at <= 5 * 60_000) {
+          const story = { id: a.id, headline: a.headline, summary: a.summary, imageUrl: a.imageUrl, publishedAt: a.publishedAt, sources: a.url ? [{ name: a.source, url: a.url }] : [] } as Story;
+          setOpenedItem({ primary: story, allStories: [story], sources: a.url ? [{ name: a.source, url: a.url }] : [] });
+        }
+        AsyncStorage.removeItem('@aifeed_pending_open').catch(() => {});
+      } catch {}
+    }).catch(() => {});
+  }, [setOpenedItem]));
+
+  // FOLD / UNFOLD RESTORATION — only on initial mount, not on every focus.
   useEffect(() => {
     (async () => {
-      // Push-tap pending open (short TTL — only honored if just fired).
-      try {
-        const raw = await AsyncStorage.getItem('@aifeed_pending_open');
-        if (raw) {
-          const a = JSON.parse(raw) as { id: string; headline: string; summary: string; imageUrl: string; url: string; source: string; publishedAt: string; at: number };
-          if (Date.now() - a.at <= 60_000) {
-            const story = { id: a.id, headline: a.headline, summary: a.summary, imageUrl: a.imageUrl, publishedAt: a.publishedAt, sources: a.url ? [{ name: a.source, url: a.url }] : [] } as Story;
-            setOpenedItem({ primary: story, allStories: [story], sources: a.url ? [{ name: a.source, url: a.url }] : [] });
-          }
-          AsyncStorage.removeItem('@aifeed_pending_open').catch(() => {});
-          return;
-        }
-      } catch {}
-      // Fold/unfold restoration — re-open Deep Dive if it was open when Activity died.
       try {
         const raw = await AsyncStorage.getItem('@aifeed_open_item');
         if (!raw) return;
         const a = JSON.parse(raw) as { id: string; headline: string; summary: string; imageUrl: string; url: string; source: string; publishedAt: string; at: number };
-        // Discard if older than 24h.
         if (Date.now() - a.at > 86_400_000) { AsyncStorage.removeItem('@aifeed_open_item').catch(() => {}); return; }
         const story = { id: a.id, headline: a.headline, summary: a.summary, imageUrl: a.imageUrl, publishedAt: a.publishedAt, sources: a.url ? [{ name: a.source, url: a.url }] : [] } as Story;
         setOpenedItemState({ primary: story, allStories: [story], sources: a.url ? [{ name: a.source, url: a.url }] : [] });
