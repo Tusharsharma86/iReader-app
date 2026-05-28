@@ -165,6 +165,7 @@ export default function AIFeedScreen() {
   const [openedItem, setOpenedItem] = useState<FeedItem | null>(null);
   const [topicCursor, setTopicCursor] = useState(0);
   const [exhausted, setExhausted] = useState(false);
+  const [activeTopic, setActiveTopic] = useState<string>(TOPIC_QUEUE[0]);
   const { reportScroll } = useTabBarActions();
   // useTabBarActions returns a stable reference — calling reportScroll on every
   // scroll tick no longer re-renders this component (only TabBar consumes visible).
@@ -291,23 +292,22 @@ export default function AIFeedScreen() {
       color: '#fff',
       overflow: 'hidden',
     }}>
-      {/* Header */}
+      {/* Header — pill is now a dropdown for topic filtering */}
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
         padding: 'max(14px, calc(env(safe-area-inset-top, 0px) + 8px)) 16px 14px',
         background: 'linear-gradient(180deg, rgba(5,5,7,0.85) 0%, transparent 100%)',
       }}>
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          padding: '6px 12px', borderRadius: 999,
-          background: 'rgba(20,20,28,0.65)',
-          border: '1px solid rgba(255,255,255,0.1)',
-          backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
-          color: '#fff', fontSize: 11, fontWeight: 800, letterSpacing: 1.4,
-        }}>
-          <SparkleIcon color="#b994ff" size={12} />
-          AI FEED · BREAKING
-        </div>
+        <TopicPill
+          current={activeTopic}
+          onChange={(t) => {
+            setActiveTopic(t);
+            setItems([]);
+            setTopicCursor(TOPIC_QUEUE.indexOf(t) >= 0 ? TOPIC_QUEUE.indexOf(t) : 0);
+            setExhausted(false);
+            loadTopic(TOPIC_QUEUE.indexOf(t) >= 0 ? TOPIC_QUEUE.indexOf(t) : 0, true);
+          }}
+        />
       </div>
 
       {/* Pull-to-refresh indicator (renders during pull/refresh, fades out otherwise) */}
@@ -1262,6 +1262,73 @@ function SparkleIcon({ color, size }: { color: string; size: number }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
       <path d="M12 0l1.5 5.5L19 7l-5.5 1.5L12 14l-1.5-5.5L5 7l5.5-1.5L12 0z M20 14l.8 2.7L23 17.5l-2.2.8L20 21l-.8-2.7L17 17.5l2.2-.8L20 14z" />
     </svg>
+  );
+}
+
+const TOPIC_LABELS: Record<string, string> = {
+  breaking: 'BREAKING',
+  technology: 'TECHNOLOGY',
+  'india-politics': 'INDIA',
+  geopolitics: 'WORLD',
+  markets: 'MARKETS',
+  business: 'BUSINESS',
+};
+
+function TopicPill({ current, onChange }: { current: string; onChange: (t: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '6px 12px', borderRadius: 999,
+          background: 'rgba(20,20,28,0.65)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
+          color: '#fff', fontSize: 11, fontWeight: 800, letterSpacing: 1.4,
+          cursor: 'pointer',
+        }}
+      >
+        <SparkleIcon color="#b994ff" size={12} />
+        AI FEED · {TOPIC_LABELS[current] ?? current.toUpperCase()}
+        <span style={{ fontSize: 9, marginLeft: 2, opacity: 0.7, transform: open ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }}>▼</span>
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 19 }} />
+          <div style={{
+            position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 20,
+            minWidth: 180, padding: 4, borderRadius: 12,
+            background: 'rgba(15,15,20,0.95)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+          }}>
+            {Object.entries(TOPIC_LABELS).map(([key, label]) => {
+              const active = key === current;
+              return (
+                <button
+                  key={key}
+                  onClick={() => { onChange(key); setOpen(false); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    width: '100%', padding: '10px 14px', borderRadius: 8, border: 'none',
+                    background: active ? 'rgba(185,148,255,0.15)' : 'transparent',
+                    color: active ? '#b994ff' : '#fff',
+                    fontSize: 12, fontWeight: 700, letterSpacing: 1, textAlign: 'left',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <span>{label}</span>
+                  {active && <span style={{ fontSize: 12 }}>✓</span>}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

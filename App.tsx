@@ -34,12 +34,28 @@ setTimeout(() => SplashScreen.hideAsync(), 3000);
 
 const navigationRef = createNavigationContainerRef<RootTabParamList>();
 
-// Open Article from a tapped push payload. Called once nav is ready.
+// Open Article (or AI Feed Deep Dive) from a tapped push payload.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function handleNotificationTap(data: any) {
   const a = data?.article;
   if (!a || !navigationRef.isReady()) return;
   try {
+    // AI Feed pushes deeplink to the AI Feed tab — AIFeedScreen reads the
+    // last-tapped article from AsyncStorage and auto-opens Deep Dive.
+    if (data?.kind === 'ai-feed') {
+      AsyncStorage.setItem('@aifeed_pending_open', JSON.stringify({
+        id: String(a.id ?? ''),
+        headline: String(a.headline ?? ''),
+        summary: String(a.summary ?? ''),
+        imageUrl: String(a.imageUrl ?? ''),
+        url: String(a.url ?? ''),
+        source: String(a.source ?? ''),
+        publishedAt: String(a.publishedAt ?? ''),
+        at: Date.now(),
+      })).catch(() => {});
+      navigationRef.navigate('AIFeed' as never);
+      return;
+    }
     navigationRef.navigate('Feed', {
       screen: 'Article',
       params: {

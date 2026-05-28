@@ -24,6 +24,8 @@ interface SettingsContextType {
   setNotifTech: (v: boolean) => void;
   notifDigest: boolean;
   setNotifDigest: (v: boolean) => void;
+  notifAiFeed: boolean;
+  setNotifAiFeed: (v: boolean) => void;
   notifSources: boolean;
   setNotifSources: (v: boolean) => void;
   favSources: string[];
@@ -50,6 +52,7 @@ const DEFAULTS = {
   notifBreaking: true,
   notifTech: true,
   notifDigest: false,
+  notifAiFeed: false,
   notifSources: false,
   showSports: false,
   showEntertainment: false,
@@ -64,6 +67,8 @@ const SettingsContext = createContext<SettingsContextType>({
   topicInterests: {},
   setFontSize: () => {},
   setNotifBreaking: () => {},
+  notifAiFeed: false,
+  setNotifAiFeed: () => {},
   setNotifTech: () => {},
   setNotifDigest: () => {},
   setNotifSources: () => {},
@@ -82,6 +87,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [notifBreaking, setNotifBreakingState] = useState(DEFAULTS.notifBreaking);
   const [notifTech, setNotifTechState] = useState(DEFAULTS.notifTech);
   const [notifDigest, setNotifDigestState] = useState(DEFAULTS.notifDigest);
+  const [notifAiFeed, setNotifAiFeedState] = useState(DEFAULTS.notifAiFeed);
   const [notifSources, setNotifSourcesState] = useState(DEFAULTS.notifSources);
   const [activeTopics, setActiveTopics] = useState<Record<TopicKey, boolean>>(DEFAULTS.activeTopics);
   const [activeSubTopics, setActiveSubTopics] = useState<Record<string, boolean>>({});
@@ -102,6 +108,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           if (typeof saved.notifBreaking === 'boolean') setNotifBreakingState(saved.notifBreaking);
           if (typeof saved.notifTech === 'boolean') setNotifTechState(saved.notifTech);
           if (typeof saved.notifDigest === 'boolean') setNotifDigestState(saved.notifDigest);
+          if (typeof saved.notifAiFeed === 'boolean') setNotifAiFeedState(saved.notifAiFeed);
           if (typeof saved.notifSources === 'boolean') setNotifSourcesState(saved.notifSources);
           if (saved.activeTopics && typeof saved.activeTopics === 'object') {
             setActiveTopics({ ...DEFAULTS.activeTopics, ...saved.activeTopics });
@@ -123,15 +130,16 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!loaded) return;
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({
-      fontSize, notifBreaking, notifTech, notifDigest, notifSources,
+      fontSize, notifBreaking, notifTech, notifDigest, notifAiFeed, notifSources,
       activeTopics, activeSubTopics, favSources, favTopics, topicInterests,
       showSports, showEntertainment,
     })).catch(() => {});
-  }, [loaded, fontSize, notifBreaking, notifTech, notifDigest, notifSources, activeTopics, activeSubTopics, favSources, favTopics, topicInterests, showSports, showEntertainment]);
+  }, [loaded, fontSize, notifBreaking, notifTech, notifDigest, notifAiFeed, notifSources, activeTopics, activeSubTopics, favSources, favTopics, topicInterests, showSports, showEntertainment]);
 
   const setFontSize = useCallback((fs: FontSize) => setFontSizeState(fs), []);
 
   const setNotifBreaking = useCallback((v: boolean) => setNotifBreakingState(v), []);
+  const setNotifAiFeed = useCallback((v: boolean) => setNotifAiFeedState(v), []);
   const setNotifTech = useCallback((v: boolean) => setNotifTechState(v), []);
   const setNotifDigest = useCallback((v: boolean) => setNotifDigestState(v), []);
   const setNotifSources = useCallback((v: boolean) => setNotifSourcesState(v), []);
@@ -183,6 +191,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     notifBreaking, setNotifBreaking,
     notifTech, setNotifTech,
     notifDigest, setNotifDigest,
+    notifAiFeed, setNotifAiFeed,
     notifSources, setNotifSources,
     showSports, setShowSports,
     showEntertainment, setShowEntertainment,
@@ -192,7 +201,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     activeSubTopics, toggleSubTopic,
     topicInterests, setTopicInterest,
     resetSettings,
-  }), [fontSize, notifBreaking, notifTech, notifDigest, notifSources, showSports, showEntertainment, favSources, favTopics, topicInterests, activeTopics, activeSubTopics, setFontSize, setNotifBreaking, setNotifTech, setNotifDigest, setNotifSources, setShowSports, setShowEntertainment, toggleFavSource, toggleFavTopic, toggleTopic, toggleSubTopic, setTopicInterest, resetSettings]);
+  }), [fontSize, notifBreaking, notifTech, notifDigest, notifAiFeed, notifSources, showSports, showEntertainment, favSources, favTopics, topicInterests, activeTopics, activeSubTopics, setFontSize, setNotifBreaking, setNotifTech, setNotifDigest, setNotifAiFeed, setNotifSources, setShowSports, setShowEntertainment, toggleFavSource, toggleFavTopic, toggleTopic, toggleSubTopic, setTopicInterest, resetSettings]);
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }

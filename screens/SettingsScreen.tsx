@@ -26,6 +26,7 @@ export default function SettingsScreen() {
   const {
     fontSize, setFontSize,
     notifBreaking, setNotifBreaking,
+    notifAiFeed, setNotifAiFeed,
     notifTech, setNotifTech,
     notifDigest, setNotifDigest,
     notifSources, setNotifSources,
@@ -50,12 +51,13 @@ export default function SettingsScreen() {
 
   const { resetSources } = useSource();
 
-  const handleNotifToggle = useCallback(async (value: boolean, setter: (v: boolean) => void, prefKey?: 'breaking' | 'topics' | 'digest') => {
+  const handleNotifToggle = useCallback(async (value: boolean, setter: (v: boolean) => void, prefKey?: 'breaking' | 'topics' | 'digest' | 'aiFeed') => {
     const FALLBACK_KWS = ['tech', 'ai', 'apple', 'google', 'meta', 'openai', 'microsoft', 'amazon', 'startup', 'software', 'chip', 'iphone', 'android', 'app', 'cyber', 'crypto'];
     const kws = starredKeywords.length > 0 ? starredKeywords : FALLBACK_KWS;
     if (!value) {
       setter(false);
       if (prefKey === 'breaking') updatePushPreferences({ breakingEnabled: false });
+      if (prefKey === 'aiFeed') updatePushPreferences({ aiFeedEnabled: false });
       if (prefKey === 'topics') updatePushPreferences({ topicsEnabled: false });
       if (prefKey === 'digest') updatePushPreferences({ digestEnabled: false, digestEveningEnabled: false });
       return;
@@ -65,6 +67,7 @@ export default function SettingsScreen() {
       setter(true);
       registerForPush().then(() => {
         if (prefKey === 'breaking') updatePushPreferences({ breakingEnabled: true });
+        if (prefKey === 'aiFeed') updatePushPreferences({ aiFeedEnabled: true });
         if (prefKey === 'topics') updatePushPreferences({ topicsEnabled: true, topicsKeywords: kws });
         if (prefKey === 'digest') {
         // Twice daily: morning + evening. Convert local 8:00 / 18:00 to UTC.
@@ -148,17 +151,17 @@ export default function SettingsScreen() {
               </Text>
             </View>
             <Switch
-              value={notifBreaking || notifTech || notifDigest}
+              value={notifBreaking || notifTech || notifDigest || notifAiFeed}
               onValueChange={async (v) => {
                 if (!v) {
-                  setNotifBreaking(false); setNotifTech(false); setNotifDigest(false);
-                  updatePushPreferences({ breakingEnabled: false, topicsEnabled: false, digestEnabled: false, digestEveningEnabled: false });
+                  setNotifBreaking(false); setNotifTech(false); setNotifDigest(false); setNotifAiFeed(false);
+                  updatePushPreferences({ breakingEnabled: false, aiFeedEnabled: false, topicsEnabled: false, digestEnabled: false, digestEveningEnabled: false });
                 } else {
                   await handleNotifToggle(true, setNotifBreaking, 'breaking');
                 }
               }}
               trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }}
-              thumbColor={(notifBreaking || notifTech || notifDigest) ? '#4A90D9' : '#444'} />
+              thumbColor={(notifBreaking || notifTech || notifDigest || notifAiFeed) ? '#4A90D9' : '#444'} />
           </View>
         </View>
 
@@ -173,6 +176,15 @@ export default function SettingsScreen() {
             <Switch value={notifBreaking} onValueChange={v => handleNotifToggle(v, setNotifBreaking, 'breaking')}
               trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }}
               thumbColor={notifBreaking ? '#4A90D9' : '#444'} />
+          </View>
+          <View style={[styles.row, styles.rowBorder]}>
+            <View style={styles.rowTextCol}>
+              <Text style={styles.rowLabel}>✨ AI Feed breaking</Text>
+              <Text style={styles.rowSub}>Tap opens AI Deep Dive instead of article</Text>
+            </View>
+            <Switch value={notifAiFeed} onValueChange={v => handleNotifToggle(v, setNotifAiFeed, 'aiFeed')}
+              trackColor={{ false: '#1A1A1A', true: '#3a2270' }}
+              thumbColor={notifAiFeed ? '#b994ff' : '#444'} />
           </View>
           <View style={[styles.row, styles.rowBorder]}>
             <View style={styles.rowTextCol}>

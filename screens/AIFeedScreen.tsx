@@ -209,6 +209,23 @@ export default function AIFeedScreen() {
     loadTopic(0, true);
   }, [loadTopic]);
 
+  // If user tapped an "AI Feed" push, auto-open Deep Dive with that article.
+  useFocusEffect(useCallback(() => {
+    AsyncStorage.getItem('@aifeed_pending_open').then(raw => {
+      if (!raw) return;
+      try {
+        const a = JSON.parse(raw) as { id: string; headline: string; summary: string; imageUrl: string; url: string; source: string; publishedAt: string; at: number };
+        if (Date.now() - a.at > 60_000) { AsyncStorage.removeItem('@aifeed_pending_open'); return; }
+        const story = {
+          id: a.id, headline: a.headline, summary: a.summary, imageUrl: a.imageUrl,
+          publishedAt: a.publishedAt, sources: a.url ? [{ name: a.source, url: a.url }] : [],
+        } as Story;
+        setOpenedItem({ primary: story, allStories: [story], sources: a.url ? [{ name: a.source, url: a.url }] : [] });
+        AsyncStorage.removeItem('@aifeed_pending_open');
+      } catch {}
+    }).catch(() => {});
+  }, []));
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     setTopicCursor(0);
@@ -272,7 +289,19 @@ export default function AIFeedScreen() {
 
   return (
     <View style={styles.container}>
-      <Header topInset={insets.top} counter={items.length > 0 ? `${activeIdx + 1} / ${items.length}` : undefined} />
+      <Header
+        topInset={insets.top}
+        counter={items.length > 0 ? `${activeIdx + 1} / ${items.length}` : undefined}
+        currentTopic={TOPIC_QUEUE[topicCursor] ?? 'breaking'}
+        onPickTopic={(t) => {
+          const idx = TOPIC_QUEUE.indexOf(t);
+          if (idx < 0) return;
+          setItems([]);
+          setTopicCursor(idx);
+          setExhausted(false);
+          loadTopic(idx, true);
+        }}
+      />
       <FlatList
         data={items}
         keyExtractor={it => it.primary.id}
@@ -320,8 +349,21 @@ export default function AIFeedScreen() {
 }
 
 // ── Header ─────────────────────────────────────────────────────────────────
-function Header({ topInset, counter }: { topInset: number; counter?: string }) {
+const TOPIC_LABELS_MOBILE: Record<string, string> = {
+  breaking: 'BREAKING',
+  technology: 'TECHNOLOGY',
+  'india-politics': 'INDIA',
+  geopolitics: 'WORLD',
+  markets: 'MARKETS',
+  business: 'BUSINESS',
+};
+
+function Header({ topInset, counter, currentTopic, onPickTopic }: {
+  topInset: number; counter?: string;
+  currentTopic?: string; onPickTopic?: (t: string) => void;
+}) {
   const counterScale = useRef(new Animated.Value(1)).current;
+  const [pickerOpen, setPickerOpen] = useState(false);
   useEffect(() => {
     if (!counter) return;
     Animated.sequence([
@@ -329,17 +371,38 @@ function Header({ topInset, counter }: { topInset: number; counter?: string }) {
       Animated.spring(counterScale, { toValue: 1, friction: 4, tension: 100, useNativeDriver: true }),
     ]).start();
   }, [counter, counterScale]);
+  const topic = currentTopic ?? 'breaking';
   return (
     <View style={[styles.header, { paddingTop: topInset + 10 }]} pointerEvents="box-none">
-      <View style={styles.pill}>
+      <Pressable onPress={() => onPickTopic && setPickerOpen(true)} style={styles.pill}>
         <Ionicons name="sparkles" size={11} color={VIOLET} />
-        <Text style={styles.pillText}>AI FEED · BREAKING</Text>
-      </View>
+        <Text style={styles.pillText}>AI FEED · {TOPIC_LABELS_MOBILE[topic] ?? topic.toUpperCase()}</Text>
+        {onPickTopic && <Ionicons name="chevron-down" size={11} color="rgba(255,255,255,0.7)" />}
+      </Pressable>
       {counter && (
         <Animated.View style={[styles.pill, { paddingHorizontal: 10, transform: [{ scale: counterScale }] }]}>
           <Text style={[styles.pillText, { letterSpacing: 0.6, color: '#aaa' }]}>{counter}</Text>
         </Animated.View>
       )}
+      <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
+        <Pressable onPress={() => setPickerOpen(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ minWidth: 240, padding: 6, borderRadius: 14, backgroundColor: '#0e0e14', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
+            {Object.entries(TOPIC_LABELS_MOBILE).map(([key, label]) => {
+              const active = key === topic;
+              return (
+                <Pressable
+                  key={key}
+                  onPress={() => { setPickerOpen(false); onPickTopic?.(key); }}
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, borderRadius: 8, backgroundColor: active ? 'rgba(185,148,255,0.15)' : 'transparent' }}
+                >
+                  <Text style={{ color: active ? VIOLET : '#fff', fontSize: 13, fontWeight: '700', letterSpacing: 1 }}>{label}</Text>
+                  {active && <Ionicons name="checkmark" size={14} color={VIOLET} />}
+                </Pressable>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
