@@ -265,8 +265,21 @@ export default function App() {
         if (raw) {
           try {
             const { state, ts } = JSON.parse(raw);
-            // Discard state older than 24 h so cold restarts start fresh
-            if (typeof ts === 'number' && !isNaN(ts) && Date.now() - ts < 86_400_000) setNavInitState(state);
+            if (typeof ts !== 'number' || isNaN(ts) || Date.now() - ts >= 86_400_000) return;
+            // Strip any Article screens from saved state — prevents the
+            // "back closes app" bug when restoration places Article without
+            // FeedHome underneath.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const stripArticle = (s: any): any => {
+              if (!s || !Array.isArray(s.routes)) return s;
+              const cleaned = s.routes
+                .map((r: any) => ({ ...r, state: r.state ? stripArticle(r.state) : r.state }))
+                .filter((r: any) => r.name !== 'Article');
+              if (cleaned.length === 0) return undefined;
+              const safeIndex = Math.min(s.index ?? 0, cleaned.length - 1);
+              return { ...s, routes: cleaned, index: safeIndex };
+            };
+            setNavInitState(stripArticle(state));
           } catch {}
         }
       })
@@ -309,7 +322,20 @@ export default function App() {
           ref={navigationRef}
           initialState={navInitState}
           onStateChange={state => {
-            AsyncStorage.setItem('@ireader_nav_state', JSON.stringify({ state, ts: Date.now() })).catch(() => {});
+            // Strip Article from any persisted stack so restoring the app never
+            // lands on a stuck Article with no parent (back exits app).
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const stripArticle = (s: any): any => {
+              if (!s || !Array.isArray(s.routes)) return s;
+              const cleaned = s.routes
+                .map((r: any) => ({ ...r, state: r.state ? stripArticle(r.state) : r.state }))
+                .filter((r: any) => r.name !== 'Article');
+              if (cleaned.length === 0) return undefined;
+              const safeIndex = Math.min(s.index ?? 0, cleaned.length - 1);
+              return { ...s, routes: cleaned, index: safeIndex };
+            };
+            const safeState = stripArticle(state);
+            AsyncStorage.setItem('@ireader_nav_state', JSON.stringify({ state: safeState, ts: Date.now() })).catch(() => {});
           }}
           theme={{ ...DarkTheme, colors: { ...DarkTheme.colors, background: '#080808', card: '#080808' } }}>
         <Tab.Navigator
