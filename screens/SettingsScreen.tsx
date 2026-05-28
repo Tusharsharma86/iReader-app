@@ -31,15 +31,28 @@ export default function SettingsScreen() {
     notifSources, setNotifSources,
     favSources, favTopics,
     activeTopics,
+    topicInterests,
     resetSettings,
   } = useSettings();
+
+  // Build keyword list from starred topics. Falls back to a tech default if
+  // user hasn't starred anything so the toggle still does something.
+  const starredKeywords = React.useMemo(() => {
+    // Lazy require to avoid import cycle.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { INTEREST_TOPICS } = require('../utils/interestTopics') as { INTEREST_TOPICS: { id: string; keywords: string[] }[] };
+    const starred = INTEREST_TOPICS.filter(t => (topicInterests[t.id] ?? 0) > 0);
+    const all = starred.flatMap(t => t.keywords);
+    return [...new Set(all)].slice(0, 30);
+  }, [topicInterests]);
 
   const favCount = favSources.length + favTopics.length;
 
   const { resetSources } = useSource();
 
   const handleNotifToggle = useCallback(async (value: boolean, setter: (v: boolean) => void, prefKey?: 'breaking' | 'topics' | 'digest') => {
-    const TECH_KWS = ['tech', 'ai', 'apple', 'google', 'meta', 'openai', 'microsoft', 'amazon', 'startup', 'software', 'chip', 'iphone', 'android', 'app', 'cyber', 'crypto'];
+    const FALLBACK_KWS = ['tech', 'ai', 'apple', 'google', 'meta', 'openai', 'microsoft', 'amazon', 'startup', 'software', 'chip', 'iphone', 'android', 'app', 'cyber', 'crypto'];
+    const kws = starredKeywords.length > 0 ? starredKeywords : FALLBACK_KWS;
     if (!value) {
       setter(false);
       if (prefKey === 'breaking') updatePushPreferences({ breakingEnabled: false });
@@ -52,7 +65,7 @@ export default function SettingsScreen() {
       setter(true);
       registerForPush().then(() => {
         if (prefKey === 'breaking') updatePushPreferences({ breakingEnabled: true });
-        if (prefKey === 'topics') updatePushPreferences({ topicsEnabled: true, topicsKeywords: TECH_KWS });
+        if (prefKey === 'topics') updatePushPreferences({ topicsEnabled: true, topicsKeywords: kws });
         if (prefKey === 'digest') {
         // Twice daily: morning + evening. Convert local 8:00 / 18:00 to UTC.
         const offsetMin = new Date().getTimezoneOffset(); // minutes added to local to get UTC
@@ -83,6 +96,14 @@ export default function SettingsScreen() {
       favSources,
     });
   }, [favSources]);
+
+  // Re-sync topic keywords whenever the user stars/unstars topics — only if
+  // topic alerts are already on (otherwise nothing changes for them).
+  useEffect(() => {
+    if (notifTech && starredKeywords.length > 0) {
+      updatePushPreferences({ topicsEnabled: true, topicsKeywords: starredKeywords });
+    }
+  }, [starredKeywords, notifTech]);
 
   const enabledTopicsCount = Object.values(activeTopics).filter(Boolean).length;
   const { onScroll, restore } = useTabBarAutoHide();
@@ -126,8 +147,12 @@ export default function SettingsScreen() {
           </View>
           <View style={[styles.row, styles.rowBorder]}>
             <View style={styles.rowTextCol}>
-              <Text style={styles.rowLabel}>Tech News</Text>
-              <Text style={styles.rowSub}>Alerts for new technology stories</Text>
+              <Text style={styles.rowLabel}>Topic Alerts ★</Text>
+              <Text style={styles.rowSub}>
+                {starredKeywords.length > 0
+                  ? `${starredKeywords.length} keywords from your starred topics`
+                  : 'Star topics below — falls back to tech defaults'}
+              </Text>
             </View>
             <Switch value={notifTech} onValueChange={v => handleNotifToggle(v, setNotifTech, 'topics')}
               trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }}
