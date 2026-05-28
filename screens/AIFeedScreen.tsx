@@ -155,7 +155,21 @@ export default function AIFeedScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [openedItem, setOpenedItem] = useState<FeedItem | null>(null);
+  const [openedItem, setOpenedItemState] = useState<FeedItem | null>(null);
+  // Persist Deep Dive open state so Activity recreation (fold/unfold) restores it.
+  const setOpenedItem = useCallback((item: FeedItem | null) => {
+    setOpenedItemState(item);
+    if (item) {
+      const a = item.primary;
+      AsyncStorage.setItem('@aifeed_open_item', JSON.stringify({
+        id: a.id, headline: a.headline, summary: a.summary, imageUrl: a.imageUrl,
+        url: a.sources?.[0]?.url ?? '', source: a.sources?.[0]?.name ?? '',
+        publishedAt: a.publishedAt, at: Date.now(),
+      })).catch(() => {});
+    } else {
+      AsyncStorage.removeItem('@aifeed_open_item').catch(() => {});
+    }
+  }, []);
   const [topicCursor, setTopicCursor] = useState(0);
   const [exhausted, setExhausted] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -206,22 +220,35 @@ export default function AIFeedScreen() {
     loadTopic(0, true);
   }, [loadTopic]);
 
-  // If user tapped an "AI Feed" push, auto-open Deep Dive with that article.
-  useFocusEffect(useCallback(() => {
-    AsyncStorage.getItem('@aifeed_pending_open').then(raw => {
-      if (!raw) return;
+  // Restore Deep Dive on mount — covers both push-tap deeplink and
+  // Activity recreation (fold/unfold) where in-memory state was lost.
+  useEffect(() => {
+    (async () => {
+      // Push-tap pending open (short TTL — only honored if just fired).
       try {
-        const a = JSON.parse(raw) as { id: string; headline: string; summary: string; imageUrl: string; url: string; source: string; publishedAt: string; at: number };
-        if (Date.now() - a.at > 60_000) { AsyncStorage.removeItem('@aifeed_pending_open'); return; }
-        const story = {
-          id: a.id, headline: a.headline, summary: a.summary, imageUrl: a.imageUrl,
-          publishedAt: a.publishedAt, sources: a.url ? [{ name: a.source, url: a.url }] : [],
-        } as Story;
-        setOpenedItem({ primary: story, allStories: [story], sources: a.url ? [{ name: a.source, url: a.url }] : [] });
-        AsyncStorage.removeItem('@aifeed_pending_open');
+        const raw = await AsyncStorage.getItem('@aifeed_pending_open');
+        if (raw) {
+          const a = JSON.parse(raw) as { id: string; headline: string; summary: string; imageUrl: string; url: string; source: string; publishedAt: string; at: number };
+          if (Date.now() - a.at <= 60_000) {
+            const story = { id: a.id, headline: a.headline, summary: a.summary, imageUrl: a.imageUrl, publishedAt: a.publishedAt, sources: a.url ? [{ name: a.source, url: a.url }] : [] } as Story;
+            setOpenedItem({ primary: story, allStories: [story], sources: a.url ? [{ name: a.source, url: a.url }] : [] });
+          }
+          AsyncStorage.removeItem('@aifeed_pending_open').catch(() => {});
+          return;
+        }
       } catch {}
-    }).catch(() => {});
-  }, []));
+      // Fold/unfold restoration — re-open Deep Dive if it was open when Activity died.
+      try {
+        const raw = await AsyncStorage.getItem('@aifeed_open_item');
+        if (!raw) return;
+        const a = JSON.parse(raw) as { id: string; headline: string; summary: string; imageUrl: string; url: string; source: string; publishedAt: string; at: number };
+        // Discard if older than 24h.
+        if (Date.now() - a.at > 86_400_000) { AsyncStorage.removeItem('@aifeed_open_item').catch(() => {}); return; }
+        const story = { id: a.id, headline: a.headline, summary: a.summary, imageUrl: a.imageUrl, publishedAt: a.publishedAt, sources: a.url ? [{ name: a.source, url: a.url }] : [] } as Story;
+        setOpenedItemState({ primary: story, allStories: [story], sources: a.url ? [{ name: a.source, url: a.url }] : [] });
+      } catch {}
+    })();
+  }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
