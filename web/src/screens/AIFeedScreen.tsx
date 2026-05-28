@@ -20,8 +20,10 @@ const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const VIOLET = '#b994ff';
 const GOLD   = '#FFC542';
 
+interface TldrSection { heading: string; bullets: string[]; }
 interface DeepDiveData {
   tldr: string[];
+  tldrSections?: TldrSection[];
   narrative: string;
   insight: string;
   questions: string[];
@@ -884,7 +886,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
           <InlineError text={error || 'Failed'} />
         ) : data ? (
           <div className="dd-stagger" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {data.tldr.length > 0 && (
+            {(data.tldrSections && data.tldrSections.length > 0) || data.tldr.length > 0 ? (
               <div style={{
                 background: 'rgba(15,15,22,0.5)',
                 border: '1px solid rgba(255,255,255,0.06)',
@@ -900,26 +902,40 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
                   <span>TL;DR BY CURIOUSCATS.AI</span>
                   <div style={{ flex: 1, height: 1, background: `${VIOLET}33` }} />
                 </div>
-                {data.tldr.map((b, i) => (
+                {data.tldrSections && data.tldrSections.length > 0 ? (
+                  data.tldrSections.map((section, si) => (
+                    <div key={si} style={{ marginTop: si > 0 ? 20 : 0, paddingTop: si > 0 ? 16 : 0, borderTop: si > 0 ? '1px solid rgba(255,255,255,0.08)' : 'none' }}>
+                      <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 10, fontWeight: 800, letterSpacing: 1.4, marginBottom: 8, textTransform: 'uppercase' }}>
+                        {section.heading}
+                      </div>
+                      {section.bullets.map((b, i) => (
+                        <div key={i} style={{
+                          display: 'flex', gap: 14, padding: '12px 0',
+                          borderTop: i > 0 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                          alignItems: 'flex-start',
+                        }}>
+                          <div style={{ width: 6, height: 6, borderRadius: 4, marginTop: 10, background: VIOLET, flexShrink: 0 }} />
+                          <div style={{ flex: 1, color: '#cfcfd8', fontSize: 15.5, lineHeight: 1.6 }}>
+                            {highlightEntities(b, [...(data.tags ?? []), ...(data.keyPeople ?? []), ...(data.keyCompanies ?? [])], accent)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ))
+                ) : data.tldr.map((b, i) => (
                   <div key={i} style={{
-                    display: 'flex', gap: 14,
-                    padding: '14px 0',
+                    display: 'flex', gap: 14, padding: '14px 0',
                     borderTop: i > 0 ? '1px solid rgba(255,255,255,0.05)' : 'none',
                     alignItems: 'flex-start',
                   }}>
-                    <div style={{
-                      width: 6, height: 6, borderRadius: 4, marginTop: 10,
-                      background: VIOLET, flexShrink: 0,
-                    }} />
-                    <div style={{
-                      flex: 1, color: '#cfcfd8', fontSize: 15.5, lineHeight: 1.6,
-                    }}>
+                    <div style={{ width: 6, height: 6, borderRadius: 4, marginTop: 10, background: VIOLET, flexShrink: 0 }} />
+                    <div style={{ flex: 1, color: '#cfcfd8', fontSize: 15.5, lineHeight: 1.6 }}>
                       {highlightEntities(b, [...(data.tags ?? []), ...(data.keyPeople ?? []), ...(data.keyCompanies ?? [])], accent)}
                     </div>
                   </div>
                 ))}
               </div>
-            )}
+            ) : null}
 
             {data.insight && (
               <div style={{

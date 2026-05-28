@@ -42,8 +42,10 @@ interface FeedItem {
   allStories: Story[];
   sources: { name: string; url: string }[];
 }
+interface TldrSection { heading: string; bullets: string[]; }
 interface DeepDiveData {
   tldr: string[];
+  tldrSections?: TldrSection[];
   narrative: string;
   insight: string;
   questions: string[];
@@ -585,21 +587,39 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
                 <InlineError text={error || 'Failed'} />
               ) : data ? (
                 <>
-                  {/* TL;DR */}
-                  {data.tldr.length > 0 && (
+                  {/* TL;DR — grouped sections if AI emitted them, else flat fallback */}
+                  {((data.tldrSections && data.tldrSections.length > 0) || data.tldr.length > 0) && (
                     <Stagger delay={0}><View style={[overlayStyles.card, { borderTopColor: VIOLET, borderTopWidth: 2 }]}>
                       <View style={overlayStyles.sectionLabelRow}>
                         <Text style={overlayStyles.sectionLabel}>TL;DR BY CURIOUSCATS.AI</Text>
                         <View style={overlayStyles.labelDivider} />
                       </View>
-                      {data.tldr.map((b, i) => (
-                        <View key={i} style={[overlayStyles.bulletRow, i > 0 && overlayStyles.bulletDivider]}>
-                          <View style={overlayStyles.bulletDot} />
-                          <Text style={overlayStyles.bulletText}>
-                            {renderHighlighted(b, allTags(data))}
-                          </Text>
-                        </View>
-                      ))}
+                      {data.tldrSections && data.tldrSections.length > 0 ? (
+                        data.tldrSections.map((section, si) => (
+                          <View key={si} style={{ marginTop: si > 0 ? 20 : 0, paddingTop: si > 0 ? 16 : 0, borderTopWidth: si > 0 ? StyleSheet.hairlineWidth : 0, borderTopColor: 'rgba(255,255,255,0.08)' }}>
+                            <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 10, fontWeight: '800', letterSpacing: 1.4, marginBottom: 8, textTransform: 'uppercase' }}>
+                              {section.heading}
+                            </Text>
+                            {section.bullets.map((b, i) => (
+                              <View key={i} style={[overlayStyles.bulletRow, i > 0 && overlayStyles.bulletDivider]}>
+                                <View style={overlayStyles.bulletDot} />
+                                <Text style={overlayStyles.bulletText}>
+                                  {renderHighlighted(b, allTags(data))}
+                                </Text>
+                              </View>
+                            ))}
+                          </View>
+                        ))
+                      ) : (
+                        data.tldr.map((b, i) => (
+                          <View key={i} style={[overlayStyles.bulletRow, i > 0 && overlayStyles.bulletDivider]}>
+                            <View style={overlayStyles.bulletDot} />
+                            <Text style={overlayStyles.bulletText}>
+                              {renderHighlighted(b, allTags(data))}
+                            </Text>
+                          </View>
+                        ))
+                      )}
                     </View></Stagger>
                   )}
 
