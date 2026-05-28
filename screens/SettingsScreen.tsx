@@ -133,13 +133,42 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* NOTIFICATIONS */}
+        {/* NOTIFICATIONS — redesigned: master switch + multi-check WHEN + drill-down WHAT */}
         <Text style={styles.sectionHeader}>NOTIFICATIONS</Text>
+
+        {/* Master switch — kills/wakes all push at once */}
         <View style={styles.card}>
           <View style={styles.row}>
             <View style={styles.rowTextCol}>
-              <Text style={styles.rowLabel}>Breaking News</Text>
-              <Text style={styles.rowSub}>Instant alerts for major stories</Text>
+              <Text style={styles.rowLabel}>All Notifications</Text>
+              <Text style={styles.rowSub}>
+                {(notifBreaking || notifTech || notifDigest)
+                  ? 'Master switch — turn off to silence everything'
+                  : 'Off — no pushes will be sent'}
+              </Text>
+            </View>
+            <Switch
+              value={notifBreaking || notifTech || notifDigest}
+              onValueChange={async (v) => {
+                if (!v) {
+                  setNotifBreaking(false); setNotifTech(false); setNotifDigest(false);
+                  updatePushPreferences({ breakingEnabled: false, topicsEnabled: false, digestEnabled: false, digestEveningEnabled: false });
+                } else {
+                  await handleNotifToggle(true, setNotifBreaking, 'breaking');
+                }
+              }}
+              trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }}
+              thumbColor={(notifBreaking || notifTech || notifDigest) ? '#4A90D9' : '#444'} />
+          </View>
+        </View>
+
+        {/* WHEN — multi-check: pick any combination */}
+        <Text style={styles.sectionHeader}>WHEN</Text>
+        <View style={styles.card}>
+          <View style={styles.row}>
+            <View style={styles.rowTextCol}>
+              <Text style={styles.rowLabel}>Breaking news</Text>
+              <Text style={styles.rowSub}>Stories with 3+ source confirmation</Text>
             </View>
             <Switch value={notifBreaking} onValueChange={v => handleNotifToggle(v, setNotifBreaking, 'breaking')}
               trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }}
@@ -147,11 +176,11 @@ export default function SettingsScreen() {
           </View>
           <View style={[styles.row, styles.rowBorder]}>
             <View style={styles.rowTextCol}>
-              <Text style={styles.rowLabel}>Topic Alerts ★</Text>
+              <Text style={styles.rowLabel}>Topic & source matches</Text>
               <Text style={styles.rowSub}>
-                {starredKeywords.length > 0
-                  ? `${starredKeywords.length} keywords from your starred topics`
-                  : 'Star topics below — falls back to tech defaults'}
+                {starredKeywords.length > 0 || favSources.length > 0
+                  ? `${starredKeywords.length} keywords · ${favSources.length} favorite sources`
+                  : 'Star topics + favorite sources below'}
               </Text>
             </View>
             <Switch value={notifTech} onValueChange={v => handleNotifToggle(v, setNotifTech, 'topics')}
@@ -160,24 +189,43 @@ export default function SettingsScreen() {
           </View>
           <View style={[styles.row, styles.rowBorder]}>
             <View style={styles.rowTextCol}>
-              <Text style={styles.rowLabel}>Daily Digest</Text>
-              <Text style={styles.rowSub}>Morning (8am) + evening (6pm) top stories</Text>
+              <Text style={styles.rowLabel}>Daily digest</Text>
+              <Text style={styles.rowSub}>8am + 6pm — top stories twice daily</Text>
             </View>
             <Switch value={notifDigest} onValueChange={v => handleNotifToggle(v, setNotifDigest, 'digest')}
               trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }}
               thumbColor={notifDigest ? '#4A90D9' : '#444'} />
           </View>
-          <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => navigation.navigate('FavSources')}>
+        </View>
+
+        {/* WHAT YOU CARE ABOUT — content selection lives here, not under notif toggles */}
+        <Text style={styles.sectionHeader}>WHAT YOU CARE ABOUT</Text>
+        <View style={styles.card}>
+          <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('TopicInterests')}>
             <View style={styles.rowTextCol}>
-              <Text style={styles.rowLabel}>Favorite Sources & Topics</Text>
+              <Text style={styles.rowLabel}>Topics ★</Text>
               <Text style={styles.rowSub}>
-                {favCount > 0 ? `${favCount} selected — tap to change` : 'Tap to choose sources or topics'}
+                {starredKeywords.length > 0 ? `${Object.values(topicInterests).filter(v => v > 0).length} starred` : 'Star topics to personalise alerts'}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#444" />
           </TouchableOpacity>
+          <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => navigation.navigate('FavSources')}>
+            <View style={styles.rowTextCol}>
+              <Text style={styles.rowLabel}>Favorite Sources</Text>
+              <Text style={styles.rowSub}>
+                {favSources.length > 0 ? `${favSources.length} favorited — push when they break news` : 'Tap to add favorite publications'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#444" />
+          </TouchableOpacity>
+        </View>
+
+        {/* ADVANCED — testing + debug */}
+        <Text style={styles.sectionHeader}>ADVANCED</Text>
+        <View style={styles.card}>
           <TouchableOpacity
-            style={[styles.row, styles.rowBorder]}
+            style={styles.row}
             onPress={async () => {
               const ok = await requestNotificationPermission();
               if (!ok) { Alert.alert('Permission needed', 'Enable notifications in system settings.'); return; }
