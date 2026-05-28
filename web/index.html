@@ -44,6 +44,12 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Lock orientation in installed PWA (no-op in regular browser tabs).
+      if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) {
+        try { screen.orientation?.lock?.('portrait').catch(() => {}); } catch {}
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -77,7 +77,6 @@ export default function App() {
               <div style={{
                 width: '100%',
                 height: '100%',
-                maxWidth: 480,
                 margin: '0 auto',
                 background: '#000',
                 overflow: 'hidden',
