@@ -209,7 +209,7 @@ function InlineActiveTopics() {
               <View style={[styles.chipWrap, { marginTop: 8 }]}>
                 {subs.map(sub => {
                   const isSpecial = (item.key === 'breaking' || item.key === 'india-politics') && (sub === 'Sports' || sub === 'Entertainment');
-                  const subKey = `${item.key}::${sub}`;
+                  const subKey = `${item.key}:${sub}`;
                   const subOn = isSpecial
                     ? (sub === 'Sports' ? showSports : showEntertainment)
                     : activeSubTopics[subKey] !== false;
