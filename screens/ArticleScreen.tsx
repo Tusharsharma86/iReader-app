@@ -587,7 +587,10 @@ export default function ArticleScreen() {
   }, [related.length]);
 
   // Track article read once on mount
-  useEffect(() => { trackArticleRead(params.source ?? '').catch(() => {}); }, []);
+  useEffect(() => {
+    const cat = deriveCategory(params.source ?? '', params.url ?? '', params.headline ?? '');
+    trackArticleRead(params.source ?? '', cat ?? undefined).catch(() => {});
+  }, []);
 
   // Parse sources from params
   const allSources: SourceEntry[] = (() => {

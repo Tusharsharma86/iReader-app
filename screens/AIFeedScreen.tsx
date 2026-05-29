@@ -23,6 +23,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { type Story, getSourceDomain, domainFromUrl } from '../components/StoryCard';
 import { tabBarTranslateY, useTabBarAutoHide } from '../utils/tabBarAnim';
+import { trackAiUsage, trackArticleRead } from '../utils/usageTracker';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 
 const FEED_API_BASE = 'https://ireader.onrender.com/api/news/feed';
@@ -174,6 +175,9 @@ export default function AIFeedScreen() {
     setOpenedItemState(item);
     if (item) {
       const a = item.primary;
+      // Track usage: count Deep Dive opens as AI usage + article read.
+      trackAiUsage('deepDive').catch(() => {});
+      trackArticleRead(a.sources?.[0]?.name ?? '', (a as { category?: string }).category).catch(() => {});
       AsyncStorage.setItem('@aifeed_open_item', JSON.stringify({
         id: a.id, headline: a.headline, summary: a.summary, imageUrl: a.imageUrl,
         url: a.sources?.[0]?.url ?? '', source: a.sources?.[0]?.name ?? '',

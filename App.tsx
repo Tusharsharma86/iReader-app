@@ -28,6 +28,7 @@ import CostDashboardScreen from './screens/CostDashboardScreen';
 import TopicInterestsScreen from './screens/TopicInterestsScreen';
 import StoryTimelineScreen from './screens/StoryTimelineScreen';
 import { setupNotificationChannels, registerForPush } from './utils/notifications';
+import { trackNotifOpened, trackNotifReceived } from './utils/usageTracker';
 
 SplashScreen.preventAutoHideAsync();
 setTimeout(() => SplashScreen.hideAsync(), 3000);
@@ -38,6 +39,7 @@ const navigationRef = createNavigationContainerRef<RootTabParamList>();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function handleNotificationTap(data: any) {
   if (!navigationRef.isReady()) return;
+  trackNotifOpened(String(data?.kind ?? 'unknown')).catch(() => {});
   const a = data?.article ?? {};
   // Deep Dive + ArticleScreen only need headline + url to render — id is an
   // internal cluster ref. Synthesize a stable id from url+headline so older
@@ -311,13 +313,18 @@ export default function App() {
     const sub = N.addNotificationResponseReceivedListener((response: { notification: { request: { content: { data: unknown } } } }) => {
       handleNotificationTap(response.notification.request.content.data);
     });
+    // Track every push delivered to this device (foreground + background).
+    const recvSub = N.addNotificationReceivedListener?.((n: { request?: { content?: { data?: { kind?: string } } } }) => {
+      const kind = String(n?.request?.content?.data?.kind ?? 'unknown');
+      trackNotifReceived(kind).catch(() => {});
+    });
     // Cold start path — if app was launched by tapping a notification.
     N.getLastNotificationResponseAsync?.().then((resp: unknown) => {
       const r = resp as { notification?: { request?: { content?: { data?: unknown } } } } | null;
       const d = r?.notification?.request?.content?.data;
       if (d) setTimeout(() => handleNotificationTap(d), 400);
     });
-    return () => { try { sub?.remove?.(); } catch {} };
+    return () => { try { sub?.remove?.(); } catch {} try { recvSub?.remove?.(); } catch {} };
   }, []);
 
   if (!navReady) return null;
