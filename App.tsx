@@ -38,47 +38,46 @@ const navigationRef = createNavigationContainerRef<RootTabParamList>();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function handleNotificationTap(data: any) {
   if (!navigationRef.isReady()) return;
-  const a = data?.article;
+  const a = data?.article ?? {};
+  // Deep Dive + ArticleScreen only need headline + url to render — id is an
+  // internal cluster ref. Synthesize a stable id from url+headline so older
+  // payloads (which may lack id, or arrived truncated) still open the same
+  // screen they would today.
+  const headline = String(a.headline ?? '').trim();
+  const url = String(a.url ?? '').trim();
+  if (!headline && !url) {
+    // Truly empty payload — last resort, land on the right tab.
+    if (data?.kind === 'ai-feed') navigationRef.navigate('AIFeed' as never);
+    else navigationRef.navigate('Feed' as never);
+    return;
+  }
+  const id = String(a.id ?? '').trim() || (url || headline);
   try {
-    // AI Feed pushes deeplink to AI Feed tab. If article payload is present
-    // (current format), AIFeedScreen auto-opens Deep Dive. If it's missing
-    // (older notifs sent before payload changes, or FCM truncation), still
-    // land on AI Feed tab — better than no-op.
     if (data?.kind === 'ai-feed') {
-      if (a && a.id) {
-        AsyncStorage.setItem('@aifeed_pending_open', JSON.stringify({
-          id: String(a.id ?? ''),
-          headline: String(a.headline ?? ''),
-          summary: String(a.summary ?? ''),
-          imageUrl: String(a.imageUrl ?? ''),
-          url: String(a.url ?? ''),
-          source: String(a.source ?? ''),
-          publishedAt: String(a.publishedAt ?? ''),
-          at: Date.now(),
-        })).catch(() => {});
-      }
+      AsyncStorage.setItem('@aifeed_pending_open', JSON.stringify({
+        id, headline,
+        summary: String(a.summary ?? ''),
+        imageUrl: String(a.imageUrl ?? ''),
+        url,
+        source: String(a.source ?? ''),
+        publishedAt: String(a.publishedAt ?? ''),
+        at: Date.now(),
+      })).catch(() => {});
       navigationRef.navigate('AIFeed' as never);
-      return;
-    }
-    // Non-AI-feed kinds need article payload to navigate to ArticleScreen.
-    if (!a) {
-      // Fallback: land on Feed tab so user isn't stuck on whatever screen.
-      navigationRef.navigate('Feed' as never);
       return;
     }
     navigationRef.navigate('Feed', {
       screen: 'Article',
       initial: false,
       params: {
-        id: String(a.id ?? ''),
-        url: String(a.url ?? ''),
+        id, url,
         image: String(a.imageUrl ?? ''),
-        headline: String(a.headline ?? ''),
+        headline,
         summary: String(a.summary ?? ''),
         source: String(a.source ?? ''),
         publishedAt: String(a.publishedAt ?? ''),
         dominantColor: '#1A1A1A',
-        sources: JSON.stringify(a.url ? [{ name: a.source, url: a.url }] : []),
+        sources: JSON.stringify(url ? [{ name: a.source ?? '', url }] : []),
       },
     } as never);
   } catch {}
