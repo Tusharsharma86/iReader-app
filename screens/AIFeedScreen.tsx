@@ -157,22 +157,33 @@ export default function AIFeedScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openedItem, setOpenedItemState] = useState<FeedItem | null>(null);
+  // Tracks whether openedItem came from mount restoration (fold/unfold) — used
+  // to suppress the Modal slide-in animation in that case so it doesn't look
+  // like a fresh open. Cleared as soon as user interacts.
+  const [openedRestored, setOpenedRestored] = useState(false);
   const flatListRef = useRef<FlatList<FeedItem> | null>(null);
   const navigation = useNavigation();
-  // Tab-tap → scroll to first card (and close any open Deep Dive).
-  useEffect(() => {
+  // Tap the AIFeed tab while on AIFeed → close any open Deep Dive + scroll
+  // to first card. Bug fix: previously this fired for ANY tabPress on the
+  // parent navigator, so tapping Feed/Saved/Settings would also reset AIFeed
+  // in the background. useFocusEffect ensures the listener is only attached
+  // while AIFeed is focused.
+  useFocusEffect(useCallback(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const unsub = (navigation as any).getParent?.()?.addListener?.('tabPress', () => {
+    const parent = (navigation as any).getParent?.();
+    if (!parent) return;
+    const unsub = parent.addListener('tabPress', () => {
       setOpenedItemState(null);
       flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     });
     return unsub;
-  }, [navigation]);
+  }, [navigation]));
   // Persist Deep Dive open state so Activity recreation (fold/unfold) restores it.
   // Write a "closed" marker (not removeItem) so close-then-fold race cannot
   // resurrect a dead overlay — restore only if last write had closed:false.
   const setOpenedItem = useCallback((item: FeedItem | null) => {
     setOpenedItemState(item);
+    setOpenedRestored(false); // user-initiated open/close — animate normally
     if (item) {
       const a = item.primary;
       // Track usage: count Deep Dive opens as AI usage + article read.
@@ -270,46 +281,85 @@ export default function AIFeedScreen() {
     return () => clearTimeout(t);
   }, [screenH]);
 
-  // Persist feed cache whenever items or activeIdx change.
+  // Persist feed cache whenever items or activeIdx change — debounced 600ms
+  // so rapid scrolling doesn't write to AsyncStorage on every snap. Bug fix G.
+  const cacheWriteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (items.length === 0) return;
-    AsyncStorage.setItem('@aifeed_cache_v1', JSON.stringify({
-      items, topicCursor, activeIdx, at: Date.now(),
-    })).catch(() => {});
+    if (cacheWriteTimerRef.current) clearTimeout(cacheWriteTimerRef.current);
+    cacheWriteTimerRef.current = setTimeout(() => {
+      AsyncStorage.setItem('@aifeed_cache_v1', JSON.stringify({
+        items, topicCursor, activeIdx, at: Date.now(),
+      })).catch(() => {});
+    }, 600);
+    return () => {
+      if (cacheWriteTimerRef.current) clearTimeout(cacheWriteTimerRef.current);
+    };
   }, [items, topicCursor, activeIdx]);
 
   // PUSH-TAP DEEPLINK — re-check on every focus so taps work even when the
-  // AIFeedScreen is already mounted (tab switch doesn't remount).
+  // AIFeedScreen is already mounted. Bug fix D: always clear pending in
+  // finally, even on JSON parse failure, so a malformed key can't poison
+  // every future focus. Bug fix F: if pending is honored, also stamp
+  // @aifeed_open_item as closed so the mount-restore effect can't fight
+  // this with a stale openedItem from before the tap.
   useFocusEffect(useCallback(() => {
     AsyncStorage.getItem('@aifeed_pending_open').then(raw => {
       if (!raw) return;
+      let honored = false;
       try {
         const a = JSON.parse(raw) as { id: string; headline: string; summary: string; imageUrl: string; url: string; source: string; publishedAt: string; at: number };
-        // Honor pending opens up to 5 min old (covers slow nav + cold start).
         if (Date.now() - a.at <= 5 * 60_000) {
           const story = { id: a.id, headline: a.headline, summary: a.summary, imageUrl: a.imageUrl, publishedAt: a.publishedAt, sources: a.url ? [{ name: a.source, url: a.url }] : [] } as Story;
           setOpenedItem({ primary: story, allStories: [story], sources: a.url ? [{ name: a.source, url: a.url }] : [] });
+          honored = true;
         }
-        AsyncStorage.removeItem('@aifeed_pending_open').catch(() => {});
       } catch {}
+      AsyncStorage.removeItem('@aifeed_pending_open').catch(() => {});
+      if (honored) {
+        // setOpenedItem already wrote @aifeed_open_item closed:false for the
+        // pending story — that's the correct restore target now. Nothing to
+        // do here, but document the invariant.
+      }
     }).catch(() => {});
   }, [setOpenedItem]));
 
-  // FOLD / UNFOLD DEEP-DIVE RESTORATION — mount only. Skip if last write was a
-  // close marker, or older than 5 min (only fold/unfold flips count, not
-  // resuming the app hours later).
+  // FOLD / UNFOLD DEEP-DIVE RESTORATION — mount only. Skip if:
+  //   - last write was a close marker
+  //   - older than 5 min (only fold/unfold flips count, not app resume hours later)
+  //   - a pending push-tap exists and is fresher (focus effect will handle it)
+  // Bug fix F: read pending alongside open_item and let whichever is newer win,
+  // so cold-start race between mount restore and focus restore can't show wrong card.
+  // Also wrap removeItem in catch so a malformed JSON never poisons future mounts.
   useEffect(() => {
     (async () => {
+      let openRaw: string | null = null;
+      let pendingRaw: string | null = null;
       try {
-        const raw = await AsyncStorage.getItem('@aifeed_open_item');
-        if (!raw) return;
-        const a = JSON.parse(raw) as { id?: string; headline?: string; summary?: string; imageUrl?: string; url?: string; source?: string; publishedAt?: string; at: number; closed?: boolean };
+        [openRaw, pendingRaw] = await Promise.all([
+          AsyncStorage.getItem('@aifeed_open_item'),
+          AsyncStorage.getItem('@aifeed_pending_open'),
+        ]);
+      } catch { return; }
+      try {
+        if (!openRaw) return;
+        const a = JSON.parse(openRaw) as { id?: string; headline?: string; summary?: string; imageUrl?: string; url?: string; source?: string; publishedAt?: string; at: number; closed?: boolean };
         if (a.closed) return;
         if (!a.id || !a.headline) return;
         if (Date.now() - a.at > 5 * 60_000) return;
+        // If pending is newer, let focus effect handle it instead.
+        if (pendingRaw) {
+          try {
+            const p = JSON.parse(pendingRaw) as { at: number };
+            if (p.at > a.at) return;
+          } catch {}
+        }
         const story = { id: a.id, headline: a.headline, summary: a.summary ?? '', imageUrl: a.imageUrl ?? '', publishedAt: a.publishedAt ?? '', sources: a.url ? [{ name: a.source ?? '', url: a.url }] : [] } as Story;
         setOpenedItemState({ primary: story, allStories: [story], sources: a.url ? [{ name: a.source ?? '', url: a.url }] : [] });
-      } catch {}
+        setOpenedRestored(true);
+      } catch {
+        AsyncStorage.removeItem('@aifeed_open_item').catch(() => {});
+      }
     })();
   }, []);
 
@@ -318,6 +368,8 @@ export default function AIFeedScreen() {
     setTopicCursor(0);
     setExhausted(false);
     setItems([]);
+    setActiveIdx(0);
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
     await loadTopic(0, true);
     setRefreshing(false);
   }, [loadTopic]);
@@ -377,10 +429,12 @@ export default function AIFeedScreen() {
         currentTopic={TOPIC_QUEUE[topicCursor] ?? 'breaking'}
         onPickTopic={(t) => {
           const idx = TOPIC_QUEUE.indexOf(t);
-          if (idx < 0) return;
+          if (idx < 0 || idx === topicCursor) return;
           setItems([]);
+          setActiveIdx(0);
           setTopicCursor(idx);
           setExhausted(false);
+          flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
           loadTopic(idx, true);
         }}
       />
@@ -427,7 +481,11 @@ export default function AIFeedScreen() {
       />
 
       {openedItem && (
-        <DeepDiveOverlay item={openedItem} onClose={() => setOpenedItem(null)} />
+        <DeepDiveOverlay
+          item={openedItem}
+          restored={openedRestored}
+          onClose={() => setOpenedItem(null)}
+        />
       )}
     </View>
   );
@@ -566,7 +624,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: _h, to
 }
 
 // ── Deep Dive Overlay ──────────────────────────────────────────────────────
-function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => void }) {
+function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored?: boolean; onClose: () => void }) {
   const story = item.primary;
   const dominant = useMemo(() => getArticleColor(story.id || story.headline), [story.id, story.headline]);
   const accent = useMemo(() => lighten(dominant, 0.55), [dominant]);
@@ -625,7 +683,10 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
       }
     })();
     return () => { cancelled = true; };
-  }, [story.id, story.headline, story.summary, story.sources, item.allStories]);
+    // Bug fix H: gate on story.id only. story.id is stable per cluster and
+    // every other field is derived from the same item — refiring on prop
+    // reference change wastes a 25s API call.
+  }, [story.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (stage !== 'generating') { setShowColdHint(false); return; }
@@ -634,7 +695,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
   }, [stage]);
 
   return (
-    <Modal visible animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+    <Modal visible animationType={restored ? 'none' : 'slide'} onRequestClose={onClose} statusBarTranslucent>
       <View style={{ flex: 1, backgroundColor: '#050507' }}>
         {/* No top SafeAreaView — image goes edge-to-edge under status bar. */}
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 60 }} showsVerticalScrollIndicator={false}>
