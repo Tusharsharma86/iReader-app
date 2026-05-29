@@ -44,14 +44,18 @@ export default function SettingsScreen() {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { INTEREST_TOPICS } = require('../utils/interestTopics') as { INTEREST_TOPICS: { id: string; label: string; keywords: string[] }[] };
     const starred = INTEREST_TOPICS.filter(t => (topicInterests[t.id] ?? 0) > 0);
+    // Pair format: "keyword|Label|stars". Stars (1-5) gate notification
+    // significance on backend. Higher star → wider net (any source). Lower
+    // star → tighter (multi-source + breaking only).
     const pairs: string[] = [];
     const seen = new Set<string>();
     for (const t of starred) {
+      const stars = Math.max(1, Math.min(5, topicInterests[t.id] ?? 0));
       for (const kw of t.keywords) {
         const key = kw.toLowerCase();
         if (seen.has(key)) continue;
         seen.add(key);
-        pairs.push(`${kw}|${t.label}`);
+        pairs.push(`${kw}|${t.label}|${stars}`);
       }
     }
     return pairs.slice(0, 30);

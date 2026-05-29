@@ -22,7 +22,8 @@ const sectionHeader: React.CSSProperties = { color: '#444', fontSize: 11, fontWe
 
 export default function SettingsScreen() {
   const { navigate, goBack, canGoBack } = useRouter();
-  const { fontSize, setFontSize, notifBreaking, setNotifBreaking, notifTech, setNotifTech, notifDigest, setNotifDigest, notifSources, setNotifSources, favSources, favTopics, activeTopics, resetSettings } = useSettings();
+  const { fontSize, setFontSize, notifBreaking, setNotifBreaking, notifTech, setNotifTech, notifDigest, setNotifDigest, notifSources, setNotifSources, favSources, favTopics, activeTopics, topicInterests, resetSettings } = useSettings();
+  const starredInterestsCount = Object.values(topicInterests).filter(v => v > 0).length;
   const favCount = favSources.length + favTopics.length;
   const { resetSources } = useSource();
   const { reportScroll } = useTabBar();
@@ -83,7 +84,18 @@ export default function SettingsScreen() {
 
       <div style={sectionHeader}>FEED</div>
       <div style={card}>
-        <div style={{ ...row, cursor: 'pointer' }} onClick={() => navigate({ name: 'Topics' })}>
+        <div style={{ ...row, cursor: 'pointer' }} onClick={() => navigate({ name: 'TopicInterests' })}>
+          <div style={{ flex: 1, marginRight: 12 }}>
+            <div style={{ color: '#DDD', fontSize: 15, fontWeight: 500 }}>Topic Interests ★</div>
+            <div style={{ color: '#555', fontSize: 12, marginTop: 2 }}>
+              {starredInterestsCount > 0
+                ? `${starredInterestsCount} starred — weights For You feed`
+                : 'Star topics 1-5 to weight For You feed'}
+            </div>
+          </div>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+        <div style={{ ...rowBorder, cursor: 'pointer' }} onClick={() => navigate({ name: 'Topics' })}>
           <div style={{ flex: 1, marginRight: 12 }}>
             <div style={{ color: '#DDD', fontSize: 15, fontWeight: 500 }}>Topics</div>
             <div style={{ color: '#555', fontSize: 12, marginTop: 2 }}>{enabledTopicsCount} of 6 categories enabled</div>

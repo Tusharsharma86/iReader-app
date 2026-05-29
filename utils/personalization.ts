@@ -73,8 +73,10 @@ export function trackSkip(story: any): void {
 }
 
 export function rankStories(stories: any[]): any[] {
-  if (userProfile.openedArticles.size === 0) {
-    // No profile yet — preserve server order
+  // Even with no learned profile, explicit star ratings should still rank.
+  const hasInterest = stories.some(s => (s._interestBonus ?? 0) > 0);
+  if (userProfile.openedArticles.size === 0 && !hasInterest) {
+    // No profile and no stars — preserve server order
     return stories;
   }
 
@@ -90,6 +92,7 @@ export function rankStories(stories: any[]): any[] {
       const sourceCount = story.sources?.length ?? 1;
       const importanceScore = sourceCount * 2;
       const categoryBonus: number = story._categoryBonus ?? 0;
+      const interestBonus: number = story._interestBonus ?? 0;
 
       const hoursOld = (Date.now() - new Date(story.publishedAt ?? 0).getTime()) / 3_600_000;
 
@@ -105,9 +108,15 @@ export function rankStories(stories: any[]): any[] {
 
       const affinityScore = (personalScore + sourceScore) * 0.5
         + importanceScore * 0.2
-        + categoryBonus;
+        + categoryBonus
+        + interestBonus;
 
-      const finalScore = affinityScore * freshnessMult + velocityScore + freshBonus;
+      // Interest bonus partially survives freshness decay so a 5★ topic stays
+      // pinned high even when older than learned affinity would tolerate.
+      const finalScore = affinityScore * freshnessMult
+        + velocityScore
+        + freshBonus
+        + interestBonus * 0.4;
 
       return { ...story, _score: finalScore };
     })

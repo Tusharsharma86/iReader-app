@@ -20,6 +20,8 @@ interface SettingsCtx {
   toggleTopic: (t: TopicKey) => void;
   activeSubTopics: Record<string, boolean>;
   toggleSubTopic: (key: string) => void;
+  topicInterests: Record<string, number>;
+  setTopicInterest: (id: string, stars: number) => void;
   resetSettings: () => void;
 }
 
@@ -36,7 +38,9 @@ const SettingsContext = createContext<SettingsCtx>({
   setFontSize: ()=>{}, setNotifBreaking: ()=>{}, setNotifTech: ()=>{}, setNotifDigest: ()=>{}, setNotifSources: ()=>{},
   setShowSports: ()=>{}, setShowEntertainment: ()=>{},
   toggleFavSource: ()=>{}, toggleFavTopic: ()=>{},
-  toggleTopic: ()=>{}, toggleSubTopic: ()=>{}, resetSettings: ()=>{},
+  toggleTopic: ()=>{}, toggleSubTopic: ()=>{},
+  topicInterests: {}, setTopicInterest: ()=>{},
+  resetSettings: ()=>{},
 });
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
@@ -51,6 +55,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [favTopics, setFavTopics] = useState<string[]>([]);
   const [activeTopics, setActiveTopics] = useState<Record<TopicKey, boolean>>(DEFAULTS.activeTopics);
   const [activeSubTopics, setActiveSubTopics] = useState<Record<string, boolean>>({});
+  const [topicInterests, setTopicInterests] = useState<Record<string, number>>({});
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -69,6 +74,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         if (s.activeSubTopics) setActiveSubTopics(s.activeSubTopics);
         if (Array.isArray(s.favSources)) setFavSources(s.favSources);
         if (Array.isArray(s.favTopics)) setFavTopics(s.favTopics);
+        if (s.topicInterests && typeof s.topicInterests === 'object') setTopicInterests(s.topicInterests);
       }
     } catch {}
     setLoaded(true);
@@ -80,9 +86,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         fontSize, notifBreaking, notifTech, notifDigest, notifSources,
         showSports, showEntertainment, activeTopics, activeSubTopics, favSources, favTopics,
+        topicInterests,
       }));
     } catch {}
-  }, [loaded, fontSize, notifBreaking, notifTech, notifDigest, notifSources, showSports, showEntertainment, activeTopics, activeSubTopics, favSources, favTopics]);
+  }, [loaded, fontSize, notifBreaking, notifTech, notifDigest, notifSources, showSports, showEntertainment, activeTopics, activeSubTopics, favSources, favTopics, topicInterests]);
 
   const setFontSize = useCallback((fs: FontSize) => setFontSizeS(fs), []);
   const setNotifBreaking = useCallback((v: boolean) => setNotifBreakingS(v), []);
@@ -95,12 +102,16 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const toggleFavTopic = useCallback((key: string) => setFavTopics(p => p.includes(key) ? p.filter(t => t !== key) : [...p, key]), []);
   const toggleTopic = useCallback((t: TopicKey) => setActiveTopics(p => ({ ...p, [t]: !p[t] })), []);
   const toggleSubTopic = useCallback((key: string) => setActiveSubTopics(p => ({ ...p, [key]: p[key] === false ? true : false })), []);
+  const setTopicInterest = useCallback((id: string, stars: number) => {
+    setTopicInterests(p => ({ ...p, [id]: Math.max(0, Math.min(5, stars)) }));
+  }, []);
   const resetSettings = useCallback(() => {
     setFontSizeS(DEFAULTS.fontSize); setNotifBreakingS(true); setNotifTechS(true);
     setNotifDigestS(false); setNotifSourcesS(false);
     setShowSportsS(false); setShowEntertainmentS(false);
     setActiveTopics(DEFAULTS.activeTopics); setActiveSubTopics({});
     setFavSources([]); setFavTopics([]);
+    setTopicInterests({});
   }, []);
 
   const value = useMemo(() => ({
@@ -108,8 +119,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     notifDigest, setNotifDigest, notifSources, setNotifSources,
     showSports, setShowSports, showEntertainment, setShowEntertainment,
     favSources, toggleFavSource, favTopics, toggleFavTopic,
-    activeTopics, toggleTopic, activeSubTopics, toggleSubTopic, resetSettings,
-  }), [fontSize, notifBreaking, notifTech, notifDigest, notifSources, showSports, showEntertainment, favSources, favTopics, activeTopics, activeSubTopics, setFontSize, setNotifBreaking, setNotifTech, setNotifDigest, setNotifSources, setShowSports, setShowEntertainment, toggleFavSource, toggleFavTopic, toggleTopic, toggleSubTopic, resetSettings]);
+    activeTopics, toggleTopic, activeSubTopics, toggleSubTopic,
+    topicInterests, setTopicInterest,
+    resetSettings,
+  }), [fontSize, notifBreaking, notifTech, notifDigest, notifSources, showSports, showEntertainment, favSources, favTopics, activeTopics, activeSubTopics, topicInterests, setFontSize, setNotifBreaking, setNotifTech, setNotifDigest, setNotifSources, setShowSports, setShowEntertainment, toggleFavSource, toggleFavTopic, toggleTopic, toggleSubTopic, setTopicInterest, resetSettings]);
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }

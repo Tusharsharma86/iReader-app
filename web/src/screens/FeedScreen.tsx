@@ -6,6 +6,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { useRouter } from '../contexts/RouterContext';
 import { useTabBar } from '../contexts/TabBarContext';
 import { loadProfile, rankStories, rankStoriesStandard } from '../utils/personalization';
+import { scoreClusterInterest } from '../utils/interestTopics';
 import { TOPIC_SUBTOPICS, storyMatchesSubTopic } from '../utils/topics';
 
 const API_BASE = 'https://ireader.onrender.com/api/news/feed';
@@ -230,7 +231,7 @@ function serverItemToCluster(item: ServerFeedItem): StoryCluster | null {
 
 export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }) {
   const { activeSources } = useSource();
-  const { activeTopics, activeSubTopics, showSports, showEntertainment } = useSettings();
+  const { activeTopics, activeSubTopics, showSports, showEntertainment, topicInterests } = useSettings();
   const { navigate } = useRouter();
   const { reportScroll } = useTabBar();
   const isVisibleRef = useRef(isVisible);
@@ -473,8 +474,16 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
     }));
 
     if (activeTopic === 'myspace') {
+      const proxiesWithInterest = proxies.map(p => ({
+        ...p,
+        _interestBonus: scoreClusterInterest(
+          filteredClusters[p._i].topicLabel ?? '',
+          filteredClusters[p._i].subtitle ?? '',
+          topicInterests,
+        ),
+      }));
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const ranked = (rankStories(proxies as any) as any[]).map((p: any) => filteredClusters[p._i]);
+      const ranked = (rankStories(proxiesWithInterest as any) as any[]).map((p: any) => filteredClusters[p._i]);
       // Diversity floor: no single category contributes more than 8 cards in top 30
       const catCount: Record<string, number> = {};
       const result: typeof filteredClusters = [];
@@ -490,7 +499,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (rankStoriesStandard(proxies as any) as any[]).map((p: any) => filteredClusters[p._i]);
-  }, [filteredClusters, activeTopic]);
+  }, [filteredClusters, activeTopic, topicInterests]);
 
   const techSources = useMemo(() => {
     if (activeTopic !== 'technology') return [];

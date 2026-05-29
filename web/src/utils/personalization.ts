@@ -62,7 +62,9 @@ export function trackSkip(story: Story): void {
 
 // Personalized ranking — used for "For You" tab
 export function rankStories(stories: Story[]): Story[] {
-  if (userProfile.openedArticles.size === 0) return stories;
+  // Even with no learned profile, explicit star ratings should still rank.
+  const hasInterest = stories.some(s => ((s as any)._interestBonus ?? 0) > 0);
+  if (userProfile.openedArticles.size === 0 && !hasInterest) return stories;
   return stories
     .map(story => {
       const keywords = extractKeywords(story.headline ?? '');
@@ -72,6 +74,7 @@ export function rankStories(stories: Story[]): Story[] {
       const sourceCount = story.sources?.length ?? 1;
       const importanceScore = sourceCount * 2;
       const categoryBonus: number = (story as any)._categoryBonus ?? 0;
+      const interestBonus: number = (story as any)._interestBonus ?? 0;
 
       const hoursOld = (Date.now() - new Date(story.publishedAt ?? 0).getTime()) / 3_600_000;
       const velocityScore = Math.min(sourceCount / Math.max(hoursOld, 0.5), 10) * 2;
@@ -84,9 +87,13 @@ export function rankStories(stories: Story[]): Story[] {
 
       const affinityScore = (personalScore + sourceScore) * 0.5
         + importanceScore * 0.2
-        + categoryBonus;
+        + categoryBonus
+        + interestBonus;
 
-      const finalScore = affinityScore * freshnessMult + velocityScore + freshBonus;
+      const finalScore = affinityScore * freshnessMult
+        + velocityScore
+        + freshBonus
+        + interestBonus * 0.4;
       return { ...story, _score: finalScore } as any;
     })
     .sort((a: any, b: any) => b._score - a._score);

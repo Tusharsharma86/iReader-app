@@ -16,6 +16,7 @@ const SourcesScreen    = lazy(() => import('./screens/SourcesScreen'));
 const TopicsScreen     = lazy(() => import('./screens/TopicsScreen'));
 const TopicFeedScreen  = lazy(() => import('./screens/TopicFeedScreen'));
 const FavSourcesScreen = lazy(() => import('./screens/FavSourcesScreen'));
+const TopicInterestsScreen = lazy(() => import('./screens/TopicInterestsScreen'));
 const UsageScreen           = lazy(() => import('./screens/UsageScreen'));
 const StoryTimelineScreen   = lazy(() => import('./screens/StoryTimelineScreen'));
 
@@ -58,6 +59,7 @@ function ScreenRenderer() {
             {currentScreen.name === 'Sources'    && <SourcesScreen />}
             {currentScreen.name === 'Topics'     && <TopicsScreen />}
             {currentScreen.name === 'FavSources' && <FavSourcesScreen />}
+            {currentScreen.name === 'TopicInterests' && <TopicInterestsScreen />}
             {currentScreen.name === 'Usage'      && <UsageScreen />}
             {currentScreen.name === 'StoryTimeline' && <StoryTimelineScreen params={currentScreen.params} />}
           </Suspense>
