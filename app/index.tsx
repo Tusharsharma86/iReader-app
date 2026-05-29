@@ -16,7 +16,6 @@ import {
   Text,
   View,
   ViewToken,
-  useWindowDimensions,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -614,8 +613,7 @@ export default function FeedScreen() {
   // automatically pins the visible row through dimension changes. The old
   // manual scrollToOffset(index * 436) used a hardcoded item-height estimate
   // that fought with the auto-anchor and caused the article-state jump after
-  // fold. Keeping width here only so other deps in this file still see it.
-  const { width } = useWindowDimensions();
+  // fold — removed. Card width adapts via useLayout's onLayout handler.
 
 
   // Restore tab bar when navigating away from Feed (e.g. to Saved/Settings)
@@ -1172,12 +1170,14 @@ export default function FeedScreen() {
         showsVerticalScrollIndicator={false}
         // Anchors visible row so async AI-summary height changes above don't
         // push it (root cause of fold-open bounce-loop on long feeds).
-        maintainVisibleContentPosition={{ minIndexForVisible: 1, autoscrollToTopThreshold: 10 }}
-        // removeClippedSubviews on Android can cause variable-height bounce —
-        // disable when unfolded (cardWidth grows past 480 = tablet/foldable open).
-        removeClippedSubviews={cardWidth < 480}
+        maintainVisibleContentPosition={{ minIndexForVisible: 1 }}
+        // STATIC props — must NOT depend on cardWidth. Earlier they flipped
+        // at the 480 fold threshold, forcing FlatList to re-virtualize mid-
+        // fold and jump the visible row. removeClippedSubviews=false also
+        // eliminates the Android variable-height bounce universally.
+        removeClippedSubviews={false}
         maxToRenderPerBatch={4}
-        windowSize={cardWidth < 480 ? 7 : 11}
+        windowSize={9}
         initialNumToRender={3}
         updateCellsBatchingPeriod={50}
         onViewableItemsChanged={onViewableItemsChanged.current}

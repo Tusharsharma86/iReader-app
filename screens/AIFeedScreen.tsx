@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Animated,
+  AppState,
   BackHandler,
   Dimensions,
   FlatList,
@@ -284,18 +285,31 @@ export default function AIFeedScreen() {
   // Persist feed cache whenever items or activeIdx change — debounced 600ms
   // so rapid scrolling doesn't write to AsyncStorage on every snap. Bug fix G.
   const cacheWriteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const topicCursorRef = useRef(topicCursor);
+  topicCursorRef.current = topicCursor;
+  const writeCacheNow = useCallback(() => {
+    if (itemsRef.current.length === 0) return;
+    AsyncStorage.setItem('@aifeed_cache_v1', JSON.stringify({
+      items: itemsRef.current, topicCursor: topicCursorRef.current, activeIdx: activeIdxRef.current, at: Date.now(),
+    })).catch(() => {});
+  }, []);
   useEffect(() => {
     if (items.length === 0) return;
     if (cacheWriteTimerRef.current) clearTimeout(cacheWriteTimerRef.current);
-    cacheWriteTimerRef.current = setTimeout(() => {
-      AsyncStorage.setItem('@aifeed_cache_v1', JSON.stringify({
-        items, topicCursor, activeIdx, at: Date.now(),
-      })).catch(() => {});
-    }, 600);
+    cacheWriteTimerRef.current = setTimeout(writeCacheNow, 600);
     return () => {
       if (cacheWriteTimerRef.current) clearTimeout(cacheWriteTimerRef.current);
     };
-  }, [items, topicCursor, activeIdx]);
+  }, [items, topicCursor, activeIdx, writeCacheNow]);
+
+  // Flush immediately when app backgrounds — covers the 600ms debounce window
+  // so a quick app-kill right after scrolling never loses the last position.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'background' || s === 'inactive') writeCacheNow();
+    });
+    return () => sub.remove();
+  }, [writeCacheNow]);
 
   // PUSH-TAP DEEPLINK — re-check on every focus so taps work even when the
   // AIFeedScreen is already mounted. Bug fix D: always clear pending in
