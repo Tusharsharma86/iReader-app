@@ -647,7 +647,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
             .map(s => `[${s.sources?.[0]?.name ?? 'Source'}]: ${s.summary}`),
         ];
         const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 75000);
+        const t = setTimeout(() => ctrl.abort(), 95000);
         let dd: Response;
         try {
           dd = await fetch(DEEPDIVE_API, {

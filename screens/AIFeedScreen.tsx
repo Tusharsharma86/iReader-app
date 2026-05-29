@@ -670,7 +670,7 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
           ...item.allStories.slice(1, 5).filter(s => s.summary && s.summary !== story.summary).map(s => `[${s.sources?.[0]?.name ?? 'Source'}]: ${s.summary}`),
         ];
         const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 75000);
+        const t = setTimeout(() => ctrl.abort(), 95000);
         let dd: Response;
         try {
           dd = await fetch(DEEPDIVE_API, {
