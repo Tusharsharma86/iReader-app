@@ -953,19 +953,11 @@ export default function FeedScreen() {
       }
 
       // Top 5 breaking first, then diversity-capped mix up to 50 total
+      // Caps removed by request — show every ranked cluster, no 50-item limit
+      // and no per-category diversity cap. Breaking stays surfaced first.
       const top5Breaking = breaking.slice(0, 5);
       const remaining = [...breaking.slice(5), ...rest];
-      const catCount: Record<string, number> = {};
-      const result: Cluster[] = [...top5Breaking];
-      for (const cluster of remaining) {
-        if (result.length >= 50) break;
-        const cat = cluster._category ?? 'unknown';
-        const count = catCount[cat] ?? 0;
-        if (count >= 10) continue;
-        catCount[cat] = count + 1;
-        result.push(cluster);
-      }
-      return result;
+      return [...top5Breaking, ...remaining];
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

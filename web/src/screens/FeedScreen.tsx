@@ -482,19 +482,10 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
           topicInterests,
         ),
       }));
+      // Caps removed by request — return every ranked cluster, no per-category
+      // diversity cap.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const ranked = (rankStories(proxiesWithInterest as any) as any[]).map((p: any) => filteredClusters[p._i]);
-      // Diversity floor: no single category contributes more than 8 cards in top 30
-      const catCount: Record<string, number> = {};
-      const result: typeof filteredClusters = [];
-      for (const cluster of ranked) {
-        const cat = (cluster as any)._category ?? 'unknown';
-        const count = catCount[cat] ?? 0;
-        if (result.length < 30 && count >= 8) continue;
-        catCount[cat] = count + 1;
-        result.push(cluster);
-      }
-      return result;
+      return (rankStories(proxiesWithInterest as any) as any[]).map((p: any) => filteredClusters[p._i]);
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
