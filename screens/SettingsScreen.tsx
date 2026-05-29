@@ -240,7 +240,7 @@ export default function SettingsScreen() {
             <View style={styles.rowTextCol}>
               <Text style={styles.rowLabel}>Favorite Sources</Text>
               <Text style={styles.rowSub}>
-                {favSources.length > 0 ? `${favSources.length} favorited — push when they break news` : 'Tap to add favorite publications'}
+                {favSources.length > 0 ? `${favSources.length} favorited — topic alerts limited to these` : 'Tap to add favorite publications · filters topic alerts'}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#444" />
