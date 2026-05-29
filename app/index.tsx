@@ -610,23 +610,12 @@ export default function FeedScreen() {
   const feedOpacity = useRef(new Animated.Value(1)).current;
   useEffect(() => { activeTopicRef.current = activeTopic; }, [activeTopic]);
 
-  // Fold/unfold: width changes → instant jump to same article, no animation
+  // Fold/unfold: maintainVisibleContentPosition on the FlatList (set below)
+  // automatically pins the visible row through dimension changes. The old
+  // manual scrollToOffset(index * 436) used a hardcoded item-height estimate
+  // that fought with the auto-anchor and caused the article-state jump after
+  // fold. Keeping width here only so other deps in this file still see it.
   const { width } = useWindowDimensions();
-  const prevWidthRef = useRef(width);
-  useEffect(() => {
-    if (prevWidthRef.current === width) return;
-    prevWidthRef.current = width;
-    const index = visibleIndexRef.current;
-    if (!index || index <= 0) return;
-    const ITEM_HEIGHT = 420 + 16;
-    feedOpacity.setValue(0);
-    requestAnimationFrame(() => {
-      listRef.current?.scrollToOffset({ offset: index * ITEM_HEIGHT, animated: false });
-      setTimeout(() => {
-        Animated.timing(feedOpacity, { toValue: 1, duration: 120, useNativeDriver: true }).start();
-      }, 100);
-    });
-  }, [width, feedOpacity]);
 
 
   // Restore tab bar when navigating away from Feed (e.g. to Saved/Settings)
