@@ -1181,9 +1181,14 @@ export default function FeedScreen() {
           ) : null
         }
         showsVerticalScrollIndicator={false}
-        removeClippedSubviews={true}
+        // Anchors visible row so async AI-summary height changes above don't
+        // push it (root cause of fold-open bounce-loop on long feeds).
+        maintainVisibleContentPosition={{ minIndexForVisible: 1, autoscrollToTopThreshold: 10 }}
+        // removeClippedSubviews on Android can cause variable-height bounce —
+        // disable when unfolded (cardWidth grows past 480 = tablet/foldable open).
+        removeClippedSubviews={cardWidth < 480}
         maxToRenderPerBatch={4}
-        windowSize={7}
+        windowSize={cardWidth < 480 ? 7 : 11}
         initialNumToRender={3}
         updateCellsBatchingPeriod={50}
         onViewableItemsChanged={onViewableItemsChanged.current}
