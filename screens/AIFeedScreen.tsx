@@ -168,6 +168,8 @@ export default function AIFeedScreen() {
     return unsub;
   }, [navigation]);
   // Persist Deep Dive open state so Activity recreation (fold/unfold) restores it.
+  // Write a "closed" marker (not removeItem) so close-then-fold race cannot
+  // resurrect a dead overlay — restore only if last write had closed:false.
   const setOpenedItem = useCallback((item: FeedItem | null) => {
     setOpenedItemState(item);
     if (item) {
@@ -175,10 +177,10 @@ export default function AIFeedScreen() {
       AsyncStorage.setItem('@aifeed_open_item', JSON.stringify({
         id: a.id, headline: a.headline, summary: a.summary, imageUrl: a.imageUrl,
         url: a.sources?.[0]?.url ?? '', source: a.sources?.[0]?.name ?? '',
-        publishedAt: a.publishedAt, at: Date.now(),
+        publishedAt: a.publishedAt, at: Date.now(), closed: false,
       })).catch(() => {});
     } else {
-      AsyncStorage.removeItem('@aifeed_open_item').catch(() => {});
+      AsyncStorage.setItem('@aifeed_open_item', JSON.stringify({ closed: true, at: Date.now() })).catch(() => {});
     }
   }, []);
   const [topicCursor, setTopicCursor] = useState(0);
@@ -225,11 +227,12 @@ export default function AIFeedScreen() {
     }
   }, []);
 
+  // MOUNT-ONLY init: pre-warm + restore cached feed. Critical: NO screenH dep
+  // — fold/unfold must not re-fetch or re-setItems. Width-only restore happens
+  // in the dimension effect below.
+  const initialScreenHRef = useRef(screenH);
   useEffect(() => {
-    // Pre-warm Render
     fetch('https://ireader.onrender.com/api/news/sources').catch(() => {});
-    // Restore cached feed instantly so fold/unfold (Activity recreation) doesn't
-    // re-fetch and reset scroll. Cache up to 30 min old.
     AsyncStorage.getItem('@aifeed_cache_v1').then(raw => {
       if (!raw) { loadTopic(0, true); return; }
       try {
@@ -239,24 +242,29 @@ export default function AIFeedScreen() {
           setTopicCursor(c.topicCursor ?? 0);
           setActiveIdx(c.activeIdx ?? 0);
           setLoading(false);
-          // Restore scroll after FlatList renders.
-          setTimeout(() => flatListRef.current?.scrollToOffset({ offset: (c.activeIdx ?? 0) * screenH, animated: false }), 0);
+          setTimeout(() => flatListRef.current?.scrollToOffset({ offset: (c.activeIdx ?? 0) * initialScreenHRef.current, animated: false }), 0);
           return;
         }
       } catch {}
       loadTopic(0, true);
     }).catch(() => loadTopic(0, true));
-  }, [loadTopic, screenH]);
+  }, [loadTopic]);
 
-  // After unfold (screenH changes) the FlatList remounts via key — restore
-  // the previously-viewed card so user stays on the same article.
+  // Dimension change (fold open/close): re-snap to current activeIdx so the
+  // visible card stays put. No state reset, no refetch. activeIdx read fresh
+  // via ref to avoid re-creating effect on every scroll.
+  const activeIdxRef = useRef(activeIdx);
+  activeIdxRef.current = activeIdx;
+  const lastScreenHRef = useRef(screenH);
   useEffect(() => {
-    if (items.length === 0) return;
+    if (lastScreenHRef.current === screenH) return;
+    lastScreenHRef.current = screenH;
+    if (itemsRef.current.length === 0) return;
     const t = setTimeout(() => {
-      flatListRef.current?.scrollToOffset({ offset: activeIdx * screenH, animated: false });
+      flatListRef.current?.scrollToOffset({ offset: activeIdxRef.current * screenH, animated: false });
     }, 50);
     return () => clearTimeout(t);
-  }, [screenH, items.length]);
+  }, [screenH]);
 
   // Persist feed cache whenever items or activeIdx change.
   useEffect(() => {
@@ -283,16 +291,20 @@ export default function AIFeedScreen() {
     }).catch(() => {});
   }, [setOpenedItem]));
 
-  // FOLD / UNFOLD RESTORATION — only on initial mount, not on every focus.
+  // FOLD / UNFOLD DEEP-DIVE RESTORATION — mount only. Skip if last write was a
+  // close marker, or older than 5 min (only fold/unfold flips count, not
+  // resuming the app hours later).
   useEffect(() => {
     (async () => {
       try {
         const raw = await AsyncStorage.getItem('@aifeed_open_item');
         if (!raw) return;
-        const a = JSON.parse(raw) as { id: string; headline: string; summary: string; imageUrl: string; url: string; source: string; publishedAt: string; at: number };
-        if (Date.now() - a.at > 86_400_000) { AsyncStorage.removeItem('@aifeed_open_item').catch(() => {}); return; }
-        const story = { id: a.id, headline: a.headline, summary: a.summary, imageUrl: a.imageUrl, publishedAt: a.publishedAt, sources: a.url ? [{ name: a.source, url: a.url }] : [] } as Story;
-        setOpenedItemState({ primary: story, allStories: [story], sources: a.url ? [{ name: a.source, url: a.url }] : [] });
+        const a = JSON.parse(raw) as { id?: string; headline?: string; summary?: string; imageUrl?: string; url?: string; source?: string; publishedAt?: string; at: number; closed?: boolean };
+        if (a.closed) return;
+        if (!a.id || !a.headline) return;
+        if (Date.now() - a.at > 5 * 60_000) return;
+        const story = { id: a.id, headline: a.headline, summary: a.summary ?? '', imageUrl: a.imageUrl ?? '', publishedAt: a.publishedAt ?? '', sources: a.url ? [{ name: a.source ?? '', url: a.url }] : [] } as Story;
+        setOpenedItemState({ primary: story, allStories: [story], sources: a.url ? [{ name: a.source ?? '', url: a.url }] : [] });
       } catch {}
     })();
   }, []);
@@ -369,7 +381,6 @@ export default function AIFeedScreen() {
         }}
       />
       <FlatList
-        key={`${screenW}x${screenH}`}
         ref={flatListRef}
         data={items}
         keyExtractor={it => it.primary.id}
