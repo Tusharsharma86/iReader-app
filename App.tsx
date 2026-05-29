@@ -37,23 +37,33 @@ const navigationRef = createNavigationContainerRef<RootTabParamList>();
 // Open Article (or AI Feed Deep Dive) from a tapped push payload.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function handleNotificationTap(data: any) {
+  if (!navigationRef.isReady()) return;
   const a = data?.article;
-  if (!a || !navigationRef.isReady()) return;
   try {
-    // AI Feed pushes deeplink to the AI Feed tab — AIFeedScreen reads the
-    // last-tapped article from AsyncStorage and auto-opens Deep Dive.
+    // AI Feed pushes deeplink to AI Feed tab. If article payload is present
+    // (current format), AIFeedScreen auto-opens Deep Dive. If it's missing
+    // (older notifs sent before payload changes, or FCM truncation), still
+    // land on AI Feed tab — better than no-op.
     if (data?.kind === 'ai-feed') {
-      AsyncStorage.setItem('@aifeed_pending_open', JSON.stringify({
-        id: String(a.id ?? ''),
-        headline: String(a.headline ?? ''),
-        summary: String(a.summary ?? ''),
-        imageUrl: String(a.imageUrl ?? ''),
-        url: String(a.url ?? ''),
-        source: String(a.source ?? ''),
-        publishedAt: String(a.publishedAt ?? ''),
-        at: Date.now(),
-      })).catch(() => {});
+      if (a && a.id) {
+        AsyncStorage.setItem('@aifeed_pending_open', JSON.stringify({
+          id: String(a.id ?? ''),
+          headline: String(a.headline ?? ''),
+          summary: String(a.summary ?? ''),
+          imageUrl: String(a.imageUrl ?? ''),
+          url: String(a.url ?? ''),
+          source: String(a.source ?? ''),
+          publishedAt: String(a.publishedAt ?? ''),
+          at: Date.now(),
+        })).catch(() => {});
+      }
       navigationRef.navigate('AIFeed' as never);
+      return;
+    }
+    // Non-AI-feed kinds need article payload to navigate to ArticleScreen.
+    if (!a) {
+      // Fallback: land on Feed tab so user isn't stuck on whatever screen.
+      navigationRef.navigate('Feed' as never);
       return;
     }
     navigationRef.navigate('Feed', {
