@@ -43,6 +43,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "./plugins/withFoldableConfigChanges.js",
       "expo-web-browser",
       "expo-font",
       [
