@@ -1,26 +1,288 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Animated,
+  Image,
+  LayoutAnimation,
+  Platform,
+  Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   TouchableOpacity,
+  UIManager,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSettings, FontSize } from '../contexts/SettingsContext';
-import { useSource } from '../contexts/SourceContext';
+import { useSource, SOURCE_CATEGORIES } from '../contexts/SourceContext';
 import { SettingsStackParamList } from '../types/navigation';
 import { requestNotificationPermission, fireTestNotif, registerForPush, updatePushPreferences, getCachedPushToken } from '../utils/notifications';
-import { Share } from 'react-native';
 import { useTabBarAutoHide } from '../utils/tabBarAnim';
+import { INTEREST_CATEGORIES, INTEREST_TOPICS, type InterestTopic } from '../utils/interestTopics';
+import { TOPIC_SUBTOPICS } from '../utils/topics';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const FONT_SIZES: FontSize[] = ['Small', 'Medium', 'Large', 'XLarge'];
+const VIOLET = '#b994ff';
+const BLUE = '#4A90D9';
 
+const TOPIC_ITEMS = [
+  { key: 'breaking',       label: 'Breaking News', icon: '🔴' },
+  { key: 'technology',     label: 'Technology',    icon: '💻' },
+  { key: 'india-politics', label: 'India',         icon: '🇮🇳' },
+  { key: 'geopolitics',    label: 'World',         icon: '🌍' },
+  { key: 'markets',        label: 'Markets',       icon: '📈' },
+  { key: 'business',       label: 'Business',      icon: '💼' },
+] as const;
+
+const SOURCE_DOMAINS: Record<string, string> = {
+  'TechCrunch':'techcrunch.com','The Verge':'theverge.com','Ars Technica':'arstechnica.com','Wired':'wired.com','Hacker News':'news.ycombinator.com','9to5Mac':'9to5mac.com','9to5Google':'9to5google.com','MIT Tech Review':'technologyreview.com','Engadget':'engadget.com','VentureBeat':'venturebeat.com','The Next Web':'thenextweb.com','BBC World':'bbc.co.uk','NYT World':'nytimes.com','The Guardian':'theguardian.com','NPR World':'npr.org','Al Jazeera':'aljazeera.com','NDTV':'ndtv.com','India Today':'indiatoday.in','The Print':'theprint.in','The Quint':'thequint.com','CNBC TV18':'cnbctv18.com','Scroll.in':'scroll.in','Economic Times':'economictimes.indiatimes.com','Livemint':'livemint.com','Mint':'livemint.com','Inc42':'inc42.com','Indian Express':'indianexpress.com',
+};
+function faviconUrl(name: string) {
+  const domain = SOURCE_DOMAINS[name] ?? 'google.com';
+  return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+}
+
+// ── Collapsible section ────────────────────────────────────────────────────
+function Collapsible({ icon, title, subtitle, children, defaultOpen }: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(!!defaultOpen);
+  const rotate = React.useRef(new Animated.Value(open ? 1 : 0)).current;
+  const toggle = useCallback(() => {
+    LayoutAnimation.configureNext({ duration: 220, update: { type: 'easeInEaseOut' } });
+    Animated.timing(rotate, { toValue: open ? 0 : 1, duration: 200, useNativeDriver: true }).start();
+    setOpen(o => !o);
+  }, [open, rotate]);
+  const deg = rotate.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] });
+  return (
+    <View style={styles.card}>
+      <Pressable onPress={toggle} style={styles.row}>
+        <View style={styles.collapsibleIcon}>
+          <Ionicons name={icon} size={16} color={VIOLET} />
+        </View>
+        <View style={styles.rowTextCol}>
+          <Text style={styles.rowLabel}>{title}</Text>
+          {subtitle ? <Text style={styles.rowSub}>{subtitle}</Text> : null}
+        </View>
+        <Animated.View style={{ transform: [{ rotate: deg }] }}>
+          <Ionicons name="chevron-forward" size={18} color="#666" />
+        </Animated.View>
+      </Pressable>
+      {open && <View style={styles.collapsibleBody}>{children}</View>}
+    </View>
+  );
+}
+
+// ── Star row for Topic Interests ────────────────────────────────────────────
+function StarRow({ value, onChange }: { value: number; onChange: (n: number) => void }) {
+  return (
+    <View style={{ flexDirection: 'row', gap: 0 }}>
+      {Array.from({ length: 5 }).map((_, i) => {
+        const filled = i < value;
+        const next = value === i + 1 ? 0 : i + 1;
+        return (
+          <Pressable key={i} onPress={() => onChange(next)} hitSlop={4} style={{ padding: 2 }}>
+            <Ionicons name={filled ? 'star' : 'star-outline'} size={18} color={filled ? '#FFC542' : '#3A3A3A'} />
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+// ── Inline Topic Interests ──────────────────────────────────────────────────
+function InlineTopicInterests() {
+  const { topicInterests, setTopicInterest } = useSettings();
+  const [q, setQ] = useState('');
+  const grouped = useMemo(() => {
+    const qq = q.trim().toLowerCase();
+    const f = (t: InterestTopic) => !qq || t.label.toLowerCase().includes(qq) || t.keywords.some(k => k.includes(qq));
+    return INTEREST_CATEGORIES.map(cat => ({
+      category: cat,
+      items: INTEREST_TOPICS.filter(t => t.category === cat && f(t)),
+    })).filter(g => g.items.length > 0);
+  }, [q]);
+  return (
+    <View>
+      <View style={styles.searchWrap}>
+        <Ionicons name="search" size={14} color="#555" />
+        <TextInput
+          value={q} onChangeText={setQ}
+          placeholder="Search topics"
+          placeholderTextColor="#555"
+          style={styles.searchInput}
+          autoCapitalize="none" autoCorrect={false}
+        />
+      </View>
+      {grouped.map(group => (
+        <View key={group.category} style={{ marginTop: 12 }}>
+          <Text style={styles.miniHeader}>{group.category.toUpperCase()}</Text>
+          {group.items.map((t, i) => (
+            <View key={t.id} style={[styles.miniRow, i > 0 && styles.miniDivider]}>
+              <Text style={{ fontSize: 16 }}>{t.emoji}</Text>
+              <Text style={styles.miniLabel} numberOfLines={1}>{t.label}</Text>
+              <StarRow value={topicInterests[t.id] ?? 0} onChange={(n) => setTopicInterest(t.id, n)} />
+            </View>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// ── Inline Favorite Sources / Topics ────────────────────────────────────────
+function InlineFavorites() {
+  const { favSources, toggleFavSource, favTopics, toggleFavTopic } = useSettings();
+  return (
+    <View>
+      <Text style={styles.miniHeader}>FAVORITE TOPICS</Text>
+      <View style={styles.chipWrap}>
+        {TOPIC_ITEMS.map(t => {
+          const on = favTopics.includes(t.key);
+          return (
+            <Pressable key={t.key} onPress={() => toggleFavTopic(t.key)} style={[styles.chip, on && styles.chipActive]}>
+              <Text style={{ fontSize: 13 }}>{t.icon}</Text>
+              <Text style={[styles.chipText, on && styles.chipTextActive]}>{t.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Text style={[styles.miniHeader, { marginTop: 16 }]}>FAVORITE SOURCES</Text>
+      <Text style={styles.miniHint}>Topic alerts limit to these publications. Tap to toggle.</Text>
+      {SOURCE_CATEGORIES.map(cat => (
+        <View key={cat.label} style={{ marginTop: 10 }}>
+          <Text style={styles.miniSubHeader}>{cat.label}</Text>
+          <View style={styles.chipWrap}>
+            {cat.sources.map(s => {
+              const on = favSources.includes(s);
+              return (
+                <Pressable key={s} onPress={() => toggleFavSource(s)} style={[styles.srcChip, on && styles.srcChipActive]}>
+                  <Image source={{ uri: faviconUrl(s) }} style={styles.favicon} />
+                  <Text style={[styles.chipText, on && styles.chipTextActive]} numberOfLines={1}>{s}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// ── Inline Active Topics ────────────────────────────────────────────────────
+function InlineActiveTopics() {
+  const { activeTopics, toggleTopic, activeSubTopics, toggleSubTopic, showSports, setShowSports, showEntertainment, setShowEntertainment } = useSettings();
+  return (
+    <View>
+      <Text style={styles.miniHint}>Toggle categories. Tap sub-topic pills to refine.</Text>
+      {TOPIC_ITEMS.map(item => {
+        const on = activeTopics[item.key] !== false;
+        const subs = TOPIC_SUBTOPICS[item.key] ?? [];
+        return (
+          <View key={item.key} style={{ marginTop: 14 }}>
+            <View style={styles.miniRow}>
+              <Text style={{ fontSize: 16 }}>{item.icon}</Text>
+              <Text style={[styles.miniLabel, !on && { color: '#555' }]}>{item.label}</Text>
+              <Switch
+                value={on}
+                onValueChange={() => toggleTopic(item.key)}
+                trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }}
+                thumbColor={on ? BLUE : '#444'}
+              />
+            </View>
+            {on && subs.length > 0 && (
+              <View style={[styles.chipWrap, { marginTop: 8 }]}>
+                {subs.map(sub => {
+                  const isSpecial = (item.key === 'breaking' || item.key === 'india-politics') && (sub === 'Sports' || sub === 'Entertainment');
+                  const subKey = `${item.key}::${sub}`;
+                  const subOn = isSpecial
+                    ? (sub === 'Sports' ? showSports : showEntertainment)
+                    : activeSubTopics[subKey] !== false;
+                  const press = () => {
+                    if (isSpecial) {
+                      if (sub === 'Sports') setShowSports(!showSports);
+                      else setShowEntertainment(!showEntertainment);
+                    } else {
+                      toggleSubTopic(subKey);
+                    }
+                  };
+                  return (
+                    <Pressable key={sub} onPress={press} style={[styles.chip, subOn && styles.chipActive]}>
+                      <Text style={[styles.chipText, subOn && styles.chipTextActive]}>{sub}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+// ── Inline Sources ──────────────────────────────────────────────────────────
+function InlineSources() {
+  const { activeSources, toggleSource } = useSource();
+  const [q, setQ] = useState('');
+  return (
+    <View>
+      <View style={styles.searchWrap}>
+        <Ionicons name="search" size={14} color="#555" />
+        <TextInput
+          value={q} onChangeText={setQ}
+          placeholder="Search sources"
+          placeholderTextColor="#555"
+          style={styles.searchInput}
+          autoCapitalize="none" autoCorrect={false}
+        />
+      </View>
+      {SOURCE_CATEGORIES.map(cat => {
+        const items = q
+          ? cat.sources.filter(s => s.toLowerCase().includes(q.toLowerCase()))
+          : cat.sources;
+        if (items.length === 0) return null;
+        return (
+          <View key={cat.label} style={{ marginTop: 12 }}>
+            <Text style={styles.miniSubHeader}>{cat.label}</Text>
+            {items.map((src, i) => {
+              const on = activeSources[src] !== false;
+              return (
+                <View key={src} style={[styles.miniRow, i > 0 && styles.miniDivider]}>
+                  <Image source={{ uri: faviconUrl(src) }} style={styles.favicon} />
+                  <Text style={styles.miniLabel} numberOfLines={1}>{src}</Text>
+                  <Switch
+                    value={on}
+                    onValueChange={() => toggleSource(src)}
+                    trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }}
+                    thumbColor={on ? BLUE : '#444'}
+                  />
+                </View>
+              );
+            })}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+// ── Main Screen ────────────────────────────────────────────────────────────
 export default function SettingsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<SettingsStackParamList>>();
   const {
@@ -29,24 +291,18 @@ export default function SettingsScreen() {
     notifAiFeed, setNotifAiFeed,
     notifTech, setNotifTech,
     notifDigest, setNotifDigest,
-    notifSources, setNotifSources,
     favSources, favTopics,
     activeTopics,
     topicInterests,
     resetSettings,
   } = useSettings();
+  const { resetSources } = useSource();
+  const { onScroll, restore } = useTabBarAutoHide();
+  useFocusEffect(useCallback(() => () => restore(), [restore]));
 
-  // Build keyword list from starred topics. Falls back to a tech default if
-  // user hasn't starred anything so the toggle still does something.
-  // Build keyword|Label pairs from starred topics so backend can label pushes
-  // with which of the user's topics matched (e.g. "📌 Electric Vehicles").
-  const starredKeywords = React.useMemo(() => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { INTEREST_TOPICS } = require('../utils/interestTopics') as { INTEREST_TOPICS: { id: string; label: string; keywords: string[] }[] };
+  // Build keyword|Label|stars pairs for backend.
+  const starredKeywords = useMemo(() => {
     const starred = INTEREST_TOPICS.filter(t => (topicInterests[t.id] ?? 0) > 0);
-    // Pair format: "keyword|Label|stars". Stars (1-5) gate notification
-    // significance on backend. Higher star → wider net (any source). Lower
-    // star → tighter (multi-source + breaking only).
     const pairs: string[] = [];
     const seen = new Set<string>();
     for (const t of starred) {
@@ -61,10 +317,6 @@ export default function SettingsScreen() {
     return pairs.slice(0, 30);
   }, [topicInterests]);
 
-  const favCount = favSources.length + favTopics.length;
-
-  const { resetSources } = useSource();
-
   const handleNotifToggle = useCallback(async (value: boolean, setter: (v: boolean) => void, prefKey?: 'breaking' | 'topics' | 'digest' | 'aiFeed') => {
     const FALLBACK_KWS = ['tech', 'ai', 'apple', 'google', 'meta', 'openai', 'microsoft', 'amazon', 'startup', 'software', 'chip', 'iphone', 'android', 'app', 'cyber', 'crypto'];
     const kws = starredKeywords.length > 0 ? starredKeywords : FALLBACK_KWS;
@@ -77,15 +329,14 @@ export default function SettingsScreen() {
       return;
     }
     const granted = await requestNotificationPermission();
-    if (granted) {
-      setter(true);
-      registerForPush().then(() => {
-        if (prefKey === 'breaking') updatePushPreferences({ breakingEnabled: true });
-        if (prefKey === 'aiFeed') updatePushPreferences({ aiFeedEnabled: true });
-        if (prefKey === 'topics') updatePushPreferences({ topicsEnabled: true, topicsKeywords: kws });
-        if (prefKey === 'digest') {
-        // Twice daily: morning + evening. Convert local 8:00 / 18:00 to UTC.
-        const offsetMin = new Date().getTimezoneOffset(); // minutes added to local to get UTC
+    if (!granted) return;
+    setter(true);
+    registerForPush().then(() => {
+      if (prefKey === 'breaking') updatePushPreferences({ breakingEnabled: true });
+      if (prefKey === 'aiFeed') updatePushPreferences({ aiFeedEnabled: true });
+      if (prefKey === 'topics') updatePushPreferences({ topicsEnabled: true, topicsKeywords: kws });
+      if (prefKey === 'digest') {
+        const offsetMin = new Date().getTimezoneOffset();
         const toUTC = (h: number, m: number) => {
           const total = h * 60 + m + offsetMin;
           const norm = ((total % 1440) + 1440) % 1440;
@@ -95,18 +346,14 @@ export default function SettingsScreen() {
         const evening = toUTC(18, 0);
         updatePushPreferences({
           digestEnabled: true,
-          digestHour: morning.hour,
-          digestMinute: morning.minute,
+          digestHour: morning.hour, digestMinute: morning.minute,
           digestEveningEnabled: true,
-          digestEveningHour: evening.hour,
-          digestEveningMinute: evening.minute,
+          digestEveningHour: evening.hour, digestEveningMinute: evening.minute,
         });
       }
-      });
-    }
-  }, []);
+    });
+  }, [starredKeywords]);
 
-  // Sync favSources to backend whenever the user changes their favorites list.
   useEffect(() => {
     updatePushPreferences({
       favSourcesEnabled: favSources.length > 0,
@@ -114,55 +361,42 @@ export default function SettingsScreen() {
     });
   }, [favSources]);
 
-  // Re-sync topic keywords whenever the user stars/unstars topics — only if
-  // topic alerts are already on (otherwise nothing changes for them).
   useEffect(() => {
     if (notifTech && starredKeywords.length > 0) {
       updatePushPreferences({ topicsEnabled: true, topicsKeywords: starredKeywords });
     }
   }, [starredKeywords, notifTech]);
 
+  const starredCount = Object.values(topicInterests).filter(v => v > 0).length;
   const enabledTopicsCount = Object.values(activeTopics).filter(Boolean).length;
-  const { onScroll, restore } = useTabBarAutoHide();
-  useFocusEffect(useCallback(() => () => restore(), [restore]));
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} onScroll={onScroll} scrollEventThrottle={16}>
         <Text style={styles.screenTitle}>Settings</Text>
 
-        {/* READING PREFERENCES */}
-        <Text style={styles.sectionHeader}>READING PREFERENCES</Text>
+        {/* READING */}
+        <Text style={styles.sectionHeader}>READING</Text>
         <View style={styles.card}>
           <Text style={styles.settingLabel}>Article Font Size</Text>
           <View style={styles.segmented}>
             {FONT_SIZES.map(fs => (
-              <TouchableOpacity
-                key={fs}
+              <TouchableOpacity key={fs}
                 style={[styles.segment, fontSize === fs && styles.segmentActive]}
-                onPress={() => setFontSize(fs)}
-              >
-                <Text style={[styles.segmentLabel, fontSize === fs && styles.segmentLabelActive]}>
-                  {fs}
-                </Text>
+                onPress={() => setFontSize(fs)}>
+                <Text style={[styles.segmentLabel, fontSize === fs && styles.segmentLabelActive]}>{fs}</Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
-        {/* NOTIFICATIONS — redesigned: master switch + multi-check WHEN + drill-down WHAT */}
+        {/* NOTIFICATIONS */}
         <Text style={styles.sectionHeader}>NOTIFICATIONS</Text>
-
-        {/* Master switch — kills/wakes all push at once */}
         <View style={styles.card}>
           <View style={styles.row}>
             <View style={styles.rowTextCol}>
               <Text style={styles.rowLabel}>All Notifications</Text>
-              <Text style={styles.rowSub}>
-                {(notifBreaking || notifTech || notifDigest)
-                  ? 'Master switch — turn off to silence everything'
-                  : 'Off — no pushes will be sent'}
-              </Text>
+              <Text style={styles.rowSub}>{(notifBreaking || notifTech || notifDigest || notifAiFeed) ? 'Master switch — off silences everything' : 'Off — no pushes will be sent'}</Text>
             </View>
             <Switch
               value={notifBreaking || notifTech || notifDigest || notifAiFeed}
@@ -175,152 +409,104 @@ export default function SettingsScreen() {
                 }
               }}
               trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }}
-              thumbColor={(notifBreaking || notifTech || notifDigest || notifAiFeed) ? '#4A90D9' : '#444'} />
+              thumbColor={(notifBreaking || notifTech || notifDigest || notifAiFeed) ? BLUE : '#444'} />
           </View>
-        </View>
-
-        {/* WHEN — multi-check: pick any combination */}
-        <Text style={styles.sectionHeader}>WHEN</Text>
-        <View style={styles.card}>
-          <View style={styles.row}>
+          <View style={[styles.row, styles.rowBorder]}>
             <View style={styles.rowTextCol}>
-              <Text style={styles.rowLabel}>Breaking news</Text>
-              <Text style={styles.rowSub}>Stories with 3+ source confirmation</Text>
+              <Text style={styles.rowLabel}>Breaking News</Text>
+              <Text style={styles.rowSub}>3+ source confirmation</Text>
             </View>
             <Switch value={notifBreaking} onValueChange={v => handleNotifToggle(v, setNotifBreaking, 'breaking')}
-              trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }}
-              thumbColor={notifBreaking ? '#4A90D9' : '#444'} />
+              trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }} thumbColor={notifBreaking ? BLUE : '#444'} />
           </View>
           <View style={[styles.row, styles.rowBorder]}>
             <View style={styles.rowTextCol}>
-              <Text style={styles.rowLabel}>✨ AI Feed breaking</Text>
-              <Text style={styles.rowSub}>Tap opens AI Deep Dive instead of article</Text>
+              <Text style={styles.rowLabel}>AI Feed Breaking</Text>
+              <Text style={styles.rowSub}>Tap opens Deep Dive</Text>
             </View>
             <Switch value={notifAiFeed} onValueChange={v => handleNotifToggle(v, setNotifAiFeed, 'aiFeed')}
-              trackColor={{ false: '#1A1A1A', true: '#3a2270' }}
-              thumbColor={notifAiFeed ? '#b994ff' : '#444'} />
+              trackColor={{ false: '#1A1A1A', true: '#3a2270' }} thumbColor={notifAiFeed ? VIOLET : '#444'} />
           </View>
           <View style={[styles.row, styles.rowBorder]}>
             <View style={styles.rowTextCol}>
-              <Text style={styles.rowLabel}>Topic & source matches</Text>
-              <Text style={styles.rowSub}>
-                {starredKeywords.length > 0 || favSources.length > 0
-                  ? `${starredKeywords.length} keywords · ${favSources.length} favorite sources`
-                  : 'Star topics + favorite sources below'}
-              </Text>
+              <Text style={styles.rowLabel}>Topic Matches</Text>
+              <Text style={styles.rowSub}>{starredCount > 0 ? `${starredCount} topics starred · ${favSources.length} fav sources` : 'Star topics below'}</Text>
             </View>
             <Switch value={notifTech} onValueChange={v => handleNotifToggle(v, setNotifTech, 'topics')}
-              trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }}
-              thumbColor={notifTech ? '#4A90D9' : '#444'} />
+              trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }} thumbColor={notifTech ? BLUE : '#444'} />
           </View>
           <View style={[styles.row, styles.rowBorder]}>
             <View style={styles.rowTextCol}>
-              <Text style={styles.rowLabel}>Daily digest</Text>
-              <Text style={styles.rowSub}>8am + 6pm — top stories twice daily</Text>
+              <Text style={styles.rowLabel}>Daily Digest</Text>
+              <Text style={styles.rowSub}>8am + 6pm summary</Text>
             </View>
             <Switch value={notifDigest} onValueChange={v => handleNotifToggle(v, setNotifDigest, 'digest')}
-              trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }}
-              thumbColor={notifDigest ? '#4A90D9' : '#444'} />
+              trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }} thumbColor={notifDigest ? BLUE : '#444'} />
           </View>
         </View>
 
-        {/* WHAT YOU CARE ABOUT — content selection lives here, not under notif toggles */}
+        {/* CONTENT — inline collapsibles */}
         <Text style={styles.sectionHeader}>WHAT YOU CARE ABOUT</Text>
+        <Collapsible icon="star" title="Topic Interests" subtitle={starredCount > 0 ? `${starredCount} starred · weights feed + notifs` : 'Star topics 1-5 to personalise'}>
+          <InlineTopicInterests />
+        </Collapsible>
+        <Collapsible icon="heart" title="Favorites" subtitle={`${favTopics.length} topics · ${favSources.length} sources`}>
+          <InlineFavorites />
+        </Collapsible>
+
+        <Text style={styles.sectionHeader}>FEED</Text>
+        <Collapsible icon="grid" title="Active Topics" subtitle={`${enabledTopicsCount} of 6 categories on`}>
+          <InlineActiveTopics />
+        </Collapsible>
+        <Collapsible icon="newspaper" title="Sources" subtitle="Enable / disable individual publications">
+          <InlineSources />
+        </Collapsible>
+
+        {/* STATS */}
+        <Text style={styles.sectionHeader}>STATS</Text>
         <View style={styles.card}>
-          <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('TopicInterests')}>
-            <View style={styles.rowTextCol}>
-              <Text style={styles.rowLabel}>Topics ★</Text>
-              <Text style={styles.rowSub}>
-                {starredKeywords.length > 0 ? `${Object.values(topicInterests).filter(v => v > 0).length} starred` : 'Star topics to personalise alerts'}
-              </Text>
+          <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('Usage')}>
+            <View style={styles.collapsibleIcon}>
+              <Ionicons name="bar-chart" size={16} color={VIOLET} />
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#444" />
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => navigation.navigate('FavSources')}>
             <View style={styles.rowTextCol}>
-              <Text style={styles.rowLabel}>Favorite Sources</Text>
-              <Text style={styles.rowSub}>
-                {favSources.length > 0 ? `${favSources.length} favorited — topic alerts limited to these` : 'Tap to add favorite publications · filters topic alerts'}
-              </Text>
+              <Text style={styles.rowLabel}>Usage & Insights</Text>
+              <Text style={styles.rowSub}>Articles read, AI usage, notif open rate, streak</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#444" />
+            <Ionicons name="chevron-forward" size={18} color="#666" />
           </TouchableOpacity>
         </View>
 
-        {/* ADVANCED — testing + debug */}
+        {/* ADVANCED */}
         <Text style={styles.sectionHeader}>ADVANCED</Text>
         <View style={styles.card}>
-          <TouchableOpacity
-            style={styles.row}
-            onPress={async () => {
-              const ok = await requestNotificationPermission();
-              if (!ok) { Alert.alert('Permission needed', 'Enable notifications in system settings.'); return; }
-              try { await fireTestNotif(); Alert.alert('Sent', 'Test notification scheduled — should appear shortly.'); }
-              catch (e) { Alert.alert('Failed', String(e instanceof Error ? e.message : e)); }
-            }}
-          >
+          <TouchableOpacity style={styles.row} onPress={async () => {
+            const ok = await requestNotificationPermission();
+            if (!ok) { Alert.alert('Permission needed', 'Enable notifications in system settings.'); return; }
+            try { await fireTestNotif(); Alert.alert('Sent', 'Test notification scheduled.'); }
+            catch (e) { Alert.alert('Failed', String(e instanceof Error ? e.message : e)); }
+          }}>
             <View style={styles.rowTextCol}>
               <Text style={styles.rowLabel}>Send Test Notification</Text>
-              <Text style={styles.rowSub}>Verifies permission, channel, and handler</Text>
+              <Text style={styles.rowSub}>Verifies permission + channel</Text>
             </View>
-            <Ionicons name="notifications-outline" size={18} color="#888" />
+            <Ionicons name="notifications-outline" size={18} color="#666" />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.row, styles.rowBorder]}
-            onPress={async () => {
-              const t = await getCachedPushToken();
-              if (!t) { Alert.alert('No token', 'Enable a notification toggle first.'); return; }
-              await Share.share({ message: t }).catch(() => {});
-            }}
-          >
+          <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={async () => {
+            const t = await getCachedPushToken();
+            if (!t) { Alert.alert('No token', 'Enable a notification toggle first.'); return; }
+            await Share.share({ message: t }).catch(() => {});
+          }}>
             <View style={styles.rowTextCol}>
               <Text style={styles.rowLabel}>Share Push Token</Text>
               <Text style={styles.rowSub}>For testing via expo.dev/notifications</Text>
             </View>
-            <Ionicons name="share-outline" size={18} color="#888" />
-          </TouchableOpacity>
-        </View>
-
-        {/* FEED */}
-        <Text style={styles.sectionHeader}>FEED</Text>
-        <View style={styles.card}>
-          <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('TopicInterests')}>
-            <View style={styles.rowTextCol}>
-              <Text style={styles.rowLabel}>Topic Interests ★</Text>
-              <Text style={styles.rowSub}>Star topics to personalise For You feed</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color="#444" />
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => navigation.navigate('Topics')}>
-            <View style={styles.rowTextCol}>
-              <Text style={styles.rowLabel}>Topics</Text>
-              <Text style={styles.rowSub}>{enabledTopicsCount} of 6 categories enabled</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color="#444" />
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => navigation.navigate('Sources')}>
-            <View style={styles.rowTextCol}>
-              <Text style={styles.rowLabel}>Sources</Text>
-              <Text style={styles.rowSub}>Manage individual news sources</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color="#444" />
-          </TouchableOpacity>
-        </View>
-
-        {/* MY STATS */}
-        <Text style={styles.sectionHeader}>MY STATS</Text>
-        <View style={styles.card}>
-          <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('Usage')}>
-            <View style={styles.rowTextCol}>
-              <Text style={styles.rowLabel}>Usage & Insights</Text>
-              <Text style={styles.rowSub}>Articles read, AI usage, estimated cost</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color="#444" />
+            <Ionicons name="share-outline" size={18} color="#666" />
           </TouchableOpacity>
         </View>
 
         {/* ABOUT */}
-        <Text style={[styles.sectionHeader, { marginTop: 8 }]}>ABOUT</Text>
+        <Text style={styles.sectionHeader}>ABOUT</Text>
         <View style={styles.card}>
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Version</Text>
@@ -330,78 +516,64 @@ export default function SettingsScreen() {
             <Text style={styles.rowLabel}>Build</Text>
             <Text style={styles.rowValue}>Expo SDK 54</Text>
           </View>
-          <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => { resetSettings(); resetSources(); }}>
-            <View style={styles.clearRow}>
+          <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => {
+            Alert.alert('Reset?', 'This clears all settings + source preferences.', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Reset', style: 'destructive', onPress: () => { resetSettings(); resetSources(); } },
+            ]);
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Ionicons name="trash-outline" size={16} color="#FF4444" style={{ marginRight: 8 }} />
-              <Text style={styles.clearCache}>Reset to Defaults</Text>
+              <Text style={{ color: '#FF4444', fontSize: 15, fontWeight: '500' }}>Reset to Defaults</Text>
             </View>
           </TouchableOpacity>
         </View>
 
-        <Text style={[styles.sectionHeader, { marginTop: 8 }]}>BIAS RATINGS</Text>
-        <View style={styles.card}>
-          <Text style={styles.biasAttribution}>
-            Bias ratings are adapted from publicly available media bias resources (AllSides, Ad Fontes Media). Used for informational purposes. Not all sources rated.
-          </Text>
-          <View style={{ marginTop: 12, gap: 8 }}>
-            {[
-              { color: '#1E5CFF', label: 'Left / Lean Left' },
-              { color: '#9B9B9B', label: 'Center' },
-              { color: '#FF3B30', label: 'Right / Lean Right' },
-            ].map(({ color, label }) => (
-              <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
-                <Text style={styles.biasLegendText}>{label}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        <View style={{ height: 40 }} />
+        <View style={{ height: 60 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000000' },
-  screenTitle: {
-    color: '#FFFFFF', fontSize: 28, fontWeight: '800',
-    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24,
-  },
-  sectionHeader: {
-    color: '#444444', fontSize: 11, fontWeight: '700', letterSpacing: 1.5,
-    paddingHorizontal: 20, paddingBottom: 10,
-  },
-  card: {
-    marginHorizontal: 16, backgroundColor: '#0E0E0E',
-    borderRadius: 14, borderWidth: 1, borderColor: '#1A1A1A',
-    marginBottom: 28, overflow: 'hidden',
-  },
-  settingLabel: {
-    color: '#888', fontSize: 12, fontWeight: '700', letterSpacing: 0.5,
-    paddingHorizontal: 16, paddingTop: 16, paddingBottom: 10,
-  },
-  segmented: {
-    flexDirection: 'row', margin: 12, marginTop: 0,
-    backgroundColor: '#1A1A1A', borderRadius: 10, padding: 3,
-  },
+  container: { flex: 1, backgroundColor: '#000' },
+  screenTitle: { color: '#FFF', fontSize: 28, fontWeight: '800', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24 },
+  sectionHeader: { color: '#444', fontSize: 11, fontWeight: '700', letterSpacing: 1.5, paddingHorizontal: 20, paddingBottom: 10 },
+  card: { marginHorizontal: 16, backgroundColor: '#0E0E0E', borderRadius: 14, borderWidth: 1, borderColor: '#1A1A1A', marginBottom: 18, overflow: 'hidden' },
+
+  settingLabel: { color: '#888', fontSize: 12, fontWeight: '700', letterSpacing: 0.5, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 10 },
+  segmented: { flexDirection: 'row', margin: 12, marginTop: 0, backgroundColor: '#1A1A1A', borderRadius: 10, padding: 3 },
   segment: { flex: 1, paddingVertical: 9, alignItems: 'center', borderRadius: 8 },
-  segmentActive: { backgroundColor: '#4A90D9' },
+  segmentActive: { backgroundColor: BLUE },
   segmentLabel: { color: '#555', fontSize: 12, fontWeight: '600' },
   segmentLabelActive: { color: '#FFF' },
-  row: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14,
-  },
+
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, gap: 12 },
   rowBorder: { borderTopWidth: 1, borderTopColor: '#1A1A1A' },
-  rowTextCol: { flex: 1, marginRight: 12 },
+  rowTextCol: { flex: 1 },
   rowLabel: { color: '#DDD', fontSize: 15, fontWeight: '500' },
   rowSub: { color: '#555', fontSize: 12, marginTop: 2 },
   rowValue: { color: '#444', fontSize: 15 },
 
-  clearRow: { flexDirection: 'row', alignItems: 'center' },
-  clearCache: { color: '#FF4444', fontSize: 15, fontWeight: '500' },
-  biasAttribution: { color: 'rgba(255,255,255,0.45)', fontSize: 12, lineHeight: 18 },
-  biasLegendText: { color: 'rgba(255,255,255,0.55)', fontSize: 13 },
+  collapsibleIcon: { width: 30, height: 30, borderRadius: 8, backgroundColor: 'rgba(185,148,255,0.12)', alignItems: 'center', justifyContent: 'center' },
+  collapsibleBody: { paddingHorizontal: 14, paddingTop: 4, paddingBottom: 16, borderTopWidth: 1, borderTopColor: '#161616' },
+
+  searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#1a1a1f', borderRadius: 10, marginTop: 8 },
+  searchInput: { flex: 1, color: '#FFF', fontSize: 13, padding: 0 },
+
+  miniHeader: { color: '#666', fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginBottom: 8 },
+  miniSubHeader: { color: '#888', fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: 6 },
+  miniHint: { color: '#555', fontSize: 11, marginBottom: 8 },
+  miniRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
+  miniDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#1a1a1a' },
+  miniLabel: { flex: 1, color: '#DDD', fontSize: 13, fontWeight: '500' },
+
+  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 16, backgroundColor: '#1a1a1f', borderWidth: 1, borderColor: 'transparent' },
+  chipActive: { backgroundColor: 'rgba(74,144,217,0.18)', borderColor: BLUE },
+  chipText: { color: '#999', fontSize: 12, fontWeight: '600' },
+  chipTextActive: { color: '#FFF' },
+  srcChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 14, backgroundColor: '#1a1a1f', borderWidth: 1, borderColor: 'transparent', maxWidth: '48%' },
+  srcChipActive: { backgroundColor: 'rgba(74,144,217,0.18)', borderColor: BLUE },
+  favicon: { width: 14, height: 14, borderRadius: 3 },
 });
