@@ -302,7 +302,10 @@ export default function SettingsScreen() {
         pairs.push(`${kw}|${t.label}|${stars}`);
       }
     }
-    return pairs.slice(0, 30);
+    // No 30-cap: previously the first ~3 Technology topics ate all 30 slots,
+    // silently dropping every India/World/Markets/Business topic. Send all
+    // (sanity ceiling 500 so a pathological list can't bloat the payload).
+    return pairs.slice(0, 500);
   }, [topicInterests]);
 
   const handleNotifToggle = useCallback(async (value: boolean, setter: (v: boolean) => void, prefKey?: 'breaking' | 'topics' | 'digest' | 'aiFeed') => {
