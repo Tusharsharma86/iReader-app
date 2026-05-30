@@ -147,23 +147,10 @@ function InlineTopicInterests() {
 
 // ── Inline Favorite Sources / Topics ────────────────────────────────────────
 function InlineFavorites() {
-  const { favSources, toggleFavSource, favTopics, toggleFavTopic } = useSettings();
+  const { favSources, toggleFavSource } = useSettings();
   return (
     <View>
-      <Text style={styles.miniHeader}>FAVORITE TOPICS</Text>
-      <View style={styles.chipWrap}>
-        {TOPIC_ITEMS.map(t => {
-          const on = favTopics.includes(t.key);
-          return (
-            <Pressable key={t.key} onPress={() => toggleFavTopic(t.key)} style={[styles.chip, on && styles.chipActive]}>
-              <Text style={{ fontSize: 13 }}>{t.icon}</Text>
-              <Text style={[styles.chipText, on && styles.chipTextActive]}>{t.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      <Text style={[styles.miniHeader, { marginTop: 16 }]}>FAVORITE SOURCES</Text>
-      <Text style={styles.miniHint}>Topic alerts limit to these publications. Tap to toggle.</Text>
+      <Text style={styles.miniHint}>When set, topic alerts are limited to these publications. Leave empty for all sources. Tap to toggle.</Text>
       {SOURCE_CATEGORIES.map(cat => (
         <View key={cat.label} style={{ marginTop: 10 }}>
           <Text style={styles.miniSubHeader}>{cat.label}</Text>
@@ -291,7 +278,7 @@ export default function SettingsScreen() {
     notifAiFeed, setNotifAiFeed,
     notifTech, setNotifTech,
     notifDigest, setNotifDigest,
-    favSources, favTopics,
+    favSources,
     activeTopics,
     topicInterests,
     resetSettings,
