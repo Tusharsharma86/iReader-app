@@ -106,19 +106,10 @@ function InlineTopicInterests() {
 
 // ── Inline: Favorite Sources (+ topics) ──────────────────────────────────────
 function InlineFavorites() {
-  const { favSources, toggleFavSource, favTopics, toggleFavTopic } = useSettings();
+  const { favSources, toggleFavSource } = useSettings();
   return (
     <div>
-      <div style={miniHeader}>FAVORITE TOPICS</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {TOPIC_ITEMS.map(t => (
-          <span key={t.key} onClick={() => toggleFavTopic(t.key)} style={chip(favTopics.includes(t.key))}>
-            <span style={{ fontSize: 13 }}>{t.icon}</span>{t.label}
-          </span>
-        ))}
-      </div>
-      <div style={miniHeader}>FAVORITE SOURCES</div>
-      <div style={miniHint}>Topic alerts are limited to these publications. Tap to toggle.</div>
+      <div style={miniHint}>When set, topic alerts are limited to these publications. Leave empty for all sources. Tap to toggle.</div>
       {SOURCE_CATEGORIES.map(cat => (
         <div key={cat.label} style={{ marginTop: 10 }}>
           <div style={{ color: '#888', fontSize: 11, fontWeight: 700, marginBottom: 6 }}>{cat.label}</div>
@@ -201,7 +192,7 @@ function InlineSources() {
 
 export default function SettingsScreen() {
   const { navigate, goBack, canGoBack } = useRouter();
-  const { fontSize, setFontSize, notifBreaking, setNotifBreaking, notifTech, setNotifTech, notifDigest, setNotifDigest, favSources, favTopics, activeTopics, topicInterests, resetSettings } = useSettings();
+  const { fontSize, setFontSize, notifBreaking, setNotifBreaking, notifTech, setNotifTech, notifDigest, setNotifDigest, favSources, activeTopics, topicInterests, resetSettings } = useSettings();
   const { resetSources } = useSource();
   const { reportScroll } = useTabBar();
   const [targetingOpen, setTargetingOpen] = useState(false);
