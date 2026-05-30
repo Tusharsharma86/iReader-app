@@ -69,6 +69,7 @@ export interface AiBreakdown {
 
 export interface UsageStats {
   last7Days: DayData[];
+  last30Days: DayData[];
   today: { articles: number; ai: AiBreakdown };
   week: { articles: number; ai: AiBreakdown };
   month: { articles: number; ai: AiBreakdown };
@@ -76,6 +77,7 @@ export interface UsageStats {
   topSources: { name: string; count: number }[];
   topCategories: { name: string; count: number }[];
   topTopics: { name: string; count: number }[];
+  streakDays: number;
   costPerAiCall: number;
 }
 
@@ -147,9 +149,19 @@ export function getUsageStats(): UsageStats {
       .map(([name, count]) => ({ name: labelMap?.[name] ?? name, count }));
   }
 
-  const topSources = buildRanking(d => d.sources, 8);
+  const topSources = buildRanking(d => d.sources, 10);
   const topCategories = buildRanking(d => d.categories, 6);
-  const topTopics = buildRanking(d => d.topics, 8, TOPIC_LABELS);
+  const topTopics = buildRanking(d => d.topics, 10, TOPIC_LABELS);
 
-  return { last7Days, today: { articles: todayRaw.articles, ai: sumAi(todayRaw) }, week, month, allTime, topSources, topCategories, topTopics, costPerAiCall: 0.018 };
+  // Reading streak: consecutive days (back from today) with >=1 article.
+  let streakDays = 0;
+  for (let i = 0; i < KEEP_DAYS; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const s = data[dateKey(d)];
+    if (s && s.articles > 0) streakDays++;
+    else if (i > 0) break;
+  }
+
+  return { last7Days, last30Days, today: { articles: todayRaw.articles, ai: sumAi(todayRaw) }, week, month, allTime, topSources, topCategories, topTopics, streakDays, costPerAiCall: 0.018 };
 }
