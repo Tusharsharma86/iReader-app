@@ -2,6 +2,12 @@ name: Build APK
 on:
   push:
     branches: [main]
+    # Web-only changes (web/**) and CI/doc tweaks don't need an APK build.
+    # Vercel still deploys web on every push regardless of this filter.
+    paths-ignore:
+      - 'web/**'
+      - '.github/**'
+      - '**.md'
   workflow_dispatch:
 
 env:
