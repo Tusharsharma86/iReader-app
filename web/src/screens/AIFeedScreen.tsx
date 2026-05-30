@@ -168,7 +168,16 @@ export default function AIFeedScreen() {
   const [topicCursor, setTopicCursor] = useState(0);
   const [exhausted, setExhausted] = useState(false);
   const [activeTopic, setActiveTopic] = useState<string>(TOPIC_QUEUE[0]);
-  const { reportScroll } = useTabBarActions();
+  const { reportScroll, hide: hideTabBar, show: showTabBar } = useTabBarActions();
+
+  // Deep Dive is an in-page overlay (not a route), and its z-index can't beat
+  // the TabBar because the bar lives in a higher root stacking context. So
+  // explicitly hide the bar while the overlay is open (same pattern as the
+  // Article reader), and restore it on close.
+  useEffect(() => {
+    if (openedItem) hideTabBar();
+    else showTabBar();
+  }, [openedItem, hideTabBar, showTabBar]);
 
   // Listen for AI Feed tab-tap → jump to first card.
   useEffect(() => {
