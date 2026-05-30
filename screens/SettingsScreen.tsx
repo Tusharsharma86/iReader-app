@@ -297,6 +297,7 @@ export default function SettingsScreen() {
     resetSettings,
   } = useSettings();
   const { resetSources } = useSource();
+  const [targetingOpen, setTargetingOpen] = useState(false);
   const { onScroll, restore } = useTabBarAutoHide();
   useFocusEffect(useCallback(() => () => restore(), [restore]));
 
@@ -429,12 +430,31 @@ export default function SettingsScreen() {
           </View>
           <View style={[styles.row, styles.rowBorder]}>
             <View style={styles.rowTextCol}>
-              <Text style={styles.rowLabel}>Topic Matches</Text>
-              <Text style={styles.rowSub}>{starredCount > 0 ? `${starredCount} topics starred · ${favSources.length} fav sources` : 'Star topics below'}</Text>
+              <Text style={styles.rowLabel}>Topic Alerts</Text>
+              <Text style={styles.rowSub}>{starredCount > 0 ? `${starredCount} topics starred · ${favSources.length} fav sources` : 'Alerts for topics you star'}</Text>
             </View>
             <Switch value={notifTech} onValueChange={v => handleNotifToggle(v, setNotifTech, 'topics')}
               trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }} thumbColor={notifTech ? BLUE : '#444'} />
           </View>
+          {/* Nested targeting sub-screen — what drives Topic Alerts. */}
+          <Pressable onPress={() => setTargetingOpen(o => !o)} style={[styles.row, styles.rowBorder, styles.nestedRow]}>
+            <View style={styles.rowTextCol}>
+              <Text style={styles.nestedLabel}>Topics & Sources</Text>
+              <Text style={styles.rowSub}>Choose what triggers your alerts</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#666" style={{ transform: [{ rotate: targetingOpen ? '90deg' : '0deg' }] }} />
+          </Pressable>
+          {targetingOpen && (
+            <View style={styles.nestedBody}>
+              <Text style={styles.nestedHeader}>TOPIC INTERESTS</Text>
+              <Text style={styles.nestedHint}>Star 1-5 — higher = higher alert priority + feed weight.</Text>
+              <InlineTopicInterests />
+              <View style={{ height: 18 }} />
+              <Text style={styles.nestedHeader}>FAVORITE SOURCES</Text>
+              <Text style={styles.nestedHint}>Optional — limit topic alerts to chosen publications.</Text>
+              <InlineFavorites />
+            </View>
+          )}
           <View style={[styles.row, styles.rowBorder]}>
             <View style={styles.rowTextCol}>
               <Text style={styles.rowLabel}>Daily Digest</Text>
@@ -444,15 +464,6 @@ export default function SettingsScreen() {
               trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }} thumbColor={notifDigest ? BLUE : '#444'} />
           </View>
         </View>
-
-        {/* CONTENT — inline collapsibles */}
-        <Text style={styles.sectionHeader}>WHAT YOU CARE ABOUT</Text>
-        <Collapsible icon="star" title="Topic Interests" subtitle={starredCount > 0 ? `${starredCount} starred · weights feed + notifs` : 'Star topics 1-5 to personalise'}>
-          <InlineTopicInterests />
-        </Collapsible>
-        <Collapsible icon="heart" title="Favorites" subtitle={`${favTopics.length} topics · ${favSources.length} sources`}>
-          <InlineFavorites />
-        </Collapsible>
 
         <Text style={styles.sectionHeader}>FEED</Text>
         <Collapsible icon="grid" title="Active Topics" subtitle={`${enabledTopicsCount} of 6 categories on`}>
@@ -555,6 +566,11 @@ const styles = StyleSheet.create({
   rowSub: { color: '#555', fontSize: 12, marginTop: 2 },
   rowValue: { color: '#444', fontSize: 15 },
 
+  nestedRow: { backgroundColor: '#0a0a0a', paddingLeft: 28 },
+  nestedLabel: { color: '#bbb', fontSize: 14, fontWeight: '500' },
+  nestedBody: { backgroundColor: '#0a0a0a', paddingHorizontal: 16, paddingBottom: 16, borderTopWidth: 1, borderTopColor: '#161616' },
+  nestedHeader: { color: VIOLET, fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginTop: 14 },
+  nestedHint: { color: '#555', fontSize: 11, marginTop: 3, marginBottom: 2 },
   collapsibleIcon: { width: 30, height: 30, borderRadius: 8, backgroundColor: 'rgba(185,148,255,0.12)', alignItems: 'center', justifyContent: 'center' },
   collapsibleBody: { paddingHorizontal: 14, paddingTop: 4, paddingBottom: 16, borderTopWidth: 1, borderTopColor: '#161616' },
 
