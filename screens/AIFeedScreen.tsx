@@ -30,7 +30,7 @@ import { darken, lighten, getArticleColor } from '../utils/colors';
 const FEED_API_BASE = 'https://ireader.onrender.com/api/news/feed';
 const DEEPDIVE_API = 'https://ireader.onrender.com/api/news/deepdive';
 const ASK_API = 'https://ireader.onrender.com/api/news/ask';
-const CACHE_PREFIX = '@deepdive_v1_';
+const CACHE_PREFIX = '@deepdive_v2_';
 const ASK_CACHE_PREFIX = '@ask_v1_';
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const VIOLET = '#b994ff';
@@ -697,7 +697,7 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
         setStage('generating');
         const paragraphs = [
           story.headline + '. ' + (story.summary ?? story.headline),
-          ...item.allStories.slice(1, 5).filter(s => s.summary && s.summary !== story.summary).map(s => `[${s.sources?.[0]?.name ?? 'Source'}]: ${s.summary}`),
+          ...item.allStories.slice(1, 12).filter(s => s.summary && s.summary !== story.summary).map(s => `[${s.sources?.[0]?.name ?? 'Source'}]: ${s.summary}`),
         ];
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 95000);
@@ -802,7 +802,7 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
                               {section.heading}
                             </Text>
                             {section.bullets.map((b, i) => (
-                              <View key={i} style={[overlayStyles.bulletRow, i > 0 && overlayStyles.bulletDivider]}>
+                              <View key={i} style={overlayStyles.bulletRow}>
                                 <View style={overlayStyles.bulletDot} />
                                 <Text style={overlayStyles.bulletText}>
                                   {renderHighlighted(b, allTags(data))}
@@ -813,7 +813,7 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
                         ))
                       ) : (
                         data.tldr.map((b, i) => (
-                          <View key={i} style={[overlayStyles.bulletRow, i > 0 && overlayStyles.bulletDivider]}>
+                          <View key={i} style={overlayStyles.bulletRow}>
                             <View style={overlayStyles.bulletDot} />
                             <Text style={overlayStyles.bulletText}>
                               {renderHighlighted(b, allTags(data))}
@@ -1439,9 +1439,8 @@ const overlayStyles = StyleSheet.create({
   sectionLabelRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
   sectionLabel: { color: VIOLET, fontSize: 10, fontWeight: '800', letterSpacing: 2 },
   labelDivider: { flex: 1, height: 1, backgroundColor: `${VIOLET}33`, marginLeft: 8 },
-  bulletRow: { flexDirection: 'row', gap: 14, paddingVertical: 14, alignItems: 'flex-start' },
-  bulletDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.05)' },
-  bulletDot: { width: 6, height: 6, borderRadius: 4, marginTop: 10, backgroundColor: VIOLET },
+  bulletRow: { flexDirection: 'row', gap: 12, paddingVertical: 7, alignItems: 'flex-start' },
+  bulletDot: { width: 6, height: 6, borderRadius: 4, marginTop: 9, backgroundColor: VIOLET },
   bulletText: { flex: 1, color: '#cfcfd8', fontSize: 15.5, lineHeight: 25 },
 
   insightCard: {
