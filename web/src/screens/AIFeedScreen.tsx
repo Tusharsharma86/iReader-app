@@ -2,7 +2,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Story } from '../types';
 import { useTabBarActions } from '../contexts/TabBarContext';
 import { darken, lighten, getArticleColor } from '../utils/colors';
+import { speakQueue, stop as stopSpeech, pause as pauseSpeech, resume as resumeSpeech, speechSupported, cleanForSpeech, type SpeechState } from '../utils/speech';
 
+const briefBtn: React.CSSProperties = {
+  width: 36, height: 36, borderRadius: 18, flexShrink: 0,
+  background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+};
 const FEED_API_BASE = 'https://ireader.onrender.com/api/news/feed';
 // Topic rotation for infinite scroll — once we run low on cards we pull the
 // next topic, dedupe against existing items, and append.
@@ -170,6 +176,29 @@ export default function AIFeedScreen() {
   const [exhausted, setExhausted] = useState(false);
   const [activeTopic, setActiveTopic] = useState<string>(TOPIC_QUEUE[0]);
   const { reportScroll, hide: hideTabBar, show: showTabBar } = useTabBarActions();
+
+  // ── Morning Briefing (sequential TTS playlist of the top feed stories) ──
+  const [briefingIdx, setBriefingIdx] = useState(-1);
+  const [briefingState, setBriefingState] = useState<SpeechState>('idle');
+  const briefItemsRef = useRef<FeedItem[]>([]);
+  briefItemsRef.current = items;
+  const startBriefing = useCallback((from: number) => {
+    const list = briefItemsRef.current.slice(from, from + 10);
+    if (list.length === 0) return;
+    const chunks = list.map(it => `${cleanForSpeech(it.primary.headline)}. ${cleanForSpeech(it.primary.summary || '')}`);
+    speakQueue(chunks, {
+      onStateChange: setBriefingState,
+      onItemStart: (i) => setBriefingIdx(from + i),
+      onDone: () => setBriefingIdx(-1),
+    });
+  }, []);
+  const toggleBriefing = useCallback(() => {
+    if (briefingState === 'speaking') pauseSpeech();
+    else if (briefingState === 'paused') resumeSpeech();
+    else startBriefing(0);
+  }, [briefingState, startBriefing]);
+  const stopBriefing = useCallback(() => { stopSpeech(); setBriefingIdx(-1); setBriefingState('idle'); }, []);
+  useEffect(() => () => stopSpeech(), []);
 
   // Deep Dive is an in-page overlay (not a route), and its z-index can't beat
   // the TabBar because the bar lives in a higher root stacking context. So
@@ -343,6 +372,7 @@ export default function AIFeedScreen() {
         position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
         padding: 'max(14px, calc(env(safe-area-inset-top, 0px) + 8px)) 16px 14px',
         background: 'linear-gradient(180deg, rgba(5,5,7,0.85) 0%, transparent 100%)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
       }}>
         <TopicPill
           current={activeTopic}
@@ -354,6 +384,18 @@ export default function AIFeedScreen() {
             loadTopic(TOPIC_QUEUE.indexOf(t) >= 0 ? TOPIC_QUEUE.indexOf(t) : 0, true);
           }}
         />
+        {speechSupported() && items.length > 0 && briefingIdx < 0 && (
+          <button onClick={toggleBriefing} title="Play a spoken briefing of the top stories"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0,
+              padding: '8px 14px', borderRadius: 999, cursor: 'pointer',
+              background: 'rgba(185,148,255,0.16)', border: '1px solid rgba(185,148,255,0.4)',
+              color: '#b994ff', fontSize: 11, fontWeight: 800, letterSpacing: 0.8,
+            }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+            BRIEFING
+          </button>
+        )}
       </div>
 
       {/* Pull-to-refresh indicator (renders during pull/refresh, fades out otherwise) */}
@@ -455,6 +497,39 @@ export default function AIFeedScreen() {
       {/* Full-screen deep dive overlay */}
       {openedItem && (
         <DeepDiveOverlay item={openedItem} onClose={() => setOpenedItem(null)} />
+      )}
+
+      {/* Morning Briefing floating player */}
+      {briefingIdx >= 0 && items[briefingIdx] && (
+        <div style={{
+          position: 'fixed', left: 12, right: 12, bottom: 'calc(env(safe-area-inset-bottom, 0px) + 86px)',
+          zIndex: 120, display: 'flex', alignItems: 'center', gap: 10,
+          padding: '10px 12px', borderRadius: 16,
+          background: 'rgba(18,16,28,0.92)', border: '1px solid rgba(185,148,255,0.35)',
+          backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+            <div style={{ color: '#b994ff', fontSize: 9, fontWeight: 800, letterSpacing: 1.2 }}>BRIEFING · {briefingIdx + 1}/{Math.min(items.length, 10)}</div>
+            <div style={{ color: '#eee', fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {items[briefingIdx].primary.headline}
+            </div>
+          </div>
+          <button onClick={() => startBriefing(Math.max(0, briefingIdx - 1))} title="Previous" style={briefBtn}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="#ccc"><polygon points="19 20 9 12 19 4 19 20"/><rect x="5" y="4" width="2" height="16"/></svg>
+          </button>
+          <button onClick={toggleBriefing} title={briefingState === 'speaking' ? 'Pause' : 'Play'} style={{ ...briefBtn, background: 'rgba(185,148,255,0.2)' }}>
+            {briefingState === 'speaking'
+              ? <svg width="16" height="16" viewBox="0 0 24 24" fill="#b994ff"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+              : <svg width="16" height="16" viewBox="0 0 24 24" fill="#b994ff"><polygon points="6 4 20 12 6 20 6 4"/></svg>}
+          </button>
+          <button onClick={() => startBriefing(briefingIdx + 1)} title="Next" style={briefBtn}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="#ccc"><polygon points="5 4 15 12 5 20 5 4"/><rect x="17" y="4" width="2" height="16"/></svg>
+          </button>
+          <button onClick={stopBriefing} title="Close" style={briefBtn}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
       )}
 
       <style>{`
@@ -674,6 +749,32 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
   const [stage, setStage] = useState<'generating' | 'done' | 'error'>(data ? 'done' : 'generating');
   const [error, setError] = useState<string | null>(null);
   const [showColdHint, setShowColdHint] = useState(false);
+  const [speech, setSpeech] = useState<SpeechState>('idle');
+
+  // Build the spoken script from the Deep Dive content (headline → TL;DR → insight).
+  const listen = useCallback(() => {
+    if (!data) return;
+    const chunks: string[] = [cleanForSpeech(story.headline)];
+    if (data.tldrSections?.length) {
+      for (const sec of data.tldrSections) {
+        if (sec.heading) chunks.push(cleanForSpeech(sec.heading) + '.');
+        for (const b of sec.bullets) chunks.push(cleanForSpeech(b));
+      }
+    } else {
+      for (const b of (data.tldr ?? [])) chunks.push(cleanForSpeech(b));
+    }
+    if (data.insight) chunks.push('Key insight. ' + cleanForSpeech(data.insight));
+    speakQueue(chunks.filter(Boolean), { onStateChange: setSpeech });
+  }, [data, story.headline]);
+
+  const toggleListen = useCallback(() => {
+    if (speech === 'speaking') pauseSpeech();
+    else if (speech === 'paused') resumeSpeech();
+    else listen();
+  }, [speech, listen]);
+
+  // Stop narration when the overlay closes/unmounts.
+  useEffect(() => () => stopSpeech(), []);
 
   useEffect(() => {
     if (data) return;
@@ -826,16 +927,35 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
-        <div style={{
-          pointerEvents: 'auto',
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          padding: '6px 12px', borderRadius: 999,
-          background: 'rgba(20,20,28,0.7)',
-          border: '1px solid rgba(255,255,255,0.1)',
-          backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
-          color: accent, fontSize: 11, fontWeight: 800, letterSpacing: 1.4,
-        }}>
-          <SparkleIcon color={accent} size={11} /> AI DEEP DIVE
+        <div style={{ pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {speechSupported() && stage === 'done' && (
+            <button onClick={toggleListen} title={speech === 'speaking' ? 'Pause' : speech === 'paused' ? 'Resume' : 'Listen'}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '7px 13px', borderRadius: 999, cursor: 'pointer',
+                background: speech === 'idle' ? 'rgba(20,20,28,0.7)' : `${accent}26`,
+                border: `1px solid ${speech === 'idle' ? 'rgba(255,255,255,0.1)' : accent}`,
+                backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
+                color: speech === 'idle' ? '#fff' : accent, fontSize: 11, fontWeight: 800, letterSpacing: 1,
+              }}>
+              {speech === 'speaking' ? (
+                <svg width="11" height="11" viewBox="0 0 24 24" fill={accent}><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+              ) : (
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+              )}
+              {speech === 'speaking' ? 'PAUSE' : speech === 'paused' ? 'RESUME' : 'LISTEN'}
+            </button>
+          )}
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '6px 12px', borderRadius: 999,
+            background: 'rgba(20,20,28,0.7)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
+            color: accent, fontSize: 11, fontWeight: 800, letterSpacing: 1.4,
+          }}>
+            <SparkleIcon color={accent} size={11} /> AI DEEP DIVE
+          </div>
         </div>
       </div>
 
