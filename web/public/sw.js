@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v26';
+const CACHE_VERSION = 'v27';
 const STATIC_CACHE = `ireader-static-${CACHE_VERSION}`;
 const API_CACHE = `ireader-api-${CACHE_VERSION}`;
 const API_TTL_MS = 5 * 60 * 1000;
@@ -6,8 +6,8 @@ const API_TTL_MS = 5 * 60 * 1000;
 // Only pre-cache the app shell icons — NOT index.html
 // index.html must always come from network so new JS bundles are loaded
 const PRECACHE_ASSETS = [
-  '/icons/icon-192.png?v=pro1',
-  '/icons/icon-512.png?v=pro1',
+  '/icons/icon-192.png?v=pro2',
+  '/icons/icon-512.png?v=pro2',
   '/manifest.json',
 ];
 
