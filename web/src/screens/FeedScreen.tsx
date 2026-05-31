@@ -8,6 +8,7 @@ import { useTabBar } from '../contexts/TabBarContext';
 import { loadProfile, rankStories, rankStoriesStandard } from '../utils/personalization';
 import { scoreClusterInterest } from '../utils/interestTopics';
 import { getUsageStats } from '../utils/usageTracker';
+import { annotateUpdates, unfollow, markSeen } from '../utils/followStore';
 import { TOPIC_SUBTOPICS, storyMatchesSubTopic } from '../utils/topics';
 
 const API_BASE = 'https://ireader.onrender.com/api/news/feed';
@@ -239,6 +240,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   useEffect(() => { isVisibleRef.current = isVisible; }, [isVisible]);
   const [streak, setStreak] = useState(0);
   useEffect(() => { try { setStreak(getUsageStats().streakDays); } catch {} }, []);
+  const [followV, setFollowV] = useState(0);
 
   const [cardWidth, setCardWidth] = useState(() => Math.min(window.innerWidth - 28, 452));
   useEffect(() => {
@@ -610,6 +612,43 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
         </div>
       ) : (
         <>
+          {activeTopic === 'myspace' && (() => {
+            const followed = annotateUpdates(rankedClusters.map(c => ({ id: c.id, headline: c.topicLabel })));
+            void followV;
+            if (followed.length === 0) return null;
+            return (
+              <div style={{ padding: '4px 16px 14px' }}>
+                <div style={{ color: '#666', fontSize: 11, fontWeight: 800, letterSpacing: 1.4, marginBottom: 10 }}>FOLLOWING</div>
+                <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
+                  {followed.map(f => {
+                    const target = rankedClusters.find(c => c.id === (f.latestId ?? f.id));
+                    return (
+                      <div key={f.id} style={{
+                        flexShrink: 0, width: 200, padding: '10px 12px', borderRadius: 14,
+                        background: f.hasUpdate ? 'rgba(185,148,255,0.12)' : '#0E0E0E',
+                        border: `1px solid ${f.hasUpdate ? 'rgba(185,148,255,0.4)' : '#1A1A1A'}`,
+                        cursor: target ? 'pointer' : 'default', position: 'relative',
+                      }}
+                        onClick={() => {
+                          if (!target) return;
+                          markSeen(f.id, target.id, target.topicLabel);
+                          navigate({ name: 'StoryTimeline', params: { clusterId: target.id, headline: target.topicLabel, stories: JSON.stringify(target.stories) } });
+                        }}>
+                        {f.hasUpdate && <div style={{ position: 'absolute', top: 8, right: 8, fontSize: 9, fontWeight: 800, color: '#b994ff', background: 'rgba(185,148,255,0.2)', padding: '2px 6px', borderRadius: 8 }}>🆕 NEW</div>}
+                        <div style={{ color: '#ddd', fontSize: 13, fontWeight: 600, lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', paddingRight: f.hasUpdate ? 44 : 0 }}>
+                          {f.hasUpdate && f.latestHeadline ? f.latestHeadline : f.headline}
+                        </div>
+                        <div onClick={(e) => { e.stopPropagation(); unfollow(f.id); setFollowV(v => v + 1); }}
+                          style={{ marginTop: 8, color: '#666', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'inline-block' }}>
+                          Unfollow
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
           {rankedClusters.map(cluster => (
             <ClusterSection key={cluster.id} cluster={cluster} soloCardWidth={cardWidth} allStories={visibleStories} />
           ))}

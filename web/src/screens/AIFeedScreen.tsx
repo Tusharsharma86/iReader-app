@@ -3,6 +3,8 @@ import type { Story } from '../types';
 import { useTabBarActions } from '../contexts/TabBarContext';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 import { speakQueue, stop as stopSpeech, pause as pauseSpeech, resume as resumeSpeech, speechSupported, cleanForSpeech, type SpeechState } from '../utils/speech';
+import { trackDeepDive } from '../utils/personalization';
+import { toggleFollow, isFollowing } from '../utils/followStore';
 
 const briefBtn: React.CSSProperties = {
   width: 36, height: 36, borderRadius: 18, flexShrink: 0,
@@ -457,7 +459,7 @@ export default function AIFeedScreen() {
               item={item}
               index={i}
               total={items.length}
-              onOpen={() => setOpenedItem(item)}
+              onOpen={() => { setOpenedItem(item); trackDeepDive(item.primary); }}
             />
           ))}
           {loadingMore && (
@@ -750,6 +752,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
   const [error, setError] = useState<string | null>(null);
   const [showColdHint, setShowColdHint] = useState(false);
   const [speech, setSpeech] = useState<SpeechState>('idle');
+  const [following, setFollowing] = useState(() => isFollowing(story.id));
 
   // Build the spoken script from the Deep Dive content (headline → TL;DR → insight).
   const listen = useCallback(() => {
@@ -928,6 +931,19 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
           </svg>
         </button>
         <div style={{ pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button onClick={() => setFollowing(toggleFollow({ id: story.id, headline: story.headline, imageUrl: story.imageUrl }))}
+            title={following ? 'Following — you’ll see new developments' : 'Follow this story'}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '7px 13px', borderRadius: 999, cursor: 'pointer',
+              background: following ? `${accent}26` : 'rgba(20,20,28,0.7)',
+              border: `1px solid ${following ? accent : 'rgba(255,255,255,0.1)'}`,
+              backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
+              color: following ? accent : '#fff', fontSize: 11, fontWeight: 800, letterSpacing: 1,
+            }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill={following ? accent : 'none'} stroke="currentColor" strokeWidth="2"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4-6.3-4.6L5.7 21 8 14 2 9.4h7.6z"/></svg>
+            {following ? 'FOLLOWING' : 'FOLLOW'}
+          </button>
           {speechSupported() && stage === 'done' && (
             <button onClick={toggleListen} title={speech === 'speaking' ? 'Pause' : speech === 'paused' ? 'Resume' : 'Listen'}
               style={{

@@ -60,6 +60,25 @@ export function trackSkip(story: Story): void {
   });
 }
 
+// Stronger-intent signals. Opening a Deep Dive or saving a story is a much
+// clearer interest signal than a tap, so they carry heavier weight.
+export function trackDeepDive(story: Story): void {
+  userProfile.openedArticles.add(story.id);
+  extractKeywords(story.headline ?? '').forEach(kw => {
+    userProfile.topicAffinity[kw] = Math.min(60, (userProfile.topicAffinity[kw] ?? 0) + 3);
+  });
+  const source = story.sources?.[0]?.name?.toLowerCase();
+  if (source) userProfile.sourceAffinity[source] = Math.min(60, (userProfile.sourceAffinity[source] ?? 0) + 2);
+  saveProfile();
+}
+
+export function trackSave(story: Story): void {
+  extractKeywords(story.headline ?? '').forEach(kw => {
+    userProfile.topicAffinity[kw] = Math.min(60, (userProfile.topicAffinity[kw] ?? 0) + 2.5);
+  });
+  saveProfile();
+}
+
 // Personalized ranking — used for "For You" tab
 export function rankStories(stories: Story[]): Story[] {
   // Even with no learned profile, explicit star ratings should still rank.
@@ -90,10 +109,17 @@ export function rankStories(stories: Story[]): Story[] {
         + categoryBonus
         + interestBonus;
 
+      // Exploration: a small stochastic nudge + a novelty bonus for stories
+      // whose keywords we have NO affinity for yet — keeps For You from
+      // tunnelling into the same few topics and surfaces fresh discovery.
+      const novelty = personalScore === 0 ? 4 : 0;
+      const exploration = Math.random() * 4 + novelty;
+
       const finalScore = affinityScore * freshnessMult
         + velocityScore
         + freshBonus
-        + interestBonus * 0.4;
+        + interestBonus * 0.4
+        + exploration;
       return { ...story, _score: finalScore } as any;
     })
     .sort((a: any, b: any) => b._score - a._score);

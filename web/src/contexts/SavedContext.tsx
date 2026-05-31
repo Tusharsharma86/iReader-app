@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import type { Story } from '../types';
+import { trackSave } from '../utils/personalization';
 
 interface SavedCtx { savedStories: Story[]; toggleSave: (s: Story) => void; isSaved: (id: string) => boolean; }
 
@@ -15,7 +16,11 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
   }, [savedStories]);
 
   const toggleSave = useCallback((story: Story) => {
-    setSavedStories(prev => prev.some(s => s.id === story.id) ? prev.filter(s => s.id !== story.id) : [story, ...prev]);
+    setSavedStories(prev => {
+      const already = prev.some(s => s.id === story.id);
+      if (!already) trackSave(story); // saving = strong interest signal
+      return already ? prev.filter(s => s.id !== story.id) : [story, ...prev];
+    });
   }, []);
 
   const isSaved = useCallback((id: string) => savedStories.some(s => s.id === id), [savedStories]);
