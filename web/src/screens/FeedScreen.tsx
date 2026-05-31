@@ -7,6 +7,7 @@ import { useRouter } from '../contexts/RouterContext';
 import { useTabBar } from '../contexts/TabBarContext';
 import { loadProfile, rankStories, rankStoriesStandard } from '../utils/personalization';
 import { scoreClusterInterest } from '../utils/interestTopics';
+import { getUsageStats } from '../utils/usageTracker';
 import { TOPIC_SUBTOPICS, storyMatchesSubTopic } from '../utils/topics';
 
 const API_BASE = 'https://ireader.onrender.com/api/news/feed';
@@ -236,6 +237,8 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   const { reportScroll } = useTabBar();
   const isVisibleRef = useRef(isVisible);
   useEffect(() => { isVisibleRef.current = isVisible; }, [isVisible]);
+  const [streak, setStreak] = useState(0);
+  useEffect(() => { try { setStreak(getUsageStats().streakDays); } catch {} }, []);
 
   const [cardWidth, setCardWidth] = useState(() => Math.min(window.innerWidth - 28, 452));
   useEffect(() => {
@@ -521,6 +524,13 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
           <div style={{ color: '#555', fontSize: 13, fontWeight: 500, marginTop: 2 }}>{formattedDate()}</div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
+          {streak > 0 && (
+            <button onClick={() => navigate({ name: 'Usage' })} title={`${streak}-day reading streak`}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 10px', borderRadius: 20, background: 'rgba(255,149,0,0.14)', border: '1px solid rgba(255,149,0,0.3)', cursor: 'pointer' }}>
+              <span style={{ fontSize: 13 }}>🔥</span>
+              <span style={{ color: '#FF9F0A', fontSize: 13, fontWeight: 800 }}>{streak}</span>
+            </button>
+          )}
           <button onClick={onRefresh} disabled={refreshing}
             style={{ background: 'none', border: 'none', width: 38, height: 38, borderRadius: '50%', cursor: refreshing ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: refreshing ? 0.3 : 1, transition: 'opacity 0.2s' }}>
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"

@@ -33,6 +33,7 @@ import { tabBarTranslateY } from '../utils/tabBarAnim';
 import { loadProfile, rankStories, rankStoriesStandard } from '../utils/personalization';
 import { scoreClusterInterest } from '../utils/interestTopics';
 import { TOPIC_SUBTOPICS, storyMatchesSubTopic } from '../utils/topics';
+import { getUsageStats } from '../utils/usageTracker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const CARD_GAP = 12;
@@ -579,6 +580,8 @@ export default function FeedScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [techSourceFilter, setTechSourceFilter] = useState<string | null>(null);
+  const [streak, setStreak] = useState(0);
+  useEffect(() => { getUsageStats().then(s => setStreak(s.streakDays)).catch(() => {}); }, []);
   const listRef = useRef<FlatList>(null);
   // useScrollToTop tries scrollToIndex first (crashes when item 0 is off-screen).
   // Wrapping in a ref that only exposes scrollToTop forces it down the safe path.
@@ -1029,6 +1032,12 @@ export default function FeedScreen() {
             <Text style={styles.greeting}>{greeting()}</Text>
             <Text style={styles.date}>{formattedDate()}</Text>
           </View>
+          {streak > 0 && (
+            <View style={styles.streakChip}>
+              <Text style={{ fontSize: 13 }}>🔥</Text>
+              <Text style={styles.streakChipText}>{streak}</Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -1407,6 +1416,8 @@ const styles = StyleSheet.create({
 
   header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  streakChip: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, backgroundColor: 'rgba(255,149,0,0.14)', borderWidth: 1, borderColor: 'rgba(255,149,0,0.3)' },
+  streakChipText: { color: '#FF9F0A', fontSize: 13, fontWeight: '800' },
   appIcon: {
     width: 87, height: 87,
     marginVertical: -12, marginHorizontal: -8,
