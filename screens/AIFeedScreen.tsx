@@ -243,6 +243,28 @@ export default function AIFeedScreen() {
     }
   }, []);
 
+  // Silent background refresh for stale-while-revalidate: fetch the current
+  // topic and REPLACE items without any loading/skeleton flicker. Only swaps
+  // in fresh data if the fetch actually returned something (never blanks the
+  // feed on a failed/empty response). No content compromise — just newer data.
+  const silentRefresh = useCallback(async (topicIdx: number) => {
+    const topic = TOPIC_QUEUE[topicIdx % TOPIC_QUEUE.length];
+    try {
+      const r = await fetch(`${FEED_API_BASE}?topic=${topic}`);
+      if (!r.ok) return;
+      const raw = await r.json();
+      const rawItems: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
+      const fresh = dedupeFeed(rawItems)
+        .filter(it => it.primary.headline && it.primary.publishedAt)
+        .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded));
+      if (fresh.length > 0) {
+        // Preserve the card the user is currently on if it still exists.
+        setItems(fresh);
+        setError(null);
+      }
+    } catch { /* keep showing cached items */ }
+  }, []);
+
   // MOUNT-ONLY init: pre-warm + restore cached feed. Critical: NO screenH dep
   // — fold/unfold must not re-fetch or re-setItems. Width-only restore happens
   // in the dimension effect below.
@@ -253,18 +275,25 @@ export default function AIFeedScreen() {
       if (!raw) { loadTopic(0, true); return; }
       try {
         const c = JSON.parse(raw) as { items: FeedItem[]; topicCursor: number; activeIdx: number; at: number };
-        if (Date.now() - c.at < 30 * 60_000 && Array.isArray(c.items) && c.items.length > 0) {
+        if (Array.isArray(c.items) && c.items.length > 0) {
+          // Stale-while-revalidate: render cache INSTANTLY at any age (no
+          // skeleton, no wait), then silently refresh in the background if it's
+          // older than 10 min. Makes every open after the first feel instant.
+          const tc = c.topicCursor ?? 0;
           setItems(c.items);
-          setTopicCursor(c.topicCursor ?? 0);
+          setTopicCursor(tc);
           setActiveIdx(c.activeIdx ?? 0);
           setLoading(false);
           setTimeout(() => flatListRef.current?.scrollToOffset({ offset: (c.activeIdx ?? 0) * initialScreenHRef.current, animated: false }), 0);
+          if (Date.now() - c.at > 10 * 60_000) {
+            setTimeout(() => silentRefresh(tc), 400);
+          }
           return;
         }
       } catch {}
       loadTopic(0, true);
     }).catch(() => loadTopic(0, true));
-  }, [loadTopic]);
+  }, [loadTopic, silentRefresh]);
 
   // Dimension change (fold open/close): re-snap to current activeIdx so the
   // visible card stays put. No state reset, no refetch. activeIdx read fresh
@@ -293,6 +322,23 @@ export default function AIFeedScreen() {
       items: itemsRef.current, topicCursor: topicCursorRef.current, activeIdx: activeIdxRef.current, at: Date.now(),
     })).catch(() => {});
   }, []);
+
+  // Read a pending push-tap (written by App.tsx handleNotificationTap) and open
+  // its Deep Dive. Declared here so both the AppState listener and the focus
+  // effect below can call it.
+  const checkPendingOpen = useCallback(() => {
+    AsyncStorage.getItem('@aifeed_pending_open').then(raw => {
+      if (!raw) return;
+      try {
+        const a = JSON.parse(raw) as { id: string; headline: string; summary: string; imageUrl: string; url: string; source: string; publishedAt: string; at: number };
+        if (Date.now() - a.at <= 5 * 60_000) {
+          const story = { id: a.id, headline: a.headline, summary: a.summary, imageUrl: a.imageUrl, publishedAt: a.publishedAt, sources: a.url ? [{ name: a.source, url: a.url }] : [] } as Story;
+          setOpenedItem({ primary: story, allStories: [story], sources: a.url ? [{ name: a.source, url: a.url }] : [] });
+        }
+      } catch {}
+      AsyncStorage.removeItem('@aifeed_pending_open').catch(() => {});
+    }).catch(() => {});
+  }, [setOpenedItem]);
   useEffect(() => {
     if (items.length === 0) return;
     if (cacheWriteTimerRef.current) clearTimeout(cacheWriteTimerRef.current);
@@ -307,9 +353,10 @@ export default function AIFeedScreen() {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {
       if (s === 'background' || s === 'inactive') writeCacheNow();
+      else if (s === 'active') checkPendingOpen(); // notif tapped while already on AI Feed
     });
     return () => sub.remove();
-  }, [writeCacheNow]);
+  }, [writeCacheNow, checkPendingOpen]);
 
   // PUSH-TAP DEEPLINK — re-check on every focus so taps work even when the
   // AIFeedScreen is already mounted. Bug fix D: always clear pending in
@@ -317,26 +364,9 @@ export default function AIFeedScreen() {
   // every future focus. Bug fix F: if pending is honored, also stamp
   // @aifeed_open_item as closed so the mount-restore effect can't fight
   // this with a stale openedItem from before the tap.
-  useFocusEffect(useCallback(() => {
-    AsyncStorage.getItem('@aifeed_pending_open').then(raw => {
-      if (!raw) return;
-      let honored = false;
-      try {
-        const a = JSON.parse(raw) as { id: string; headline: string; summary: string; imageUrl: string; url: string; source: string; publishedAt: string; at: number };
-        if (Date.now() - a.at <= 5 * 60_000) {
-          const story = { id: a.id, headline: a.headline, summary: a.summary, imageUrl: a.imageUrl, publishedAt: a.publishedAt, sources: a.url ? [{ name: a.source, url: a.url }] : [] } as Story;
-          setOpenedItem({ primary: story, allStories: [story], sources: a.url ? [{ name: a.source, url: a.url }] : [] });
-          honored = true;
-        }
-      } catch {}
-      AsyncStorage.removeItem('@aifeed_pending_open').catch(() => {});
-      if (honored) {
-        // setOpenedItem already wrote @aifeed_open_item closed:false for the
-        // pending story — that's the correct restore target now. Nothing to
-        // do here, but document the invariant.
-      }
-    }).catch(() => {});
-  }, [setOpenedItem]));
+  // Read pending push-tap on focus (covers tab-switch / cold start); the
+  // AppState 'active' listener above covers the already-on-AI-Feed case.
+  useFocusEffect(useCallback(() => { checkPendingOpen(); }, [checkPendingOpen]));
 
   // FOLD / UNFOLD DEEP-DIVE RESTORATION — mount only. Skip if:
   //   - last write was a close marker

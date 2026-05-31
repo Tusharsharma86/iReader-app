@@ -37,8 +37,14 @@ const navigationRef = createNavigationContainerRef<RootTabParamList>();
 
 // Open Article (or AI Feed Deep Dive) from a tapped push payload.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function handleNotificationTap(data: any) {
-  if (!navigationRef.isReady()) return;
+function handleNotificationTap(data: any, attempt = 0) {
+  // Cold start: the tap can arrive before the NavigationContainer is ready.
+  // Instead of dropping it (the old bug — "sometimes opens, sometimes not"),
+  // retry for up to ~6s until navigation is mounted.
+  if (!navigationRef.isReady()) {
+    if (attempt < 30) setTimeout(() => handleNotificationTap(data, attempt + 1), 200);
+    return;
+  }
   trackNotifOpened(String(data?.kind ?? 'unknown')).catch(() => {});
   const a = data?.article ?? {};
   // Deep Dive + ArticleScreen only need headline + url to render — id is an

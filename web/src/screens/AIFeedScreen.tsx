@@ -17,6 +17,7 @@ const TOPIC_QUEUE = [
 const DEEPDIVE_API = 'https://ireader.onrender.com/api/news/deepdive';
 const CACHE_PREFIX = '@deepdive_v1_';
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const FEED_LIST_CACHE = '@aifeed_list_v1';
 const VIOLET = '#b994ff';
 const GOLD   = '#FFC542';
 
@@ -219,7 +220,11 @@ export default function AIFeedScreen() {
         return;
       }
 
-      setItems(prev => isInitial ? newOnes : [...prev, ...newOnes]);
+      setItems(prev => {
+        const next = isInitial ? newOnes : [...prev, ...newOnes];
+        if (isInitial) { try { localStorage.setItem(FEED_LIST_CACHE, JSON.stringify({ items: next, at: Date.now() })); } catch {} }
+        return next;
+      });
       if (isInitial) setError(null);
     } catch (e) {
       if (isInitial) setError(String(e));
@@ -228,11 +233,44 @@ export default function AIFeedScreen() {
     }
   }, []);
 
+  // Silent background refresh — replaces items with fresh data, no skeleton.
+  // Never blanks the feed if the fetch fails/returns empty.
+  const silentRefresh = useCallback(async () => {
+    try {
+      const r = await fetch(`${FEED_API_BASE}?topic=${TOPIC_QUEUE[0]}`);
+      if (!r.ok) return;
+      const raw = await r.json();
+      const rawItems: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
+      const fresh = dedupeFeed(rawItems)
+        .filter(it => it.primary.headline && it.primary.publishedAt)
+        .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded));
+      if (fresh.length > 0) {
+        setItems(fresh);
+        setError(null);
+        try { localStorage.setItem(FEED_LIST_CACHE, JSON.stringify({ items: fresh, at: Date.now() })); } catch {}
+      }
+    } catch { /* keep cached */ }
+  }, []);
+
   useEffect(() => {
     // Pre-warm Render
     try { fetch('https://ireader.onrender.com/api/news/sources', { cache: 'no-store' }).catch(() => {}); } catch {}
+    // Stale-while-revalidate: render cached list instantly (any age), refresh
+    // in background if older than 10 min. Avoids a skeleton on every visit.
+    try {
+      const raw = localStorage.getItem(FEED_LIST_CACHE);
+      if (raw) {
+        const c = JSON.parse(raw) as { items: FeedItem[]; at: number };
+        if (Array.isArray(c.items) && c.items.length > 0) {
+          setItems(c.items);
+          setLoading(false);
+          if (Date.now() - c.at > 10 * 60_000) setTimeout(() => silentRefresh(), 300);
+          return;
+        }
+      }
+    } catch {}
     loadTopic(0, true);
-  }, [loadTopic]);
+  }, [loadTopic, silentRefresh]);
 
   // ── Pull-to-refresh ─────────────────────────────────────────────────────
   const PULL_THRESHOLD = 80;
