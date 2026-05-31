@@ -25,6 +25,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { type Story, getSourceDomain, domainFromUrl } from '../components/StoryCard';
 import { tabBarTranslateY, useTabBarAutoHide } from '../utils/tabBarAnim';
 import { trackAiUsage, trackArticleRead } from '../utils/usageTracker';
+import { trackDeepDive } from '../utils/personalization';
+import { speakQueue, stop as stopSpeech, pause as pauseSpeech, resume as resumeSpeech, cleanForSpeech, type SpeechState } from '../utils/speech';
+import { toggleFollow, isFollowing, loadFollowed } from '../utils/followStore';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 
 const FEED_API_BASE = 'https://ireader.onrender.com/api/news/feed';
@@ -190,6 +193,7 @@ export default function AIFeedScreen() {
       // Track usage: count Deep Dive opens as AI usage + article read.
       trackAiUsage('deepDive').catch(() => {});
       trackArticleRead(a.sources?.[0]?.name ?? '', (a as { category?: string }).category).catch(() => {});
+      trackDeepDive(a); // strong-intent signal for For-You ranking
       AsyncStorage.setItem('@aifeed_open_item', JSON.stringify({
         id: a.id, headline: a.headline, summary: a.summary, imageUrl: a.imageUrl,
         url: a.sources?.[0]?.url ?? '', source: a.sources?.[0]?.name ?? '',
@@ -204,6 +208,27 @@ export default function AIFeedScreen() {
   const [activeIdx, setActiveIdx] = useState(0);
   const itemsRef = useRef<FeedItem[]>([]);
   itemsRef.current = items;
+
+  // ── Morning Briefing (sequential TTS playlist of the top feed stories) ──
+  const [briefingIdx, setBriefingIdx] = useState(-1);
+  const [briefingState, setBriefingState] = useState<SpeechState>('idle');
+  const startBriefing = useCallback((from: number) => {
+    const list = itemsRef.current.slice(from, from + 10);
+    if (list.length === 0) return;
+    const chunks = list.map(it => `${cleanForSpeech(it.primary.headline)}. ${cleanForSpeech(it.primary.summary || '')}`);
+    speakQueue(chunks, {
+      onStateChange: setBriefingState,
+      onItemStart: (i) => setBriefingIdx(from + i),
+      onDone: () => setBriefingIdx(-1),
+    });
+  }, []);
+  const toggleBriefing = useCallback(() => {
+    if (briefingState === 'speaking') { pauseSpeech(); setBriefingState('paused'); }
+    else if (briefingState === 'paused') { resumeSpeech(); setBriefingState('speaking'); }
+    else startBriefing(0);
+  }, [briefingState, startBriefing]);
+  const stopBriefing = useCallback(() => { stopSpeech(); setBriefingIdx(-1); setBriefingState('idle'); }, []);
+  useEffect(() => () => stopSpeech(), []);
 
   // Auto-hide tab bar on scroll; restore on blur.
   const { onScroll: onScrollHide, restore: restoreTabBar } = useTabBarAutoHide();
@@ -271,6 +296,7 @@ export default function AIFeedScreen() {
   const initialScreenHRef = useRef(screenH);
   useEffect(() => {
     fetch('https://ireader.onrender.com/api/news/sources').catch(() => {});
+    loadFollowed().catch(() => {});
     AsyncStorage.getItem('@aifeed_cache_v1').then(raw => {
       if (!raw) { loadTopic(0, true); return; }
       try {
@@ -481,6 +507,8 @@ export default function AIFeedScreen() {
           flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
           loadTopic(idx, true);
         }}
+        onBriefing={toggleBriefing}
+        briefingActive={briefingIdx >= 0}
       />
       <FlatList
         ref={flatListRef}
@@ -531,6 +559,28 @@ export default function AIFeedScreen() {
           onClose={() => setOpenedItem(null)}
         />
       )}
+
+      {/* Morning Briefing floating player */}
+      {briefingIdx >= 0 && items[briefingIdx] && (
+        <View style={[styles.briefBar, { bottom: insets.bottom + 90 }]}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.briefLabel}>BRIEFING · {briefingIdx + 1}/{Math.min(items.length, 10)}</Text>
+            <Text style={styles.briefTitle} numberOfLines={1}>{items[briefingIdx].primary.headline}</Text>
+          </View>
+          <Pressable onPress={() => startBriefing(Math.max(0, briefingIdx - 1))} hitSlop={8} style={styles.briefBtn}>
+            <Ionicons name="play-skip-back" size={16} color="#ccc" />
+          </Pressable>
+          <Pressable onPress={toggleBriefing} hitSlop={8} style={[styles.briefBtn, { backgroundColor: 'rgba(185,148,255,0.2)' }]}>
+            <Ionicons name={briefingState === 'speaking' ? 'pause' : 'play'} size={16} color={VIOLET} />
+          </Pressable>
+          <Pressable onPress={() => startBriefing(briefingIdx + 1)} hitSlop={8} style={styles.briefBtn}>
+            <Ionicons name="play-skip-forward" size={16} color="#ccc" />
+          </Pressable>
+          <Pressable onPress={stopBriefing} hitSlop={8} style={styles.briefBtn}>
+            <Ionicons name="close" size={16} color="#999" />
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 }
@@ -545,9 +595,10 @@ const TOPIC_LABELS_MOBILE: Record<string, string> = {
   business: 'BUSINESS',
 };
 
-function Header({ topInset, counter, currentTopic, onPickTopic }: {
+function Header({ topInset, counter, currentTopic, onPickTopic, onBriefing, briefingActive }: {
   topInset: number; counter?: string;
   currentTopic?: string; onPickTopic?: (t: string) => void;
+  onBriefing?: () => void; briefingActive?: boolean;
 }) {
   const counterScale = useRef(new Animated.Value(1)).current;
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -570,6 +621,12 @@ function Header({ topInset, counter, currentTopic, onPickTopic }: {
         <Animated.View style={[styles.pill, { paddingHorizontal: 10, transform: [{ scale: counterScale }] }]}>
           <Text style={[styles.pillText, { letterSpacing: 0.6, color: '#aaa' }]}>{counter}</Text>
         </Animated.View>
+      )}
+      {onBriefing && !briefingActive && (
+        <Pressable onPress={onBriefing} style={[styles.pill, { marginLeft: 'auto', backgroundColor: 'rgba(185,148,255,0.16)', borderColor: 'rgba(185,148,255,0.4)' }]}>
+          <Ionicons name="play" size={11} color={VIOLET} />
+          <Text style={[styles.pillText, { color: VIOLET }]}>BRIEFING</Text>
+        </Pressable>
       )}
       <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
         <Pressable onPress={() => setPickerOpen(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }}>
@@ -679,6 +736,30 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
   const [stage, setStage] = useState<'generating' | 'done' | 'error'>('generating');
   const [error, setError] = useState<string | null>(null);
   const [showColdHint, setShowColdHint] = useState(false);
+  const [speech, setSpeech] = useState<SpeechState>('idle');
+  const [following, setFollowing] = useState(() => isFollowing(story.id));
+
+  // Read headline + TL;DR + insight aloud.
+  const listen = useCallback(() => {
+    if (!data) return;
+    const chunks: string[] = [cleanForSpeech(story.headline)];
+    if (data.tldrSections?.length) {
+      for (const sec of data.tldrSections) {
+        if (sec.heading) chunks.push(cleanForSpeech(sec.heading) + '.');
+        for (const b of sec.bullets) chunks.push(cleanForSpeech(b));
+      }
+    } else {
+      for (const b of (data.tldr ?? [])) chunks.push(cleanForSpeech(b));
+    }
+    if (data.insight) chunks.push('Key insight. ' + cleanForSpeech(data.insight));
+    speakQueue(chunks.filter(Boolean), { onStateChange: setSpeech });
+  }, [data, story.headline]);
+  const toggleListen = useCallback(() => {
+    if (speech === 'speaking') { pauseSpeech(); setSpeech('paused'); }
+    else if (speech === 'paused') { resumeSpeech(); setSpeech('speaking'); }
+    else listen();
+  }, [speech, listen]);
+  useEffect(() => () => stopSpeech(), []);
 
   // Android back closes overlay
   useEffect(() => {
@@ -921,9 +1002,23 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
           <Pressable onPress={onClose} hitSlop={12} style={overlayStyles.iconBtn}>
             <Ionicons name="chevron-back" size={20} color="#fff" />
           </Pressable>
-          <View style={overlayStyles.brandPill}>
-            <Ionicons name="sparkles" size={11} color={VIOLET} />
-            <Text style={[overlayStyles.brandText, { color: VIOLET }]}>AI DEEP DIVE</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Pressable
+              onPress={() => setFollowing(toggleFollow({ id: story.id, headline: story.headline, imageUrl: story.imageUrl }))}
+              hitSlop={8}
+              style={[overlayStyles.iconBtn, following && { backgroundColor: `${accent}33`, borderColor: accent }]}>
+              <Ionicons name={following ? 'star' : 'star-outline'} size={17} color={following ? accent : '#fff'} />
+            </Pressable>
+            {stage === 'done' && (
+              <Pressable onPress={toggleListen} hitSlop={8}
+                style={[overlayStyles.iconBtn, speech !== 'idle' && { backgroundColor: `${accent}33`, borderColor: accent }]}>
+                <Ionicons name={speech === 'speaking' ? 'pause' : 'volume-high'} size={17} color={speech !== 'idle' ? accent : '#fff'} />
+              </Pressable>
+            )}
+            <View style={overlayStyles.brandPill}>
+              <Ionicons name="sparkles" size={11} color={VIOLET} />
+              <Text style={[overlayStyles.brandText, { color: VIOLET }]}>AI DEEP DIVE</Text>
+            </View>
           </View>
         </View>
       </View>
@@ -1336,6 +1431,15 @@ function allTags(d: DeepDiveData): string[] {
 
 // ── Styles ──────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
+  briefBar: {
+    position: 'absolute', left: 12, right: 12, zIndex: 50,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 12, paddingVertical: 10, borderRadius: 16,
+    backgroundColor: 'rgba(18,16,28,0.96)', borderWidth: 1, borderColor: 'rgba(185,148,255,0.35)',
+  },
+  briefLabel: { color: VIOLET, fontSize: 9, fontWeight: '800', letterSpacing: 1.2 },
+  briefTitle: { color: '#eee', fontSize: 13, fontWeight: '600', marginTop: 1 },
+  briefBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.06)' },
   container: { flex: 1, backgroundColor: '#050507' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, padding: 24 },
   loadingText: { color: '#888', fontSize: 13, fontWeight: '500' },

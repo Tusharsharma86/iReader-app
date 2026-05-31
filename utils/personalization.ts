@@ -72,6 +72,25 @@ export function trackSkip(story: any): void {
   });
 }
 
+// Stronger-intent signals — opening a Deep Dive or saving a story is a much
+// clearer interest signal than a tap, so they carry heavier weight.
+export function trackDeepDive(story: any): void {
+  userProfile.openedArticles.add(story.id);
+  extractKeywords(story.headline ?? '').forEach(kw => {
+    userProfile.topicAffinity[kw] = Math.min(60, (userProfile.topicAffinity[kw] ?? 0) + 3);
+  });
+  const source = story.sources?.[0]?.name?.toLowerCase();
+  if (source) userProfile.sourceAffinity[source] = Math.min(60, (userProfile.sourceAffinity[source] ?? 0) + 2);
+  saveProfile();
+}
+
+export function trackSave(story: any): void {
+  extractKeywords(story.headline ?? '').forEach(kw => {
+    userProfile.topicAffinity[kw] = Math.min(60, (userProfile.topicAffinity[kw] ?? 0) + 2.5);
+  });
+  saveProfile();
+}
+
 export function rankStories(stories: any[]): any[] {
   // Even with no learned profile, explicit star ratings should still rank.
   const hasInterest = stories.some(s => (s._interestBonus ?? 0) > 0);
@@ -111,12 +130,18 @@ export function rankStories(stories: any[]): any[] {
         + categoryBonus
         + interestBonus;
 
+      // Exploration: stochastic nudge + novelty bonus for stories whose
+      // keywords we have no affinity for yet — keeps For You from tunnelling.
+      const novelty = personalScore === 0 ? 4 : 0;
+      const exploration = Math.random() * 4 + novelty;
+
       // Interest bonus partially survives freshness decay so a 5★ topic stays
       // pinned high even when older than learned affinity would tolerate.
       const finalScore = affinityScore * freshnessMult
         + velocityScore
         + freshBonus
-        + interestBonus * 0.4;
+        + interestBonus * 0.4
+        + exploration;
 
       return { ...story, _score: finalScore };
     })

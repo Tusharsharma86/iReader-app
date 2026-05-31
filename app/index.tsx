@@ -34,6 +34,7 @@ import { loadProfile, rankStories, rankStoriesStandard } from '../utils/personal
 import { scoreClusterInterest } from '../utils/interestTopics';
 import { TOPIC_SUBTOPICS, storyMatchesSubTopic } from '../utils/topics';
 import { getUsageStats } from '../utils/usageTracker';
+import { loadFollowed, annotateUpdates, markSeen, toggleFollow as toggleFollowStory } from '../utils/followStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const CARD_GAP = 12;
@@ -571,6 +572,7 @@ export default function FeedScreen() {
   const { notifBreaking, notifSources, favSources, favTopics, showSports, showEntertainment, activeSubTopics, topicInterests } = useSettings();
   const layout = useLayout();
   const insets = useSafeAreaInsets();
+  const rootNav = useNavigation<NativeStackNavigationProp<FeedStackParamList>>();
   const [activeTopic, setActiveTopic] = useState<CategoryTopic>('breaking');
   const [topicRestored, setTopicRestored] = useState(false);
   const [allFeed, setAllFeed] = useState<ApiFeedItem[]>([]);
@@ -582,6 +584,8 @@ export default function FeedScreen() {
   const [techSourceFilter, setTechSourceFilter] = useState<string | null>(null);
   const [streak, setStreak] = useState(0);
   useEffect(() => { getUsageStats().then(s => setStreak(s.streakDays)).catch(() => {}); }, []);
+  const [followV, setFollowV] = useState(0);
+  useEffect(() => { loadFollowed().then(() => setFollowV(v => v + 1)).catch(() => {}); }, []);
   const listRef = useRef<FlatList>(null);
   // useScrollToTop tries scrollToIndex first (crashes when item 0 is off-screen).
   // Wrapping in a ref that only exposes scrollToTop forces it down the safe path.
@@ -1117,6 +1121,40 @@ export default function FeedScreen() {
         </ScrollView>
       )}
 
+      {/* Following strip (For You only) */}
+      {activeTopic === 'myspace' && (() => {
+        void followV;
+        const followed = annotateUpdates(rankedClusterGroups.map(c => ({ id: c.id, headline: c.headline })));
+        if (followed.length === 0) return null;
+        return (
+          <View style={{ marginBottom: 14 }}>
+            <Text style={styles.followHeader}>FOLLOWING</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}>
+              {followed.map(f => {
+                const target = rankedClusterGroups.find(c => c.id === (f.latestId ?? f.id));
+                return (
+                  <Pressable key={f.id} style={[styles.followCard, f.hasUpdate && styles.followCardNew]}
+                    onPress={() => {
+                      if (!target) return;
+                      markSeen(f.id, target.id, target.headline);
+                      setFollowV(v => v + 1);
+                      rootNav.navigate('StoryTimeline', { clusterId: target.id, headline: target.headline, stories: JSON.stringify(target.stories) });
+                    }}>
+                    {f.hasUpdate && <View style={styles.followNewBadge}><Text style={styles.followNewText}>🆕 NEW</Text></View>}
+                    <Text style={styles.followCardText} numberOfLines={3}>
+                      {f.hasUpdate && f.latestHeadline ? f.latestHeadline : f.headline}
+                    </Text>
+                    <Pressable hitSlop={6} onPress={() => { toggleFollowStory({ id: f.id, headline: f.headline }); setFollowV(v => v + 1); }}>
+                      <Text style={styles.followUnfollow}>Unfollow</Text>
+                    </Pressable>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        );
+      })()}
+
       {/* New stories banner */}
       {newCount > 0 && (
         <Pressable onPress={applyPending} style={styles.newBanner}>
@@ -1418,6 +1456,13 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   streakChip: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, backgroundColor: 'rgba(255,149,0,0.14)', borderWidth: 1, borderColor: 'rgba(255,149,0,0.3)' },
   streakChipText: { color: '#FF9F0A', fontSize: 13, fontWeight: '800' },
+  followHeader: { color: '#666', fontSize: 11, fontWeight: '800', letterSpacing: 1.4, paddingHorizontal: 16, marginBottom: 10 },
+  followCard: { width: 200, padding: 12, borderRadius: 14, backgroundColor: '#0E0E0E', borderWidth: 1, borderColor: '#1A1A1A' },
+  followCardNew: { backgroundColor: 'rgba(185,148,255,0.12)', borderColor: 'rgba(185,148,255,0.4)' },
+  followNewBadge: { alignSelf: 'flex-start', backgroundColor: 'rgba(185,148,255,0.2)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, marginBottom: 6 },
+  followNewText: { color: '#b994ff', fontSize: 9, fontWeight: '800' },
+  followCardText: { color: '#ddd', fontSize: 13, fontWeight: '600', lineHeight: 18 },
+  followUnfollow: { color: '#666', fontSize: 11, fontWeight: '600', marginTop: 8 },
   appIcon: {
     width: 87, height: 87,
     marginVertical: -12, marginHorizontal: -8,

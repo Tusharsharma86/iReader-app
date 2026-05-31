@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useState } from 'react';
 import { Story } from '../components/StoryCard';
+import { trackSave } from '../utils/personalization';
 
 interface SavedContextType {
   savedStories: Story[];
@@ -19,6 +20,7 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
   const toggleSave = useCallback((story: Story) => {
     setSavedStories(prev => {
       const exists = prev.some(s => s.id === story.id);
+      if (!exists) trackSave(story); // saving = strong interest signal
       return exists ? prev.filter(s => s.id !== story.id) : [story, ...prev];
     });
   }, []);
