@@ -1118,7 +1118,9 @@ function CardTextBounce({ children }: { children: React.ReactNode }) {
 function AIFeedSkeleton() {
   const v = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.loop(Animated.timing(v, { toValue: 1, duration: 1400, useNativeDriver: false })).start();
+    // Native driver so the shimmer keeps animating even while the JS thread
+    // is busy fetching/parsing the feed (was false → froze during load).
+    Animated.loop(Animated.timing(v, { toValue: 1, duration: 1400, useNativeDriver: true })).start();
   }, [v]);
   const opacity = v.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.35, 0.7, 0.35] });
   return (
