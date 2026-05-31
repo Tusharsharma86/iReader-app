@@ -15,7 +15,7 @@ const TOPIC_QUEUE = [
   'business',
 ];
 const DEEPDIVE_API = 'https://ireader.onrender.com/api/news/deepdive';
-const CACHE_PREFIX = '@deepdive_v1_';
+const CACHE_PREFIX = '@deepdive_v2_';
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const FEED_LIST_CACHE = '@aifeed_list_v1';
 const VIOLET = '#b994ff';
@@ -689,7 +689,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
         const paragraphs = [
           story.headline + '. ' + (story.summary ?? story.headline),
           ...item.allStories
-            .slice(1, 5)
+            .slice(1, 12)
             .filter(s => s.summary && s.summary !== story.summary)
             .map(s => `[${s.sources?.[0]?.name ?? 'Source'}]: ${s.summary}`),
         ];
@@ -964,11 +964,10 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
                       </div>
                       {section.bullets.map((b, i) => (
                         <div key={i} style={{
-                          display: 'flex', gap: 14, padding: '12px 0',
-                          borderTop: i > 0 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                          display: 'flex', gap: 12, padding: '7px 0',
                           alignItems: 'flex-start',
                         }}>
-                          <div style={{ width: 6, height: 6, borderRadius: 4, marginTop: 10, background: VIOLET, flexShrink: 0 }} />
+                          <div style={{ width: 6, height: 6, borderRadius: 4, marginTop: 9, background: VIOLET, flexShrink: 0 }} />
                           <div style={{ flex: 1, color: '#cfcfd8', fontSize: 15.5, lineHeight: 1.6 }}>
                             {highlightEntities(b, [...(data.tags ?? []), ...(data.keyPeople ?? []), ...(data.keyCompanies ?? [])], accent)}
                           </div>
@@ -978,11 +977,10 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
                   ))
                 ) : data.tldr.map((b, i) => (
                   <div key={i} style={{
-                    display: 'flex', gap: 14, padding: '14px 0',
-                    borderTop: i > 0 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                    display: 'flex', gap: 12, padding: '7px 0',
                     alignItems: 'flex-start',
                   }}>
-                    <div style={{ width: 6, height: 6, borderRadius: 4, marginTop: 10, background: VIOLET, flexShrink: 0 }} />
+                    <div style={{ width: 6, height: 6, borderRadius: 4, marginTop: 9, background: VIOLET, flexShrink: 0 }} />
                     <div style={{ flex: 1, color: '#cfcfd8', fontSize: 15.5, lineHeight: 1.6 }}>
                       {highlightEntities(b, [...(data.tags ?? []), ...(data.keyPeople ?? []), ...(data.keyCompanies ?? [])], accent)}
                     </div>
