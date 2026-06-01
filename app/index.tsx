@@ -690,6 +690,8 @@ export default function FeedScreen() {
     if (!showSports && BLOCKED_SPORTS_RE.test(headline)) return true;
     if (!showEntertainment && BLOCKED_ENTERTAINMENT_RE.test(headline)) return true;
     if (source === 'India Today' && /\bdiscount\b/i.test(headline)) return true;
+    // NYT recurring "Here's the Latest" live-briefing roundup — not a story.
+    if (/nyt|new york times/i.test(source ?? '') && /here.?s the latest|here are the latest/i.test(headline)) return true;
     return false;
   }
 

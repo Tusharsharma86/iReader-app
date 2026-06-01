@@ -96,11 +96,13 @@ function dedupeSources(arr: { name: string; url: string }[]): { name: string; ur
 // Drop Hindi/Devanagari headlines and mobile-phone discount/deal stories.
 const PHONE_RE = /\b(phone|smartphone|mobile|iphone|android|samsung|xiaomi|redmi|oneplus|oppo|vivo|realme|motorola|moto|nokia|pixel|infinix|tecno|poco|nothing phone)\b/i;
 const DEAL_RE = /\b(discount|deal|deals|offer|offers|sale|price drop|price cut|cashback|emi|exchange offer|bank offer|coupon|lowest price|best price|under ₹|under rs\.?|under inr|% off|percent off|flat \d+|flipkart|amazon (sale|prime day|great)|big billion)\b/i;
-function isExcluded(s?: { headline?: string; summary?: string }): boolean {
+function isExcluded(s?: { headline?: string; summary?: string; sources?: { name?: string }[] }): boolean {
   if (!s) return false;
   const text = `${s.headline || ''} ${s.summary || ''}`;
   if (/[ऀ-ॿ]/.test(text)) return true; // Devanagari (Hindi)
   if (PHONE_RE.test(text) && DEAL_RE.test(text)) return true;
+  // NYT recurring "Here's the Latest" live-briefing roundup — not a story.
+  if (/nyt|new york times/i.test(s.sources?.[0]?.name ?? '') && /here.?s the latest|here are the latest/i.test(s.headline ?? '')) return true;
   return false;
 }
 
