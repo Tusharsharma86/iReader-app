@@ -29,6 +29,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { useSaved } from '../contexts/SavedContext';
 import { getCached, setCached, TTL } from '../utils/cache';
 import { trackArticleRead, trackAiUsage } from '../utils/usageTracker';
+import { FALLBACK_IMG } from '../utils/fallback';
 
 function deriveCategory(source: string, url: string, headline: string): string {
   const s = (source || '').toLowerCase();
@@ -797,49 +798,16 @@ export default function ArticleScreen() {
       >
         {/* Hero — image variant OR typographic fallback for image-less articles */}
         {noHero ? (
-          <View style={[styles.heroContainer, styles.heroFallback]}>
-            {/* Layered gradient creates a richer "abstract" hero so it doesn't read empty */}
+          <View style={[styles.heroContainer, { overflow: 'hidden', backgroundColor: '#05060c' }]}>
+            {/* Branded network-node banner for image-less articles */}
+            <Image source={FALLBACK_IMG} style={StyleSheet.absoluteFill} contentFit="cover" />
             <LinearGradient
-              colors={[lighten(dominant, 0.25), dominant, darken(dominant, 0.3)]}
-              locations={[0, 0.55, 1]}
+              colors={[dominant + '33', 'transparent', accent + '1f']}
+              locations={[0, 0.45, 1]}
               style={StyleSheet.absoluteFill}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             />
-            {/* Subtle diagonal accent stripe for visual interest */}
-            <LinearGradient
-              colors={['transparent', accent + '22', 'transparent']}
-              locations={[0.35, 0.55, 0.75]}
-              style={StyleSheet.absoluteFill}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            />
-
-            {/* Center mark: large source avatar + name */}
-            <View style={styles.heroFallbackCenter}>
-              {(() => {
-                const fav = params.url ? faviconFromUrl(params.url) : '';
-                return (
-                  <View style={[styles.heroFallbackAvatar, { borderColor: accent + 'AA' }]}>
-                    {fav ? (
-                      <Image source={{ uri: fav }} style={StyleSheet.absoluteFill} contentFit="cover" />
-                    ) : (
-                      <Text style={[styles.heroFallbackLetter, { color: accent }]}>
-                        {(params.source ?? '?').charAt(0).toUpperCase()}
-                      </Text>
-                    )}
-                  </View>
-                );
-              })()}
-              <Text style={[styles.heroFallbackSource, { color: accent }]} numberOfLines={1}>
-                {params.source ?? 'UNKNOWN'}
-              </Text>
-              <View style={[styles.heroFallbackDivider, { backgroundColor: accent + '55' }]} />
-              <Text style={[styles.heroFallbackTag, { color: accent + 'CC' }]}>
-                {articleCategory.toUpperCase()} · ARTICLE
-              </Text>
-            </View>
-
             {/* Bottom fade into screen bg */}
             <LinearGradient
               colors={['transparent', 'transparent', darken(dominant, 0.4)]}
@@ -1178,11 +1146,7 @@ export default function ArticleScreen() {
                   });
                 }}
               >
-                {story.imageUrl ? (
-                  <Image source={{ uri: story.imageUrl }} style={styles.relatedCardImg} contentFit="cover" />
-                ) : (
-                  <View style={[styles.relatedCardImg, { backgroundColor: lighten(dominant, 0.1) }]} />
-                )}
+                <Image source={story.imageUrl ? { uri: story.imageUrl } : FALLBACK_IMG} style={styles.relatedCardImg} contentFit="cover" />
                 <View style={styles.relatedCardBody}>
                   <Text style={styles.relatedCardHeadline} numberOfLines={2}>{story.headline}</Text>
                   <Text style={styles.relatedCardSource}>{story.sources?.[0]?.name?.toUpperCase()}</Text>

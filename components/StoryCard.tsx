@@ -7,6 +7,7 @@ import { Dimensions, Pressable, StyleSheet, Text, View, useWindowDimensions } fr
 import { darken, lighten, getArticleColor } from '../utils/colors';
 import { FeedStackParamList } from '../types/navigation';
 import { trackArticleOpen } from '../utils/personalization';
+import { FALLBACK_IMG } from '../utils/fallback';
 
 export type BiasRating = 'left' | 'lean-left' | 'center' | 'lean-right' | 'right' | 'unknown';
 
@@ -219,56 +220,16 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight:
             onError={() => setImageError(true)}
           />
         ) : (
-          /* No image — typographic fallback so card still feels deliberate */
+          /* No image — branded network-node fallback banner */
           <>
+            <Image source={FALLBACK_IMG} style={StyleSheet.absoluteFill} contentFit="cover" />
             <LinearGradient
-              colors={[lighten(dominant, 0.25), dominant, darken(dominant, 0.3)]}
-              locations={[0, 0.55, 1]}
+              colors={[dominant + '33', 'transparent', accent + '1f']}
+              locations={[0, 0.45, 1]}
               style={StyleSheet.absoluteFill}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             />
-            <LinearGradient
-              colors={['transparent', accent + '22', 'transparent']}
-              locations={[0.35, 0.55, 0.75]}
-              style={StyleSheet.absoluteFill}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            />
-            <View style={styles.fallbackCenter}>
-              {(() => {
-                const mapped = getSourceDomain(source);
-                const fromUrl = domainFromUrl(story.sources?.[0]?.url);
-                const domain = mapped || fromUrl;
-                const faviconUri = domain
-                  ? `https://www.google.com/s2/favicons?domain=${domain}&sz=128`
-                  : '';
-                return (
-                  <View style={[styles.fallbackAvatar, { borderColor: accent + 'AA' }]}>
-                    {faviconUri ? (
-                      <Image
-                        source={{ uri: faviconUri }}
-                        style={StyleSheet.absoluteFill}
-                        contentFit="cover"
-                      />
-                    ) : (
-                      <View style={[styles.fallbackAvatarLetter, { backgroundColor: lighten(dominant, 0.15) }]}>
-                        <Text style={[styles.fallbackAvatarLetterText, { color: accent }]}>
-                          {(source ?? '?').charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                );
-              })()}
-              <Text style={[styles.fallbackSource, { color: accent }]} numberOfLines={1}>
-                {source.toUpperCase()}
-              </Text>
-              <View style={[styles.fallbackDivider, { backgroundColor: accent + '55' }]} />
-              <Text style={[styles.fallbackTag, { color: accent + 'CC' }]}>
-                {timeAgo(story.publishedAt)}
-              </Text>
-            </View>
           </>
         )}
 

@@ -28,6 +28,7 @@ import { trackAiUsage, trackArticleRead } from '../utils/usageTracker';
 import { trackDeepDive } from '../utils/personalization';
 import { speakQueue, stop as stopSpeech, pause as pauseSpeech, resume as resumeSpeech, cleanForSpeech, type SpeechState } from '../utils/speech';
 import { toggleFollow, isFollowing, loadFollowed } from '../utils/followStore';
+import { FALLBACK_IMG } from '../utils/fallback';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 
 const FEED_API_BASE = 'https://ireader.onrender.com/api/news/feed';
@@ -1282,52 +1283,20 @@ function CelebratePop() {
   );
 }
 
-function NoImageFallback({ dominant, accent, source, url }: {
-  dominant: string; accent: string; source: string; url?: string;
+function NoImageFallback({ dominant, accent }: {
+  dominant: string; accent: string; source?: string; url?: string;
 }) {
-  const mapped = getSourceDomain(source);
-  const fromUrl = domainFromUrl(url);
-  const domain = mapped || fromUrl;
-  const faviconUri = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=128` : '';
+  // Branded network-node banner whenever an article has no thumbnail.
   return (
-    <View style={StyleSheet.absoluteFill}>
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: '#05060c' }]}>
+      <Image source={FALLBACK_IMG} style={StyleSheet.absoluteFill} contentFit="cover" />
       <LinearGradient
-        colors={[lighten(dominant, 0.25), dominant, darken(dominant, 0.3)]}
-        locations={[0, 0.55, 1]}
+        colors={[dominant + '33', 'transparent', accent + '1f']}
+        locations={[0, 0.45, 1]}
         style={StyleSheet.absoluteFill}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       />
-      <LinearGradient
-        colors={['transparent', accent + '22', 'transparent']}
-        locations={[0.35, 0.55, 0.75]}
-        style={StyleSheet.absoluteFill}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      />
-      <View style={{
-        position: 'absolute', left: 0, right: 0, top: '18%',
-        alignItems: 'center', gap: 10, padding: 24,
-      }}>
-        <View style={{
-          width: 72, height: 72, borderRadius: 36,
-          borderWidth: 2, borderColor: accent + 'AA',
-          backgroundColor: 'rgba(0,0,0,0.25)',
-          overflow: 'hidden', alignItems: 'center', justifyContent: 'center',
-        }}>
-          {faviconUri ? (
-            <Image source={{ uri: faviconUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
-          ) : (
-            <Text style={{ color: accent, fontSize: 28, fontWeight: '800' }}>
-              {(source ?? '?').charAt(0).toUpperCase()}
-            </Text>
-          )}
-        </View>
-        <View style={{ width: 28, height: 1, backgroundColor: accent + '55' }} />
-        <Text style={{ color: accent + 'CC', fontSize: 9, fontWeight: '700', letterSpacing: 1.6 }}>
-          NO PREVIEW
-        </Text>
-      </View>
     </View>
   );
 }
