@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { registerForPush, updatePushPreferences } from '../utils/notifications';
+import { INTEREST_TOPICS } from '../utils/interestTopics';
 
 export type FontSize = 'Small' | 'Medium' | 'Large' | 'XLarge';
 
@@ -135,6 +137,47 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       showSports, showEntertainment,
     })).catch(() => {});
   }, [loaded, fontSize, notifBreaking, notifTech, notifDigest, notifAiFeed, notifSources, activeTopics, activeSubTopics, favSources, favTopics, topicInterests, showSports, showEntertainment]);
+
+  // Reconcile backend notification prefs with the toggles shown locally —
+  // ONCE per launch, after settings load. Fixes the fresh-install / new-token
+  // case: the DB prefs row defaults every category to false, and the client
+  // previously only synced a category when the user *toggled* it. So a toggle
+  // that's "on" by default (e.g. Breaking) was never pushed → backend stayed
+  // false → no breaking notifications even though the UI showed it enabled.
+  const didReconcileRef = useRef(false);
+  useEffect(() => {
+    if (!loaded || didReconcileRef.current) return;
+    didReconcileRef.current = true;
+    (async () => {
+      try {
+        await registerForPush();
+        // Build keyword|Label|stars pairs from starred interests (matches the
+        // Settings screen's sync format).
+        const pairs: string[] = [];
+        const seen = new Set<string>();
+        for (const t of INTEREST_TOPICS.filter(t => (topicInterests[t.id] ?? 0) > 0)) {
+          const stars = Math.max(1, Math.min(5, topicInterests[t.id] ?? 0));
+          for (const kw of t.keywords) {
+            const key = kw.toLowerCase();
+            if (seen.has(key)) continue;
+            seen.add(key);
+            pairs.push(`${kw}|${t.label}|${stars}`);
+          }
+        }
+        await updatePushPreferences({
+          breakingEnabled: notifBreaking,
+          aiFeedEnabled: notifAiFeed,
+          topicsEnabled: notifTech,
+          topicsKeywords: notifTech ? pairs.slice(0, 500) : [],
+          digestEnabled: notifDigest,
+          favSourcesEnabled: favSources.length > 0,
+          favSources,
+        });
+      } catch { /* best-effort; toggles still sync on change */ }
+    })();
+    // Intentionally only depends on `loaded` — runs once after first load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded]);
 
   const setFontSize = useCallback((fs: FontSize) => setFontSizeState(fs), []);
 
