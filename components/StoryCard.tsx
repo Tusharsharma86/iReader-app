@@ -144,9 +144,15 @@ interface Props {
   cardWidth?: number;
   imageHeight?: number;
   allStories?: Story[];
+  showSummary?: boolean;
 }
 
-function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight: imageHeightProp, allStories }: Props) {
+function clampWords(text: string, n: number): string {
+  const words = (text || '').trim().split(/\s+/);
+  return words.length <= n ? text.trim() : words.slice(0, n).join(' ') + '…';
+}
+
+function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight: imageHeightProp, allStories, showSummary }: Props) {
   const { width: hookWidth } = useWindowDimensions();
   const [dimWidth, setDimWidth] = useState(() => Dimensions.get('window').width);
   useEffect(() => {
@@ -285,8 +291,10 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight:
           );
         })()}
 
-        {!compact && (
-          <Text style={styles.summary} numberOfLines={2}>{story.summary}</Text>
+        {!compact && !!story.summary && (
+          <Text style={styles.summary} numberOfLines={showSummary ? 4 : 2}>
+            {showSummary ? clampWords(story.summary, 50) : story.summary}
+          </Text>
         )}
       </View>
     </Pressable>

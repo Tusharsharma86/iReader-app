@@ -1366,7 +1366,7 @@ const TopicSection = React.memo(function TopicSection({
   if (count === 1) {
     return (
       <View style={[styles.section, { alignItems: 'center' }]}>
-        <StoryCard story={cluster.stories[0]} cardWidth={cardWidth} allStories={allStories} />
+        <StoryCard story={cluster.stories[0]} cardWidth={cardWidth} allStories={allStories} showSummary />
       </View>
     );
   }
@@ -1397,9 +1397,11 @@ const TopicSection = React.memo(function TopicSection({
             </View>
           </TouchableOpacity>
 
-          {/* AI summary */}
+          {/* AI summary — ~50 words */}
           {!!summary && (
-            <Text style={styles.clusterSummary} numberOfLines={3}>{summary}</Text>
+            <Text style={styles.clusterSummary} numberOfLines={3}>
+              {summary.split(/\s+/).slice(0, 50).join(' ')}{summary.split(/\s+/).length > 50 ? '…' : ''}
+            </Text>
           )}
 
           {/* Bias spectrum + diversity badge (count pill moved to headline row) */}

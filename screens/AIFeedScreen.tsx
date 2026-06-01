@@ -669,7 +669,9 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: _h, to
         </View>
         <Text style={styles.cardHeadline}>{story.headline}</Text>
         {story.summary ? (
-          <Text style={styles.cardSummary} numberOfLines={4}>{story.summary}</Text>
+          <Text style={styles.cardSummary} numberOfLines={8}>
+            {story.summary.split(/\s+/).slice(0, 100).join(' ')}{story.summary.split(/\s+/).length > 100 ? '…' : ''}
+          </Text>
         ) : null}
       </CardTextBounce>
 

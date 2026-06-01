@@ -99,7 +99,7 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
   if (cluster.stories.length === 1) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 28 }}>
-        <StoryCard story={cluster.stories[0]} cardWidth={soloCardWidth} allStories={allStories} />
+        <StoryCard story={cluster.stories[0]} cardWidth={soloCardWidth} allStories={allStories} showSummary />
       </div>
     );
   }
@@ -134,8 +134,8 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
           </span>
         </div>
         {cluster.subtitle && (
-          <div style={{ color: '#666', fontSize: 13, lineHeight: 1.4, marginTop: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-            {cluster.subtitle}
+          <div style={{ color: '#8a8a8a', fontSize: 13, lineHeight: 1.45, marginTop: 2, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {cluster.subtitle.split(/\s+/).slice(0, 50).join(' ')}{cluster.subtitle.split(/\s+/).length > 50 ? '…' : ''}
           </div>
         )}
         {(() => {
