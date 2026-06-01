@@ -780,6 +780,42 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
   // Stop narration when the overlay closes/unmounts.
   useEffect(() => () => stopSpeech(), []);
 
+  // Pre-highlight TL;DR + full story ONCE per data load. Without this, the
+  // swipe-down drag (setState on every touch-move) re-ran highlightEntities
+  // over the whole long story each frame → black/laggy/unresponsive overlay.
+  const tagList = useMemo(
+    () => [...(data?.tags ?? []), ...(data?.keyPeople ?? []), ...(data?.keyCompanies ?? [])],
+    [data],
+  );
+  const tldrBody = useMemo(() => {
+    if (!data) return null;
+    if (data.tldrSections && data.tldrSections.length > 0) {
+      return data.tldrSections.map((section, si) => (
+        <div key={si} style={{ marginTop: si > 0 ? 20 : 0, paddingTop: si > 0 ? 16 : 0, borderTop: si > 0 ? '1px solid rgba(255,255,255,0.08)' : 'none' }}>
+          <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 10, fontWeight: 800, letterSpacing: 1.4, marginBottom: 8, textTransform: 'uppercase' }}>{section.heading}</div>
+          {section.bullets.map((b, i) => (
+            <div key={i} style={{ display: 'flex', gap: 12, padding: '7px 0', alignItems: 'flex-start' }}>
+              <div style={{ width: 6, height: 6, borderRadius: 4, marginTop: 9, background: VIOLET, flexShrink: 0 }} />
+              <div style={{ flex: 1, color: '#cfcfd8', fontSize: 15.5, lineHeight: 1.6 }}>{highlightEntities(b, tagList, accent)}</div>
+            </div>
+          ))}
+        </div>
+      ));
+    }
+    return data.tldr.map((b, i) => (
+      <div key={i} style={{ display: 'flex', gap: 12, padding: '7px 0', alignItems: 'flex-start' }}>
+        <div style={{ width: 6, height: 6, borderRadius: 4, marginTop: 9, background: VIOLET, flexShrink: 0 }} />
+        <div style={{ flex: 1, color: '#cfcfd8', fontSize: 15.5, lineHeight: 1.6 }}>{highlightEntities(b, tagList, accent)}</div>
+      </div>
+    ));
+  }, [data, tagList, accent]);
+  const narrativeBody = useMemo(() => {
+    if (!data?.narrative) return null;
+    return data.narrative.split(/\n\n+/).map((p, i) => (
+      <p key={i} style={{ margin: '0 0 20px', color: '#c8c8d4', fontSize: 16, lineHeight: 1.7, letterSpacing: 0.05 }}>{highlightEntities(p, tagList, accent)}</p>
+    ));
+  }, [data, tagList, accent]);
+
   useEffect(() => {
     if (data) return;
     let cancelled = false;
@@ -1074,36 +1110,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
                   <span>TL;DR BY CURIOUSCATS.AI</span>
                   <div style={{ flex: 1, height: 1, background: `${VIOLET}33` }} />
                 </div>
-                {data.tldrSections && data.tldrSections.length > 0 ? (
-                  data.tldrSections.map((section, si) => (
-                    <div key={si} style={{ marginTop: si > 0 ? 20 : 0, paddingTop: si > 0 ? 16 : 0, borderTop: si > 0 ? '1px solid rgba(255,255,255,0.08)' : 'none' }}>
-                      <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 10, fontWeight: 800, letterSpacing: 1.4, marginBottom: 8, textTransform: 'uppercase' }}>
-                        {section.heading}
-                      </div>
-                      {section.bullets.map((b, i) => (
-                        <div key={i} style={{
-                          display: 'flex', gap: 12, padding: '7px 0',
-                          alignItems: 'flex-start',
-                        }}>
-                          <div style={{ width: 6, height: 6, borderRadius: 4, marginTop: 9, background: VIOLET, flexShrink: 0 }} />
-                          <div style={{ flex: 1, color: '#cfcfd8', fontSize: 15.5, lineHeight: 1.6 }}>
-                            {highlightEntities(b, [...(data.tags ?? []), ...(data.keyPeople ?? []), ...(data.keyCompanies ?? [])], accent)}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ))
-                ) : data.tldr.map((b, i) => (
-                  <div key={i} style={{
-                    display: 'flex', gap: 12, padding: '7px 0',
-                    alignItems: 'flex-start',
-                  }}>
-                    <div style={{ width: 6, height: 6, borderRadius: 4, marginTop: 9, background: VIOLET, flexShrink: 0 }} />
-                    <div style={{ flex: 1, color: '#cfcfd8', fontSize: 15.5, lineHeight: 1.6 }}>
-                      {highlightEntities(b, [...(data.tags ?? []), ...(data.keyPeople ?? []), ...(data.keyCompanies ?? [])], accent)}
-                    </div>
-                  </div>
-                ))}
+                {tldrBody}
               </div>
             ) : null}
 
@@ -1140,12 +1147,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
                   <span>CURIOUSCATS FULL STORY</span>
                   <div style={{ flex: 1, height: 1, background: `${VIOLET}33` }} />
                 </div>
-                {data.narrative.split(/\n\n+/).map((p, i) => (
-                  <p key={i} style={{
-                    margin: '0 0 20px',
-                    color: '#c8c8d4', fontSize: 16, lineHeight: 1.7, letterSpacing: 0.05,
-                  }}>{highlightEntities(p, [...(data.tags ?? []), ...(data.keyPeople ?? []), ...(data.keyCompanies ?? [])], accent)}</p>
-                ))}
+                {narrativeBody}
               </div>
             )}
 
