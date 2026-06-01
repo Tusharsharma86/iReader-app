@@ -5,6 +5,7 @@ import { getArticleColor, lighten, darken } from '../utils/colors';
 import { useRouter } from '../contexts/RouterContext';
 import { useSaved } from '../contexts/SavedContext';
 import { trackArticleOpen } from '../utils/personalization';
+import { FALLBACK_IMG } from '../utils/fallback';
 
 const CARD_HEIGHT = 420;
 
@@ -132,13 +133,13 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
       ) : (
         <div style={{
-          position: 'absolute', inset: 0,
-          background: `linear-gradient(135deg, ${lighten(dominant, 0.25)} 0%, ${dominant} 55%, ${darken(dominant, 0.3)} 100%)`,
+          position: 'absolute', inset: 0, background: '#05060c',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
+          <img src={FALLBACK_IMG} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
           <div style={{
             position: 'absolute', inset: 0,
-            background: `linear-gradient(135deg, transparent 35%, ${accent}22 55%, transparent 75%)`,
+            background: `linear-gradient(135deg, ${dominant}33 0%, transparent 45%, ${accent}1f 100%)`,
           }} />
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: 20, position: 'relative' }}>
             {(() => {

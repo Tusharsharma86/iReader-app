@@ -3,6 +3,7 @@ import type { Story } from '../types';
 import { useTabBarActions } from '../contexts/TabBarContext';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 import { speakQueue, stop as stopSpeech, pause as pauseSpeech, resume as resumeSpeech, speechSupported, cleanForSpeech, type SpeechState } from '../utils/speech';
+import { FALLBACK_IMG } from '../utils/fallback';
 import { trackDeepDive } from '../utils/personalization';
 import { toggleFollow, isFollowing } from '../utils/followStore';
 
@@ -617,48 +618,13 @@ function FullPreviewCard({ item, index, total, onOpen }: {
           }}
         />
       ) : (
-        <div style={{ position: 'absolute', inset: 0 }}>
+        <div style={{ position: 'absolute', inset: 0, background: '#05060c' }}>
+          <img src={FALLBACK_IMG} alt="" loading={index < 2 ? 'eager' : 'lazy'} decoding="async"
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
           <div style={{
             position: 'absolute', inset: 0,
-            background: `linear-gradient(135deg, ${lighten(dominant, 0.25)} 0%, ${dominant} 55%, ${darken(dominant, 0.3)} 100%)`,
+            background: `linear-gradient(135deg, ${dominant}33 0%, transparent 45%, ${accent}1f 100%)`,
           }} />
-          <div style={{
-            position: 'absolute', inset: 0,
-            background: `linear-gradient(135deg, transparent 35%, ${accent}22 55%, transparent 75%)`,
-          }} />
-          <div style={{
-            position: 'absolute', left: 0, right: 0, top: '18%',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: 24,
-          }}>
-            {(() => {
-              const fav = aifFaviconFromStory(sourceName, story.sources?.[0]?.url);
-              return (
-                <div style={{
-                  width: 72, height: 72, borderRadius: 36,
-                  border: `2px solid ${accent}AA`,
-                  background: 'rgba(0,0,0,0.25)',
-                  overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  {fav ? (
-                    <img src={fav} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <div style={{
-                      width: '100%', height: '100%',
-                      background: lighten(dominant, 0.15),
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: accent, fontSize: 28, fontWeight: 800,
-                    }}>
-                      {(sourceName ?? '?').charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-            <div style={{ width: 28, height: 1, background: `${accent}55`, borderRadius: 1 }} />
-            <div style={{ color: `${accent}CC`, fontSize: 9, fontWeight: 700, letterSpacing: 1.6 }}>
-              NO PREVIEW
-            </div>
-          </div>
         </div>
       )}
 
@@ -1000,45 +966,14 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
             filter: 'brightness(0.85)',
           }} />
         ) : (
-          <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
-            <div style={{
-              position: 'absolute', inset: 0,
-              background: `linear-gradient(135deg, ${lighten(dominant, 0.25)} 0%, ${dominant} 55%, ${darken(dominant, 0.3)} 100%)`,
+          <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: '#05060c' }}>
+            <img src={FALLBACK_IMG} alt="" className="dd-hero-in" style={{
+              width: '100%', height: '100%', objectFit: 'cover', display: 'block', filter: 'brightness(0.85)',
             }} />
             <div style={{
               position: 'absolute', inset: 0,
-              background: `linear-gradient(135deg, transparent 35%, ${accent}22 55%, transparent 75%)`,
+              background: `linear-gradient(135deg, ${dominant}33 0%, transparent 45%, ${accent}1f 100%)`,
             }} />
-            <div style={{
-              position: 'absolute', inset: 0,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 20,
-            }}>
-              {(() => {
-                const fav = aifFaviconFromStory(sourceName, story.sources?.[0]?.url);
-                return (
-                  <div style={{
-                    width: 64, height: 64, borderRadius: 32,
-                    border: `2px solid ${accent}AA`,
-                    background: 'rgba(0,0,0,0.25)',
-                    overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    {fav ? (
-                      <img src={fav} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    ) : (
-                      <div style={{
-                        width: '100%', height: '100%',
-                        background: lighten(dominant, 0.15),
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: accent, fontSize: 24, fontWeight: 800,
-                      }}>
-                        {(sourceName ?? '?').charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-              <div style={{ color: accent, fontSize: 14, fontWeight: 800, letterSpacing: 0.5 }}>{sourceName.toUpperCase()}</div>
-            </div>
           </div>
         )}
         <div style={{

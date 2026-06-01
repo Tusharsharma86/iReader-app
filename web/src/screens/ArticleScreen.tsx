@@ -7,6 +7,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { useTabBar } from '../contexts/TabBarContext';
 import { getCached, setCached, TTL } from '../utils/cache';
 import { trackArticleRead, trackAiUsage } from '../utils/usageTracker';
+import { FALLBACK_IMG } from '../utils/fallback';
 
 const API = 'https://ireader.onrender.com/api/news';
 const TABS = ['Long Form', 'Summary', '5 Ws', 'ELI5'] as const;
@@ -323,13 +324,11 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
       <div style={{ height: 280, position: 'relative', marginTop: 0, overflow: 'hidden' }}>
         {noHero ? (
           <>
+            <div style={{ position: 'absolute', inset: 0, background: '#05060c' }} />
+            <img src={FALLBACK_IMG} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
             <div style={{
               position: 'absolute', inset: 0,
-              background: `linear-gradient(135deg, ${lighten(dominant, 0.25)} 0%, ${dominant} 55%, ${darken(dominant, 0.3)} 100%)`,
-            }} />
-            <div style={{
-              position: 'absolute', inset: 0,
-              background: `linear-gradient(135deg, transparent 35%, ${accent}22 55%, transparent 75%)`,
+              background: `linear-gradient(135deg, ${dominant}33 0%, transparent 45%, ${accent}1f 100%)`,
             }} />
             <div style={{
               position: 'absolute', top: 0, left: 0, right: 0, bottom: 60,
@@ -675,7 +674,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
               return (
                 <div key={s.id || idx} onClick={() => navigate({ name: 'Article', params: { id: s.id, url: s.sources?.[0]?.url ?? '', image: s.imageUrl ?? '', headline: s.headline, summary: s.summary ?? '', source: s.sources?.[0]?.name ?? '', publishedAt: s.publishedAt ?? '', dominantColor: color, sources: JSON.stringify(s.sources ?? []), allStories: params.allStories } })}
                   style={{ width: 180, background: '#111', borderRadius: 14, overflow: 'hidden', flexShrink: 0, cursor: 'pointer' }}>
-                  {s.imageUrl ? <img src={s.imageUrl} alt="" style={{ width: 180, height: 100, objectFit: 'cover', display: 'block' }} /> : <div style={{ width: 180, height: 100, background: '#222' }} />}
+                  <img src={s.imageUrl || FALLBACK_IMG} alt="" style={{ width: 180, height: 100, objectFit: 'cover', display: 'block' }} />
                   <div style={{ padding: 10 }}>
                     <div style={{ color: '#fff', fontSize: 12, fontWeight: 600, lineHeight: 1.42, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{s.headline}</div>
                     <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, marginTop: 4 }}>{s.sources?.[0]?.name}</div>
