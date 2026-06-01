@@ -26,7 +26,6 @@ import { type Story, getSourceDomain, domainFromUrl } from '../components/StoryC
 import { tabBarTranslateY, useTabBarAutoHide } from '../utils/tabBarAnim';
 import { trackAiUsage, trackArticleRead } from '../utils/usageTracker';
 import { trackDeepDive } from '../utils/personalization';
-import { speakQueue, stop as stopSpeech, pause as pauseSpeech, resume as resumeSpeech, cleanForSpeech, type SpeechState } from '../utils/speech';
 import { toggleFollow, isFollowing, loadFollowed } from '../utils/followStore';
 import { FALLBACK_IMG } from '../utils/fallback';
 import { darken, lighten, getArticleColor } from '../utils/colors';
@@ -689,30 +688,18 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
   const [stage, setStage] = useState<'generating' | 'done' | 'error'>('generating');
   const [error, setError] = useState<string | null>(null);
   const [showColdHint, setShowColdHint] = useState(false);
-  const [speech, setSpeech] = useState<SpeechState>('idle');
   const [following, setFollowing] = useState(() => isFollowing(story.id));
+  const [reloadKey, setReloadKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Read headline + TL;DR + insight aloud.
-  const listen = useCallback(() => {
-    if (!data) return;
-    const chunks: string[] = [cleanForSpeech(story.headline)];
-    if (data.tldrSections?.length) {
-      for (const sec of data.tldrSections) {
-        if (sec.heading) chunks.push(cleanForSpeech(sec.heading) + '.');
-        for (const b of sec.bullets) chunks.push(cleanForSpeech(b));
-      }
-    } else {
-      for (const b of (data.tldr ?? [])) chunks.push(cleanForSpeech(b));
-    }
-    if (data.insight) chunks.push('Key insight. ' + cleanForSpeech(data.insight));
-    speakQueue(chunks.filter(Boolean), { onStateChange: setSpeech });
-  }, [data, story.headline]);
-  const toggleListen = useCallback(() => {
-    if (speech === 'speaking') { pauseSpeech(); setSpeech('paused'); }
-    else if (speech === 'paused') { resumeSpeech(); setSpeech('speaking'); }
-    else listen();
-  }, [speech, listen]);
-  useEffect(() => () => stopSpeech(), []);
+  // Retry a failed Deep Dive — bumping reloadKey re-runs the fetch effect and
+  // bypasses the disk cache (reloadKey > 0).
+  const reload = useCallback(() => {
+    setError(null);
+    setShowColdHint(false);
+    setStage('generating');
+    setReloadKey(k => k + 1);
+  }, []);
 
   // Android back closes overlay
   useEffect(() => {
@@ -725,9 +712,11 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
     (async () => {
       try {
         setError(null);
-        // Check cache first
-        const cached = await readDeepDiveCache(story.id);
-        if (cached && !cancelled) { setData(cached); setStage('done'); return; }
+        // Check cache first (skip on manual retry so we force a fresh call).
+        if (reloadKey === 0) {
+          const cached = await readDeepDiveCache(story.id);
+          if (cached && !cancelled) { setData(cached); setStage('done'); return; }
+        }
         setStage('generating');
         const paragraphs = [
           story.headline + '. ' + (story.summary ?? story.headline),
@@ -758,13 +747,16 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
         if (cancelled) return;
         setError(String(e instanceof Error ? e.message : e));
         setStage('error');
+      } finally {
+        if (!cancelled) setRefreshing(false);
       }
     })();
     return () => { cancelled = true; };
     // Bug fix H: gate on story.id only. story.id is stable per cluster and
     // every other field is derived from the same item — refiring on prop
-    // reference change wastes a 25s API call.
-  }, [story.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    // reference change wastes a 25s API call. reloadKey added so manual
+    // retry re-runs the fetch.
+  }, [story.id, reloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (stage !== 'generating') { setShowColdHint(false); return; }
@@ -776,7 +768,11 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
     <Modal visible animationType={restored ? 'none' : 'slide'} onRequestClose={onClose} statusBarTranslucent>
       <View style={{ flex: 1, backgroundColor: '#050507' }}>
         {/* No top SafeAreaView — image goes edge-to-edge under status bar. */}
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 60 }} showsVerticalScrollIndicator={false}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 60 }} showsVerticalScrollIndicator={false}
+          refreshControl={stage === 'error'
+            ? <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); reload(); }} tintColor={accent} colors={[accent]} />
+            : undefined}
+        >
           {/* Hero — starts at y=0, behind status bar */}
           <View style={{ height: 360, position: 'relative', backgroundColor: dominant, overflow: 'hidden' }}>
             {story.imageUrl ? (
@@ -819,7 +815,7 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
               {stage === 'generating' ? (
                 <InlineLoader showColdHint={showColdHint} />
               ) : stage === 'error' ? (
-                <InlineError text={error || 'Failed'} />
+                <InlineError text={error || 'Failed'} onRetry={reload} accent={accent} />
               ) : data ? (
                 <>
                   {/* TL;DR — grouped sections if AI emitted them, else flat fallback */}
@@ -975,12 +971,6 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
               style={[overlayStyles.iconBtn, following && { backgroundColor: `${accent}33`, borderColor: accent }]}>
               <Ionicons name={following ? 'star' : 'star-outline'} size={17} color={following ? accent : '#fff'} />
             </Pressable>
-            {stage === 'done' && (
-              <Pressable onPress={toggleListen} hitSlop={8}
-                style={[overlayStyles.iconBtn, speech !== 'idle' && { backgroundColor: `${accent}33`, borderColor: accent }]}>
-                <Ionicons name={speech === 'speaking' ? 'pause' : 'volume-high'} size={17} color={speech !== 'idle' ? accent : '#fff'} />
-              </Pressable>
-            )}
             <View style={overlayStyles.brandPill}>
               <Ionicons name="sparkles" size={11} color={VIOLET} />
               <Text style={[overlayStyles.brandText, { color: VIOLET }]}>AI DEEP DIVE</Text>
@@ -1295,11 +1285,27 @@ function TickNumber({ to, dur = 600 }: { to: number; dur?: number }) {
   return <>{v}</>;
 }
 
-function InlineError({ text }: { text: string }) {
+function InlineError({ text, onRetry, accent }: { text: string; onRetry?: () => void; accent?: string }) {
+  const c = accent || VIOLET;
   return (
     <View style={overlayStyles.errorCard}>
       <Text style={{ color: '#ff8888', fontWeight: '700', fontSize: 13, marginBottom: 4 }}>Couldn't generate</Text>
-      <Text style={{ color: '#aaa', fontSize: 11 }}>{text}</Text>
+      <Text style={{ color: '#aaa', fontSize: 11, marginBottom: onRetry ? 14 : 0 }}>{text}</Text>
+      {onRetry && (
+        <>
+          <Pressable onPress={onRetry} style={{
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+            paddingVertical: 11, borderRadius: 12,
+            backgroundColor: `${c}22`, borderWidth: 1, borderColor: `${c}66`,
+          }}>
+            <Ionicons name="refresh" size={15} color={c} />
+            <Text style={{ color: c, fontSize: 13, fontWeight: '800', letterSpacing: 0.5 }}>RETRY</Text>
+          </Pressable>
+          <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 10, textAlign: 'center', marginTop: 9 }}>
+            or pull down to refresh
+          </Text>
+        </>
+      )}
     </View>
   );
 }
