@@ -257,7 +257,8 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   const [newCount, setNewCount] = useState(0);
   const [loading, setLoading] = useState(() => !feedCache.has(activeTopic));
   const [refreshing, setRefreshing] = useState(false);
-  const [techSourceFilter, setTechSourceFilter] = useState<string | null>(null);
+  // Multi-select tech source filter — empty set = all sources.
+  const [techSourceFilter, setTechSourceFilter] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
   const activeTopicRef = useRef(activeTopic);
@@ -369,7 +370,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
 
   // Topic change: serve from cache instantly, fetch in background if stale
   useEffect(() => {
-    setPendingFeed(null); setNewCount(0); setTechSourceFilter(null);
+    setPendingFeed(null); setNewCount(0); setTechSourceFilter(new Set());
 
     let cancelled = false;
     const cached = feedCache.get(activeTopic);
@@ -457,8 +458,9 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   }, [filteredFeed]);
 
   const filteredClusters = useMemo(() => {
-    if (activeTopic !== 'technology' || !techSourceFilter) return storyClusters;
-    return storyClusters.filter(c => c.stories.some(s => s.sources?.[0]?.name === techSourceFilter));
+    if (activeTopic !== 'technology' || techSourceFilter.size === 0) return storyClusters;
+    // Multi-select: keep clusters that include ANY of the selected sources.
+    return storyClusters.filter(c => c.stories.some(s => techSourceFilter.has(s.sources?.[0]?.name ?? '')));
   }, [storyClusters, activeTopic, techSourceFilter]);
 
   // Re-rank clusters — personalized for "For You", standard scoring for topic tabs
@@ -567,17 +569,22 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
       {/* Tech source filter bar */}
       {activeTopic === 'technology' && techSources.length > 0 && (
         <div style={{ display: 'flex', overflowX: 'auto', padding: '0 16px 10px', gap: 10, scrollbarWidth: 'none', alignItems: 'center' }}>
-          <button onClick={() => setTechSourceFilter(null)}
-            style={{ flexShrink: 0, padding: '6px 12px', borderRadius: 99, background: !techSourceFilter ? '#fff' : 'rgba(255,255,255,0.1)', border: 'none', cursor: 'pointer', color: !techSourceFilter ? '#000' : '#888', fontSize: 12, fontWeight: 700 }}>
+          <button onClick={() => setTechSourceFilter(new Set())}
+            style={{ flexShrink: 0, padding: '6px 12px', borderRadius: 99, background: techSourceFilter.size === 0 ? '#fff' : 'rgba(255,255,255,0.1)', border: 'none', cursor: 'pointer', color: techSourceFilter.size === 0 ? '#000' : '#888', fontSize: 12, fontWeight: 700 }}>
             All
           </button>
           {techSources.map(src => {
-            const active = techSourceFilter === src.name;
+            const active = techSourceFilter.has(src.name);
             return (
-              <button key={src.name} onClick={() => setTechSourceFilter(active ? null : src.name)}
-                style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 99, background: active ? '#fff' : 'rgba(255,255,255,0.1)', border: 'none', cursor: 'pointer' }}>
+              <button key={src.name} onClick={() => setTechSourceFilter(prev => {
+                const next = new Set(prev);
+                if (next.has(src.name)) next.delete(src.name); else next.add(src.name);
+                return next;
+              })}
+                style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 99, background: active ? '#fff' : 'rgba(255,255,255,0.1)', border: active ? 'none' : '1px solid transparent', cursor: 'pointer' }}>
                 <img src={src.favicon} alt="" style={{ width: 16, height: 16, borderRadius: 4 }} />
                 <span style={{ color: active ? '#000' : '#aaa', fontSize: 12, fontWeight: 600 }}>{src.name}</span>
+                {active && <span style={{ color: '#000', fontSize: 11, fontWeight: 800, marginLeft: 1 }}>✕</span>}
               </button>
             );
           })}
