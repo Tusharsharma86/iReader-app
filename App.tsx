@@ -6,7 +6,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Animated, Pressable, Text, View, StyleSheet } from 'react-native';
+import { Animated, Pressable, Text, View, StyleSheet, Linking } from 'react-native';
 import { tabBarTranslateY } from './utils/tabBarAnim';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import ArticleScreen from './screens/ArticleScreen';
@@ -89,6 +89,31 @@ function handleNotificationTap(data: any, attempt = 0) {
       },
     } as never);
   } catch {}
+}
+
+// Open from a widget tap deep link: `ireaderpro://story?p=<encoded json>` or
+// `ireaderpro://feed`. Parsed manually (RN's URL polyfill is unreliable for
+// custom schemes) and routed through the same handler as push taps.
+function handleWidgetUrl(url: string | null) {
+  if (!url || !url.startsWith('ireaderpro://')) return;
+  const rest = url.slice('ireaderpro://'.length);
+  const [path, query = ''] = rest.split('?');
+  if (path.startsWith('feed')) {
+    const go = (attempt = 0): void => {
+      if (!navigationRef.isReady()) { if (attempt < 30) setTimeout(() => go(attempt + 1), 200); return; }
+      try { navigationRef.navigate('Feed' as never); } catch {}
+    };
+    go();
+    return;
+  }
+  if (path.startsWith('story')) {
+    const kv = query.split('&').find((p) => p.startsWith('p='));
+    if (!kv) return;
+    try {
+      const article = JSON.parse(decodeURIComponent(kv.slice(2)));
+      handleNotificationTap({ kind: 'widget', article });
+    } catch {}
+  }
 }
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
@@ -330,7 +355,12 @@ export default function App() {
       const d = r?.notification?.request?.content?.data;
       if (d) setTimeout(() => handleNotificationTap(d), 400);
     });
-    return () => { try { sub?.remove?.(); } catch {} try { recvSub?.remove?.(); } catch {} };
+
+    // Widget tap deep links (ireaderpro://…) — warm + cold start.
+    const linkSub = Linking.addEventListener('url', ({ url }) => handleWidgetUrl(url));
+    Linking.getInitialURL().then((url) => { if (url) setTimeout(() => handleWidgetUrl(url), 400); }).catch(() => {});
+
+    return () => { try { sub?.remove?.(); } catch {} try { recvSub?.remove?.(); } catch {} try { linkSub?.remove?.(); } catch {} };
   }, []);
 
   if (!navReady) return null;

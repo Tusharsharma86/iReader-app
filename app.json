@@ -2,6 +2,7 @@
   "expo": {
     "name": "iReader Pro",
     "slug": "ireader-pro-fresh",
+    "scheme": "ireaderpro",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -59,6 +60,25 @@
           "color": "#1BE7FF",
           "defaultChannel": "default",
           "sounds": []
+        }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "News",
+              "label": "iReader Headlines",
+              "description": "Latest breaking headlines",
+              "minWidth": "180dp",
+              "minHeight": "180dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 4,
+              "previewImage": "./assets/icon.png",
+              "updatePeriodMillis": 1800000,
+              "resizeMode": "horizontal|vertical"
+            }
+          ]
         }
       ]
     ],
