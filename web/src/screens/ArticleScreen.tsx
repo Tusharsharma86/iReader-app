@@ -331,39 +331,6 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
               background: `linear-gradient(135deg, ${dominant}33 0%, transparent 45%, ${accent}1f 100%)`,
             }} />
             <div style={{
-              position: 'absolute', top: 0, left: 0, right: 0, bottom: 60,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              gap: 14, padding: '0 24px',
-            }}>
-              {(() => {
-                const fav = params.url ? faviconFromUrl(params.url) : '';
-                return (
-                  <div style={{
-                    width: 64, height: 64, borderRadius: 32,
-                    border: `2px solid ${accent}AA`, overflow: 'hidden',
-                    background: 'rgba(0,0,0,0.25)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    {fav ? (
-                      <img src={fav} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    ) : (
-                      <span style={{ color: accent, fontSize: 28, fontWeight: 800 }}>
-                        {(params.source ?? '?').charAt(0).toUpperCase()}
-                      </span>
-                    )}
-                  </div>
-                );
-              })()}
-              <span style={{
-                color: accent, fontSize: 16, fontWeight: 800,
-                letterSpacing: 0.4, textTransform: 'uppercase',
-              }}>{params.source ?? 'UNKNOWN'}</span>
-              <div style={{ width: 40, height: 1, background: `${accent}55`, borderRadius: 1 }} />
-              <span style={{ color: `${accent}CC`, fontSize: 10, fontWeight: 700, letterSpacing: 2 }}>
-                {articleCategory.toUpperCase()} · ARTICLE
-              </span>
-            </div>
-            <div style={{
               position: 'absolute', inset: 0,
               background: `linear-gradient(to bottom, transparent 0%, transparent 55%, ${darken(dominant, 0.4)} 100%)`,
             }} />
