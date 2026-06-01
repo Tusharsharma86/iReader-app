@@ -11,13 +11,26 @@ const BORDER = '#1A1A1A';
 const MUTED = '#666';
 
 type Range = '7d' | '30d' | 'all';
+interface GroqQuota {
+  requestsPerDay?: string | null; requestsRemaining?: string | null; requestsReset?: string | null;
+  tokensPerMin?: string | null; tokensRemaining?: string | null; tokensReset?: string | null;
+}
 
 export default function UsageScreen() {
   const { goBack } = useRouter();
   const [stats, setStats] = useState<UsageStats | null>(null);
   const [range, setRange] = useState<Range>('7d');
+  const [quota, setQuota] = useState<GroqQuota | null>(null);
+  const [quotaErr, setQuotaErr] = useState(false);
 
   useEffect(() => { setStats(getUsageStats()); }, []);
+
+  useEffect(() => {
+    fetch('https://ireader.onrender.com/api/news/groq-quota')
+      .then(r => r.json())
+      .then((d: { limits?: GroqQuota }) => { if (d?.limits) setQuota(d.limits); else setQuotaErr(true); })
+      .catch(() => setQuotaErr(true));
+  }, []);
 
   const bucket = useMemo(() => {
     if (!stats) return null;
@@ -86,6 +99,15 @@ export default function UsageScreen() {
           <Section title="TOP SOURCES · ALL TIME"><RankedList items={stats.topSources} color={BLUE} /></Section>
         )}
 
+        {/* AI engine quota (Groq) — live daily limits. Web-only for now. */}
+        {(quota || quotaErr) && (
+          <Section title="AI ENGINE · GROQ DAILY QUOTA">
+            {quota ? <GroqQuotaCard q={quota} /> : (
+              <div style={{ color: MUTED, fontSize: 12 }}>Couldn't load live quota.</div>
+            )}
+          </Section>
+        )}
+
         {!hasAny && (
           <div style={{ textAlign: 'center', padding: 40, color: MUTED }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>📊</div>
@@ -93,6 +115,46 @@ export default function UsageScreen() {
             <div style={{ fontSize: 12, marginTop: 4 }}>Read an article or open a Deep Dive to start tracking.</div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function GroqQuotaCard({ q }: { q: GroqQuota }) {
+  const limit = Number(q.requestsPerDay) || 0;
+  const remaining = Number(q.requestsRemaining);
+  const hasReq = limit > 0 && Number.isFinite(remaining);
+  const used = hasReq ? Math.max(0, limit - remaining) : 0;
+  const pct = hasReq ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+  const barColor = pct >= 90 ? PINK : pct >= 70 ? '#F59E0B' : GREEN;
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+        <span style={{ color: '#FFF', fontSize: 13, fontWeight: 700 }}>Requests today</span>
+        <span style={{ color: MUTED, fontSize: 12 }}>
+          {hasReq ? `${used.toLocaleString()} / ${limit.toLocaleString()}` : '—'}
+        </span>
+      </div>
+      <div style={{ height: 8, borderRadius: 4, background: '#1A1A1A', overflow: 'hidden' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: barColor, borderRadius: 4, transition: 'width 0.3s' }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+        <span style={{ color: barColor, fontSize: 11, fontWeight: 700 }}>{hasReq ? `${remaining.toLocaleString()} left` : ''}</span>
+        {q.requestsReset && <span style={{ color: MUTED, fontSize: 11 }}>resets in {q.requestsReset}</span>}
+      </div>
+
+      <div style={{ height: 1, background: BORDER, margin: '14px 0' }} />
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <span style={{ color: '#FFF', fontSize: 13, fontWeight: 700 }}>Tokens / min</span>
+        <span style={{ color: MUTED, fontSize: 12 }}>
+          {q.tokensRemaining != null && q.tokensPerMin != null
+            ? `${Number(q.tokensRemaining).toLocaleString()} / ${Number(q.tokensPerMin).toLocaleString()} left`
+            : '—'}
+        </span>
+      </div>
+      <div style={{ color: '#444', fontSize: 10, marginTop: 10 }}>
+        Live from Groq · model llama-4-scout · falls back to local clustering if exhausted
       </div>
     </div>
   );
