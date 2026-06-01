@@ -69,17 +69,9 @@ interface Props {
   cardWidth?: number;
   allStories?: Story[];
   suppressBreaking?: boolean;
-  showSummary?: boolean;
 }
 
-// Trim text to at most `n` words (adds … if truncated).
-function clampWords(text: string, n: number): string {
-  const words = (text || '').trim().split(/\s+/);
-  if (words.length <= n) return text.trim();
-  return words.slice(0, n).join(' ') + '…';
-}
-
-export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppressBreaking, showSummary }: Props) {
+export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppressBreaking }: Props) {
   const { navigate } = useRouter();
   const { toggleSave, isSaved } = useSaved();
   const [imgError, setImgError] = useState(false);
@@ -198,16 +190,9 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
         </div>
 
         {/* Headline */}
-        <div style={{ color: '#fff', fontSize: 17, fontWeight: 800, lineHeight: 1.3, letterSpacing: -0.2, marginBottom: compact ? 0 : 5, display: '-webkit-box', WebkitLineClamp: showSummary ? 2 : 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+        <div style={{ color: '#fff', fontSize: 17, fontWeight: 800, lineHeight: 1.3, letterSpacing: -0.2, marginBottom: compact ? 0 : 5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
           {story.headline}
         </div>
-
-        {/* 50-word summary (main feed) */}
-        {showSummary && story.summary && (
-          <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12.5, fontWeight: 500, lineHeight: 1.45, marginBottom: 5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-            {clampWords(story.summary, 50)}
-          </div>
-        )}
 
         {/* Reading meta */}
         {(() => {
