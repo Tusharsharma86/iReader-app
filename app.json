@@ -71,7 +71,7 @@
               "label": "iReader Headlines",
               "description": "Latest breaking headlines",
               "minWidth": "180dp",
-              "minHeight": "180dp",
+              "minHeight": "110dp",
               "targetCellWidth": 4,
               "targetCellHeight": 4,
               "previewImage": "./assets/icon.png",

@@ -5,6 +5,7 @@ export interface WidgetStory {
   id: string;
   headline: string;
   source: string;
+  sourceCount: number;
   imageUrl: string;
   url: string;
   publishedAt: string;
@@ -12,9 +13,7 @@ export interface WidgetStory {
 }
 
 const BG = '#0A0B12';
-const CARD = '#12131C';
-const ACCENT = '#B994FF';
-const FALLBACK_THUMB = 'https://ireader-pro-fresh.vercel.app/fallback.jpg';
+const LOGO = require('../assets/header-logo.png');
 
 function deepLink(s: WidgetStory): string {
   const payload = JSON.stringify({
@@ -35,8 +34,22 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)}d`;
 }
 
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good Morning';
+  if (h < 17) return 'Good Afternoon';
+  return 'Good Evening';
+}
+
+function metaLine(s: WidgetStory): string {
+  const time = timeAgo(s.publishedAt);
+  if (s.sourceCount > 1) return `${s.sourceCount} articles  ·  ${time}`;
+  if (s.source) return `${s.source.toUpperCase()}  ·  ${time}`;
+  return time;
+}
+
 function Row({ story }: { story: WidgetStory }) {
-  const meta = [story.source.toUpperCase(), timeAgo(story.publishedAt)].filter(Boolean).join('  ·  ');
+  const hasImg = story.imageUrl?.startsWith('http');
   return (
     <FlexWidget
       clickAction="OPEN_URI"
@@ -44,67 +57,66 @@ function Row({ story }: { story: WidgetStory }) {
       style={{
         flexDirection: 'row',
         width: 'match_parent',
-        backgroundColor: CARD,
-        borderRadius: 14,
-        padding: 10,
-        marginBottom: 8,
+        paddingVertical: 9,
         alignItems: 'center',
       }}
     >
-      <ImageWidget
-        image={(story.imageUrl?.startsWith('http') ? story.imageUrl : FALLBACK_THUMB) as ImageWidgetSource}
-        imageWidth={64}
-        imageHeight={64}
-        radius={10}
-        style={{ width: 64, height: 64, marginRight: 12 }}
-      />
+      {hasImg ? (
+        <ImageWidget
+          image={story.imageUrl as ImageWidgetSource}
+          imageWidth={108}
+          imageHeight={72}
+          radius={12}
+          style={{ width: 108, height: 72, marginRight: 14 }}
+        />
+      ) : (
+        <TextWidget text="" style={{ width: 0, height: 72 }} />
+      )}
       <FlexWidget style={{ flex: 1, flexDirection: 'column' }}>
+        <TextWidget
+          text={metaLine(story)}
+          style={{ fontSize: 11, fontWeight: '500', color: '#9AA0AE', marginBottom: 4, letterSpacing: 0.2 }}
+        />
         <TextWidget
           text={story.headline}
           maxLines={3}
-          style={{ fontSize: 13.5, fontWeight: '600', color: '#FFFFFF' }}
+          style={{ fontSize: 15, fontWeight: '700', color: '#FFFFFF' }}
         />
-        {meta ? (
-          <TextWidget
-            text={meta}
-            style={{ fontSize: 10, fontWeight: '700', color: ACCENT, marginTop: 4, letterSpacing: 0.4 }}
-          />
-        ) : <TextWidget text="" style={{ fontSize: 0 }} />}
       </FlexWidget>
     </FlexWidget>
   );
 }
 
-export function NewsWidget({ stories, updatedAt }: { stories: WidgetStory[]; updatedAt?: number }) {
-  const updated = updatedAt ? timeAgo(new Date(updatedAt).toISOString()) : '';
+export function NewsWidget({ stories }: { stories: WidgetStory[]; updatedAt?: number }) {
   return (
     <FlexWidget
       style={{
         height: 'match_parent',
         width: 'match_parent',
         backgroundColor: BG,
-        borderRadius: 22,
-        paddingHorizontal: 12,
-        paddingTop: 12,
+        borderRadius: 28,
+        paddingHorizontal: 18,
+        paddingTop: 16,
         paddingBottom: 6,
         flexDirection: 'column',
       }}
     >
-      {/* Header */}
-      <FlexWidget
-        clickAction="OPEN_URI"
-        clickActionData={{ uri: 'ireaderpro://feed' }}
-        style={{ flexDirection: 'row', width: 'match_parent', alignItems: 'center', marginBottom: 10 }}
-      >
-        <TextWidget text="●" style={{ fontSize: 12, color: ACCENT, marginRight: 6 }} />
-        <TextWidget
-          text="IREADER · BREAKING"
-          style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF', letterSpacing: 1 }}
-        />
-        <FlexWidget style={{ flex: 1 }} />
-        {updated ? (
-          <TextWidget text={`${updated} ago`} style={{ fontSize: 9, fontWeight: '600', color: '#66FFFFFF' }} />
-        ) : <TextWidget text="" style={{ fontSize: 0 }} />}
+      {/* Header — transparent logo top-left + greeting, refresh top-right */}
+      <FlexWidget style={{ flexDirection: 'row', width: 'match_parent', alignItems: 'center', marginBottom: 12 }}>
+        <FlexWidget
+          clickAction="OPEN_URI"
+          clickActionData={{ uri: 'ireaderpro://feed' }}
+          style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+        >
+          <ImageWidget image={LOGO} imageWidth={30} imageHeight={30} style={{ width: 30, height: 30, marginRight: 10 }} />
+          <TextWidget text={greeting()} style={{ fontSize: 18, fontWeight: '700', color: '#FFFFFF' }} />
+        </FlexWidget>
+        <FlexWidget
+          clickAction="REFRESH"
+          style={{ width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <TextWidget text="⟳" style={{ fontSize: 20, fontWeight: '500', color: '#FFFFFF' }} />
+        </FlexWidget>
       </FlexWidget>
 
       {stories.length === 0 ? (

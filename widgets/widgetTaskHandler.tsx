@@ -18,11 +18,14 @@ function mapItems(raw: any): WidgetStory[] {
     const headline = String(p?.headline ?? '').trim();
     const publishedAt = String(p?.publishedAt ?? '');
     if (!headline) continue;
-    const src = Array.isArray(p?.sources) ? p.sources[0] : undefined;
+    const srcs = Array.isArray(p?.sources) ? p.sources : [];
+    const src = srcs[0];
+    const count = Number(p?.sourceCount ?? srcs.length ?? 1) || 1;
     out.push({
       id: String(p?.id ?? src?.url ?? headline),
       headline,
       source: String(src?.name ?? ''),
+      sourceCount: count,
       imageUrl: String(p?.imageUrl ?? ''),
       url: String(src?.url ?? ''),
       publishedAt,
@@ -56,7 +59,7 @@ async function fetchFresh(): Promise<CacheShape | null> {
 }
 
 export async function widgetTaskHandler(props: WidgetTaskHandlerProps): Promise<void> {
-  const { widgetAction, renderWidget } = props;
+  const { widgetAction, renderWidget, clickAction } = props;
 
   switch (widgetAction) {
     case 'WIDGET_ADDED':
@@ -65,19 +68,21 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps): Promise<
       // Render cached content instantly so the widget is never blank, then
       // fetch fresh and re-render.
       const cached = await readCache();
-      if (cached) {
-        renderWidget(<NewsWidget stories={cached.stories} updatedAt={cached.at} />);
-      } else {
-        renderWidget(<NewsWidget stories={[]} />);
-      }
+      renderWidget(<NewsWidget stories={cached?.stories ?? []} updatedAt={cached?.at} />);
       const fresh = await fetchFresh();
-      if (fresh) {
-        renderWidget(<NewsWidget stories={fresh.stories} updatedAt={fresh.at} />);
+      if (fresh) renderWidget(<NewsWidget stories={fresh.stories} updatedAt={fresh.at} />);
+      break;
+    }
+    case 'WIDGET_CLICK': {
+      // Row/header taps use OPEN_URI (handled natively). The only in-handler
+      // action is the refresh button.
+      if (clickAction === 'REFRESH') {
+        const fresh = await fetchFresh();
+        const data = fresh ?? (await readCache());
+        renderWidget(<NewsWidget stories={data?.stories ?? []} updatedAt={data?.at} />);
       }
       break;
     }
-    // Row taps use clickAction "OPEN_URI" → handled natively (deep link),
-    // so WIDGET_CLICK never fires here. Nothing to do for DELETED.
     default:
       break;
   }
