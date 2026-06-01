@@ -141,37 +141,6 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
             position: 'absolute', inset: 0,
             background: `linear-gradient(135deg, ${dominant}33 0%, transparent 45%, ${accent}1f 100%)`,
           }} />
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: 20, position: 'relative' }}>
-            {(() => {
-              const fav = faviconFromStory(source, story.sources?.[0]?.url);
-              return (
-                <div style={{
-                  width: 44, height: 44, borderRadius: 22,
-                  border: `2px solid ${accent}AA`,
-                  background: 'rgba(0,0,0,0.25)',
-                  overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  {fav ? (
-                    <img src={fav} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <div style={{
-                      width: '100%', height: '100%',
-                      background: lighten(dominant, 0.15),
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: accent, fontSize: 18, fontWeight: 800,
-                    }}>
-                      {(source ?? '?').charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-            <div style={{ color: accent, fontSize: 13, fontWeight: 800, letterSpacing: 0.4 }}>{source.toUpperCase()}</div>
-            <div style={{ width: 28, height: 1, background: `${accent}55`, borderRadius: 1 }} />
-            <div style={{ color: `${accent}CC`, fontSize: 9, fontWeight: 700, letterSpacing: 1.6 }}>
-              {timeAgo(story.publishedAt)}
-            </div>
-          </div>
         </div>
       )}
 
