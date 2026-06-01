@@ -374,7 +374,8 @@ export default function AIFeedScreen() {
         position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
         padding: 'max(14px, calc(env(safe-area-inset-top, 0px) + 8px)) 16px 14px',
         background: 'linear-gradient(180deg, rgba(5,5,7,0.85) 0%, transparent 100%)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+        display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 10,
+        paddingRight: 76, /* leave room for the per-card counter at top-right */
       }}>
         <TopicPill
           current={activeTopic}
@@ -931,47 +932,28 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
           </svg>
         </button>
         <div style={{ pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button onClick={() => setFollowing(toggleFollow({ id: story.id, headline: story.headline, imageUrl: story.imageUrl }))}
-            title={following ? 'Following — you’ll see new developments' : 'Follow this story'}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              padding: '7px 13px', borderRadius: 999, cursor: 'pointer',
-              background: following ? `${accent}26` : 'rgba(20,20,28,0.7)',
-              border: `1px solid ${following ? accent : 'rgba(255,255,255,0.1)'}`,
+          {(() => {
+            const circle = (active: boolean): React.CSSProperties => ({
+              width: 40, height: 40, borderRadius: 20, cursor: 'pointer', flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: active ? `${accent}26` : 'rgba(20,20,28,0.7)',
+              border: `1px solid ${active ? accent : 'rgba(255,255,255,0.1)'}`,
               backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
-              color: following ? accent : '#fff', fontSize: 11, fontWeight: 800, letterSpacing: 1,
-            }}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill={following ? accent : 'none'} stroke="currentColor" strokeWidth="2"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4-6.3-4.6L5.7 21 8 14 2 9.4h7.6z"/></svg>
-            {following ? 'FOLLOWING' : 'FOLLOW'}
-          </button>
-          {speechSupported() && stage === 'done' && (
-            <button onClick={toggleListen} title={speech === 'speaking' ? 'Pause' : speech === 'paused' ? 'Resume' : 'Listen'}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                padding: '7px 13px', borderRadius: 999, cursor: 'pointer',
-                background: speech === 'idle' ? 'rgba(20,20,28,0.7)' : `${accent}26`,
-                border: `1px solid ${speech === 'idle' ? 'rgba(255,255,255,0.1)' : accent}`,
-                backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
-                color: speech === 'idle' ? '#fff' : accent, fontSize: 11, fontWeight: 800, letterSpacing: 1,
-              }}>
-              {speech === 'speaking' ? (
-                <svg width="11" height="11" viewBox="0 0 24 24" fill={accent}><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
-              ) : (
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+            });
+            return (<>
+              <button onClick={() => setFollowing(toggleFollow({ id: story.id, headline: story.headline, imageUrl: story.imageUrl }))}
+                title={following ? 'Following' : 'Follow this story'} style={circle(following)}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill={following ? accent : 'none'} stroke={following ? accent : '#fff'} strokeWidth="2"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4-6.3-4.6L5.7 21 8 14 2 9.4h7.6z"/></svg>
+              </button>
+              {speechSupported() && stage === 'done' && (
+                <button onClick={toggleListen} title={speech === 'speaking' ? 'Pause' : 'Listen'} style={circle(speech !== 'idle')}>
+                  {speech === 'speaking'
+                    ? <svg width="16" height="16" viewBox="0 0 24 24" fill={accent}><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+                    : <svg width="16" height="16" viewBox="0 0 24 24" fill={speech === 'paused' ? accent : '#fff'}><polygon points="6 4 20 12 6 20 6 4"/></svg>}
+                </button>
               )}
-              {speech === 'speaking' ? 'PAUSE' : speech === 'paused' ? 'RESUME' : 'LISTEN'}
-            </button>
-          )}
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '6px 12px', borderRadius: 999,
-            background: 'rgba(20,20,28,0.7)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
-            color: accent, fontSize: 11, fontWeight: 800, letterSpacing: 1.4,
-          }}>
-            <SparkleIcon color={accent} size={11} /> AI DEEP DIVE
-          </div>
+            </>);
+          })()}
         </div>
       </div>
 
