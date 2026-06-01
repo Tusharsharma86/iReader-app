@@ -49,10 +49,12 @@ interface FeedItem {
   sources: { name: string; url: string }[];
 }
 interface TldrSection { heading: string; bullets: string[]; }
+interface StorySection { heading: string; body: string; }
 interface DeepDiveData {
   tldr: string[];
   tldrSections?: TldrSection[];
   narrative: string;
+  storySections?: StorySection[];
   insight: string;
   questions: string[];
   tags: string[];
@@ -916,17 +918,30 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
                   )}
 
                   {/* Story */}
-                  {data.narrative && (
+                  {(data.narrative || (data.storySections && data.storySections.length > 0)) && (
                     <Stagger delay={160}><View style={{ marginTop: 4 }}>
                       <View style={overlayStyles.sectionLabelRow}>
                         <Text style={overlayStyles.sectionLabel}>CURIOUSCATS FULL STORY</Text>
                         <View style={overlayStyles.labelDivider} />
                       </View>
-                      {data.narrative.split(/\n\n+/).map((p, i) => (
-                        <Text key={i} style={overlayStyles.narrativePara}>
-                          {renderHighlighted(p, allTags(data))}
-                        </Text>
-                      ))}
+                      {data.storySections && data.storySections.length > 0 ? (
+                        data.storySections.map((sec, si) => (
+                          <View key={si} style={{ marginTop: si > 0 ? 20 : 0 }}>
+                            <Text style={overlayStyles.storyHeading}>{sec.heading}</Text>
+                            {sec.body.split(/\n\n+/).filter(Boolean).map((p, pi) => (
+                              <Text key={pi} style={overlayStyles.narrativePara}>
+                                {renderHighlighted(p, allTags(data))}
+                              </Text>
+                            ))}
+                          </View>
+                        ))
+                      ) : (
+                        data.narrative.split(/\n\n+/).map((p, i) => (
+                          <Text key={i} style={overlayStyles.narrativePara}>
+                            {renderHighlighted(p, allTags(data))}
+                          </Text>
+                        ))
+                      )}
                     </View></Stagger>
                   )}
 
@@ -1529,7 +1544,8 @@ const overlayStyles = StyleSheet.create({
   insightLabel: { color: GOLD, fontSize: 10, fontWeight: '800', letterSpacing: 1.6, marginBottom: 8 },
   insightText: { color: '#fff', fontSize: 15.5, lineHeight: 24, fontWeight: '500', fontStyle: 'italic' },
 
-  narrativePara: { color: '#c8c8d4', fontSize: 16, lineHeight: 27, marginBottom: 20 },
+  narrativePara: { color: '#c8c8d4', fontSize: 16, lineHeight: 27, marginBottom: 16 },
+  storyHeading: { color: VIOLET, fontSize: 11, fontWeight: '800', letterSpacing: 1.6, marginBottom: 10, textTransform: 'uppercase' },
 
   entityBlock: {
     marginBottom: 12, padding: 16, borderRadius: 14,

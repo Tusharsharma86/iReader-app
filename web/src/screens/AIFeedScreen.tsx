@@ -31,10 +31,12 @@ const VIOLET = '#b994ff';
 const GOLD   = '#FFC542';
 
 interface TldrSection { heading: string; bullets: string[]; }
+interface StorySection { heading: string; body: string; }
 interface DeepDiveData {
   tldr: string[];
   tldrSections?: TldrSection[];
   narrative: string;
+  storySections?: StorySection[];
   insight: string;
   questions: string[];
   tags: string[];
@@ -760,10 +762,21 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
     ));
   }, [data, tagList, accent]);
   const narrativeBody = useMemo(() => {
-    if (!data?.narrative) return null;
-    return data.narrative.split(/\n\n+/).map((p, i) => (
-      <p key={i} style={{ margin: '0 0 20px', color: '#c8c8d4', fontSize: 16, lineHeight: 1.7, letterSpacing: 0.05 }}>{highlightEntities(p, tagList, accent)}</p>
-    ));
+    if (!data) return null;
+    const para = (p: string, key: string) => (
+      <p key={key} style={{ margin: '0 0 16px', color: '#c8c8d4', fontSize: 16, lineHeight: 1.7, letterSpacing: 0.05 }}>{highlightEntities(p, tagList, accent)}</p>
+    );
+    // Preferred: labelled sections (What Happened / Why It Matters / …).
+    if (data.storySections && data.storySections.length > 0) {
+      return data.storySections.map((sec, si) => (
+        <div key={si} style={{ marginTop: si > 0 ? 24 : 0 }}>
+          <div style={{ color: accent, fontSize: 11, fontWeight: 800, letterSpacing: 1.6, marginBottom: 10, textTransform: 'uppercase' }}>{sec.heading}</div>
+          {sec.body.split(/\n\n+/).filter(Boolean).map((p, pi) => para(p, `${si}-${pi}`))}
+        </div>
+      ));
+    }
+    if (!data.narrative) return null;
+    return data.narrative.split(/\n\n+/).map((p, i) => para(p, String(i)));
   }, [data, tagList, accent]);
 
   useEffect(() => {
@@ -1069,7 +1082,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
               </div>
             )}
 
-            {data.narrative && (
+            {(data.narrative || (data.storySections && data.storySections.length > 0)) && (
               <div style={{ marginTop: 4 }}>
                 <div style={{
                   color: VIOLET, fontSize: 10, fontWeight: 800, letterSpacing: 2,
