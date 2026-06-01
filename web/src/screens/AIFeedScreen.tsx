@@ -752,33 +752,17 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
   const [stage, setStage] = useState<'generating' | 'done' | 'error'>(data ? 'done' : 'generating');
   const [error, setError] = useState<string | null>(null);
   const [showColdHint, setShowColdHint] = useState(false);
-  const [speech, setSpeech] = useState<SpeechState>('idle');
+  const [reloadKey, setReloadKey] = useState(0);
   const [following, setFollowing] = useState(() => isFollowing(story.id));
 
-  // Build the spoken script from the Deep Dive content (headline → TL;DR → insight).
-  const listen = useCallback(() => {
-    if (!data) return;
-    const chunks: string[] = [cleanForSpeech(story.headline)];
-    if (data.tldrSections?.length) {
-      for (const sec of data.tldrSections) {
-        if (sec.heading) chunks.push(cleanForSpeech(sec.heading) + '.');
-        for (const b of sec.bullets) chunks.push(cleanForSpeech(b));
-      }
-    } else {
-      for (const b of (data.tldr ?? [])) chunks.push(cleanForSpeech(b));
-    }
-    if (data.insight) chunks.push('Key insight. ' + cleanForSpeech(data.insight));
-    speakQueue(chunks.filter(Boolean), { onStateChange: setSpeech });
-  }, [data, story.headline]);
-
-  const toggleListen = useCallback(() => {
-    if (speech === 'speaking') pauseSpeech();
-    else if (speech === 'paused') resumeSpeech();
-    else listen();
-  }, [speech, listen]);
-
-  // Stop narration when the overlay closes/unmounts.
-  useEffect(() => () => stopSpeech(), []);
+  // Re-trigger the Deep Dive fetch (after a failure). data is still null on
+  // error, so bumping reloadKey re-runs the load effect.
+  const reload = useCallback(() => {
+    setError(null);
+    setShowColdHint(false);
+    setStage('generating');
+    setReloadKey(k => k + 1);
+  }, []);
 
   // Pre-highlight TL;DR + full story ONCE per data load. Without this, the
   // swipe-down drag (setState on every touch-move) re-ran highlightEntities
@@ -867,7 +851,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
       }
     })();
     return () => { cancelled = true; };
-  }, [data, story.id, story.summary, story.headline, story.sources, item.allStories]);
+  }, [data, reloadKey, story.id, story.summary, story.headline, story.sources, item.allStories]);
 
   useEffect(() => {
     if (stage !== 'generating') { setShowColdHint(false); return; }
@@ -917,13 +901,16 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
     if (!dragRef.current?.active) return;
     if (dragY > 130) {
       try { navigator.vibrate?.(12); } catch {}
-      onClose();
+      // On a failed Deep Dive, pull-down RETRIES instead of closing.
+      if (stage === 'error') { setDragY(0); reload(); }
+      else onClose();
     } else setDragY(0);
     dragRef.current = null;
-  }, [dragY, onClose]);
+  }, [dragY, onClose, stage, reload]);
 
-  const dragOpacity = Math.max(0, 1 - dragY / 500);
-  const dragScale = Math.max(0.92, 1 - dragY / 1800);
+  // On error, the pull gesture is a refresh — don't fade/shrink the overlay.
+  const dragOpacity = stage === 'error' ? 1 : Math.max(0, 1 - dragY / 500);
+  const dragScale = stage === 'error' ? 1 : Math.max(0.92, 1 - dragY / 1800);
 
   return (
     <div
@@ -946,6 +933,22 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
         overflow: dragY > 8 ? 'hidden' : 'auto',
       }}>
       <style>{`@keyframes ddOverlayIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+
+      {/* Pull-to-refresh indicator — only while pulling on a failed Deep Dive */}
+      {stage === 'error' && dragY > 4 && (
+        <div style={{
+          position: 'absolute', top: 'calc(env(safe-area-inset-top, 0px) + 6px)', left: 0, right: 0, zIndex: 20,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          color: accent, fontSize: 11, fontWeight: 800, letterSpacing: 0.6,
+          pointerEvents: 'none',
+        }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2.4"
+            style={{ transform: `rotate(${Math.min(dragY, 130) / 130 * 180}deg)`, transition: 'transform 0.05s linear' }}>
+            <polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+          </svg>
+          {dragY > 130 ? 'RELEASE TO RETRY' : 'PULL TO RETRY'}
+        </div>
+      )}
 
       {/* Top bar — floats over the hero (absolute, not sticky) */}
       <div style={{
@@ -981,13 +984,6 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
                 title={following ? 'Following' : 'Follow this story'} style={circle(following)}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill={following ? accent : 'none'} stroke={following ? accent : '#fff'} strokeWidth="2"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4-6.3-4.6L5.7 21 8 14 2 9.4h7.6z"/></svg>
               </button>
-              {speechSupported() && stage === 'done' && (
-                <button onClick={toggleListen} title={speech === 'speaking' ? 'Pause' : 'Listen'} style={circle(speech !== 'idle')}>
-                  {speech === 'speaking'
-                    ? <svg width="16" height="16" viewBox="0 0 24 24" fill={accent}><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
-                    : <svg width="16" height="16" viewBox="0 0 24 24" fill={speech === 'paused' ? accent : '#fff'}><polygon points="6 4 20 12 6 20 6 4"/></svg>}
-                </button>
-              )}
             </>);
           })()}
         </div>
@@ -1091,7 +1087,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
         {stage === 'generating' ? (
           <InlineLoader accent={accent} showColdHint={showColdHint} />
         ) : stage === 'error' ? (
-          <InlineError text={error || 'Failed'} />
+          <InlineError text={error || 'Failed'} onRetry={reload} accent={accent} />
         ) : data ? (
           <div className="dd-stagger" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {(data.tldrSections && data.tldrSections.length > 0) || data.tldr.length > 0 ? (
@@ -1611,15 +1607,34 @@ function InlineLoader({ accent, showColdHint }: { accent: string; showColdHint: 
   );
 }
 
-function InlineError({ text }: { text: string }) {
+function InlineError({ text, onRetry, accent }: { text: string; onRetry?: () => void; accent?: string }) {
+  const c = accent || '#b994ff';
   return (
     <div style={{
-      padding: 16, borderRadius: 14,
+      padding: 18, borderRadius: 14,
       background: 'rgba(40,20,20,0.4)', border: '1px solid rgba(255,80,80,0.15)',
       color: '#ff8888', fontSize: 12,
     }}>
       <div style={{ fontWeight: 700, marginBottom: 4 }}>Couldn't generate</div>
-      <div style={{ color: '#aaa', fontSize: 11 }}>{text}</div>
+      <div style={{ color: '#aaa', fontSize: 11, marginBottom: onRetry ? 16 : 0 }}>{text}</div>
+      {onRetry && (
+        <>
+          <button onClick={onRetry} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            width: '100%', padding: '12px 16px', borderRadius: 12,
+            background: `${c}1f`, border: `1px solid ${c}66`,
+            color: c, fontSize: 13, fontWeight: 800, letterSpacing: 0.5, cursor: 'pointer',
+          }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2.4">
+              <polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+            </svg>
+            RETRY
+          </button>
+          <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.35)', fontSize: 10, marginTop: 10, letterSpacing: 0.3 }}>
+            or pull down to refresh
+          </div>
+        </>
+      )}
     </div>
   );
 }
