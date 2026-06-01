@@ -2,16 +2,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Story } from '../types';
 import { useTabBarActions } from '../contexts/TabBarContext';
 import { darken, lighten, getArticleColor } from '../utils/colors';
-import { speakQueue, stop as stopSpeech, pause as pauseSpeech, resume as resumeSpeech, speechSupported, cleanForSpeech, type SpeechState } from '../utils/speech';
 import { FALLBACK_IMG } from '../utils/fallback';
 import { trackDeepDive } from '../utils/personalization';
 import { toggleFollow, isFollowing } from '../utils/followStore';
 
-const briefBtn: React.CSSProperties = {
-  width: 36, height: 36, borderRadius: 18, flexShrink: 0,
-  background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-};
 const FEED_API_BASE = 'https://ireader.onrender.com/api/news/feed';
 // Topic rotation for infinite scroll — once we run low on cards we pull the
 // next topic, dedupe against existing items, and append.
@@ -182,28 +176,6 @@ export default function AIFeedScreen() {
   const [activeTopic, setActiveTopic] = useState<string>(TOPIC_QUEUE[0]);
   const { reportScroll, hide: hideTabBar, show: showTabBar } = useTabBarActions();
 
-  // ── Morning Briefing (sequential TTS playlist of the top feed stories) ──
-  const [briefingIdx, setBriefingIdx] = useState(-1);
-  const [briefingState, setBriefingState] = useState<SpeechState>('idle');
-  const briefItemsRef = useRef<FeedItem[]>([]);
-  briefItemsRef.current = items;
-  const startBriefing = useCallback((from: number) => {
-    const list = briefItemsRef.current.slice(from, from + 10);
-    if (list.length === 0) return;
-    const chunks = list.map(it => `${cleanForSpeech(it.primary.headline)}. ${cleanForSpeech(it.primary.summary || '')}`);
-    speakQueue(chunks, {
-      onStateChange: setBriefingState,
-      onItemStart: (i) => setBriefingIdx(from + i),
-      onDone: () => setBriefingIdx(-1),
-    });
-  }, []);
-  const toggleBriefing = useCallback(() => {
-    if (briefingState === 'speaking') pauseSpeech();
-    else if (briefingState === 'paused') resumeSpeech();
-    else startBriefing(0);
-  }, [briefingState, startBriefing]);
-  const stopBriefing = useCallback(() => { stopSpeech(); setBriefingIdx(-1); setBriefingState('idle'); }, []);
-  useEffect(() => () => stopSpeech(), []);
 
   // Deep Dive is an in-page overlay (not a route), and its z-index can't beat
   // the TabBar because the bar lives in a higher root stacking context. So
@@ -390,18 +362,6 @@ export default function AIFeedScreen() {
             loadTopic(TOPIC_QUEUE.indexOf(t) >= 0 ? TOPIC_QUEUE.indexOf(t) : 0, true);
           }}
         />
-        {speechSupported() && items.length > 0 && briefingIdx < 0 && (
-          <button onClick={toggleBriefing} title="Play a spoken briefing of the top stories"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0,
-              padding: '8px 14px', borderRadius: 999, cursor: 'pointer',
-              background: 'rgba(185,148,255,0.16)', border: '1px solid rgba(185,148,255,0.4)',
-              color: '#b994ff', fontSize: 11, fontWeight: 800, letterSpacing: 0.8,
-            }}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
-            BRIEFING
-          </button>
-        )}
       </div>
 
       {/* Pull-to-refresh indicator (renders during pull/refresh, fades out otherwise) */}
@@ -503,39 +463,6 @@ export default function AIFeedScreen() {
       {/* Full-screen deep dive overlay */}
       {openedItem && (
         <DeepDiveOverlay item={openedItem} onClose={() => setOpenedItem(null)} />
-      )}
-
-      {/* Morning Briefing floating player */}
-      {briefingIdx >= 0 && items[briefingIdx] && (
-        <div style={{
-          position: 'fixed', left: 12, right: 12, bottom: 'calc(env(safe-area-inset-bottom, 0px) + 86px)',
-          zIndex: 120, display: 'flex', alignItems: 'center', gap: 10,
-          padding: '10px 12px', borderRadius: 16,
-          background: 'rgba(18,16,28,0.92)', border: '1px solid rgba(185,148,255,0.35)',
-          backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)',
-          boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-        }}>
-          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
-            <div style={{ color: '#b994ff', fontSize: 9, fontWeight: 800, letterSpacing: 1.2 }}>BRIEFING · {briefingIdx + 1}/{Math.min(items.length, 10)}</div>
-            <div style={{ color: '#eee', fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {items[briefingIdx].primary.headline}
-            </div>
-          </div>
-          <button onClick={() => startBriefing(Math.max(0, briefingIdx - 1))} title="Previous" style={briefBtn}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="#ccc"><polygon points="19 20 9 12 19 4 19 20"/><rect x="5" y="4" width="2" height="16"/></svg>
-          </button>
-          <button onClick={toggleBriefing} title={briefingState === 'speaking' ? 'Pause' : 'Play'} style={{ ...briefBtn, background: 'rgba(185,148,255,0.2)' }}>
-            {briefingState === 'speaking'
-              ? <svg width="16" height="16" viewBox="0 0 24 24" fill="#b994ff"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
-              : <svg width="16" height="16" viewBox="0 0 24 24" fill="#b994ff"><polygon points="6 4 20 12 6 20 6 4"/></svg>}
-          </button>
-          <button onClick={() => startBriefing(briefingIdx + 1)} title="Next" style={briefBtn}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="#ccc"><polygon points="5 4 15 12 5 20 5 4"/><rect x="17" y="4" width="2" height="16"/></svg>
-          </button>
-          <button onClick={stopBriefing} title="Close" style={briefBtn}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
       )}
 
       <style>{`

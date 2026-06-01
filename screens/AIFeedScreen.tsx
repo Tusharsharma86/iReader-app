@@ -212,26 +212,6 @@ export default function AIFeedScreen() {
   const itemsRef = useRef<FeedItem[]>([]);
   itemsRef.current = items;
 
-  // ── Morning Briefing (sequential TTS playlist of the top feed stories) ──
-  const [briefingIdx, setBriefingIdx] = useState(-1);
-  const [briefingState, setBriefingState] = useState<SpeechState>('idle');
-  const startBriefing = useCallback((from: number) => {
-    const list = itemsRef.current.slice(from, from + 10);
-    if (list.length === 0) return;
-    const chunks = list.map(it => `${cleanForSpeech(it.primary.headline)}. ${cleanForSpeech(it.primary.summary || '')}`);
-    speakQueue(chunks, {
-      onStateChange: setBriefingState,
-      onItemStart: (i) => setBriefingIdx(from + i),
-      onDone: () => setBriefingIdx(-1),
-    });
-  }, []);
-  const toggleBriefing = useCallback(() => {
-    if (briefingState === 'speaking') { pauseSpeech(); setBriefingState('paused'); }
-    else if (briefingState === 'paused') { resumeSpeech(); setBriefingState('speaking'); }
-    else startBriefing(0);
-  }, [briefingState, startBriefing]);
-  const stopBriefing = useCallback(() => { stopSpeech(); setBriefingIdx(-1); setBriefingState('idle'); }, []);
-  useEffect(() => () => stopSpeech(), []);
 
   // Auto-hide tab bar on scroll; restore on blur.
   const { onScroll: onScrollHide, restore: restoreTabBar } = useTabBarAutoHide();
@@ -510,8 +490,6 @@ export default function AIFeedScreen() {
           flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
           loadTopic(idx, true);
         }}
-        onBriefing={toggleBriefing}
-        briefingActive={briefingIdx >= 0}
       />
       <FlatList
         ref={flatListRef}
@@ -563,27 +541,6 @@ export default function AIFeedScreen() {
         />
       )}
 
-      {/* Morning Briefing floating player */}
-      {briefingIdx >= 0 && items[briefingIdx] && (
-        <View style={[styles.briefBar, { bottom: insets.bottom + 90 }]}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.briefLabel}>BRIEFING · {briefingIdx + 1}/{Math.min(items.length, 10)}</Text>
-            <Text style={styles.briefTitle} numberOfLines={1}>{items[briefingIdx].primary.headline}</Text>
-          </View>
-          <Pressable onPress={() => startBriefing(Math.max(0, briefingIdx - 1))} hitSlop={8} style={styles.briefBtn}>
-            <Ionicons name="play-skip-back" size={16} color="#ccc" />
-          </Pressable>
-          <Pressable onPress={toggleBriefing} hitSlop={8} style={[styles.briefBtn, { backgroundColor: 'rgba(185,148,255,0.2)' }]}>
-            <Ionicons name={briefingState === 'speaking' ? 'pause' : 'play'} size={16} color={VIOLET} />
-          </Pressable>
-          <Pressable onPress={() => startBriefing(briefingIdx + 1)} hitSlop={8} style={styles.briefBtn}>
-            <Ionicons name="play-skip-forward" size={16} color="#ccc" />
-          </Pressable>
-          <Pressable onPress={stopBriefing} hitSlop={8} style={styles.briefBtn}>
-            <Ionicons name="close" size={16} color="#999" />
-          </Pressable>
-        </View>
-      )}
     </View>
   );
 }
@@ -598,10 +555,9 @@ const TOPIC_LABELS_MOBILE: Record<string, string> = {
   business: 'BUSINESS',
 };
 
-function Header({ topInset, counter, currentTopic, onPickTopic, onBriefing, briefingActive }: {
+function Header({ topInset, counter, currentTopic, onPickTopic }: {
   topInset: number; counter?: string;
   currentTopic?: string; onPickTopic?: (t: string) => void;
-  onBriefing?: () => void; briefingActive?: boolean;
 }) {
   const counterScale = useRef(new Animated.Value(1)).current;
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -624,12 +580,6 @@ function Header({ topInset, counter, currentTopic, onPickTopic, onBriefing, brie
         <Animated.View style={[styles.pill, { paddingHorizontal: 10, transform: [{ scale: counterScale }] }]}>
           <Text style={[styles.pillText, { letterSpacing: 0.6, color: '#aaa' }]}>{counter}</Text>
         </Animated.View>
-      )}
-      {onBriefing && !briefingActive && (
-        <Pressable onPress={onBriefing} style={[styles.pill, { marginLeft: 'auto', backgroundColor: 'rgba(185,148,255,0.16)', borderColor: 'rgba(185,148,255,0.4)' }]}>
-          <Ionicons name="play" size={11} color={VIOLET} />
-          <Text style={[styles.pillText, { color: VIOLET }]}>BRIEFING</Text>
-        </Pressable>
       )}
       <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
         <Pressable onPress={() => setPickerOpen(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }}>
