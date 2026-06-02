@@ -33,7 +33,7 @@ import { darken, lighten, getArticleColor } from '../utils/colors';
 const FEED_API_BASE = 'https://ireader.onrender.com/api/news/feed';
 const DEEPDIVE_API = 'https://ireader.onrender.com/api/news/deepdive';
 const ASK_API = 'https://ireader.onrender.com/api/news/ask';
-const CACHE_PREFIX = '@deepdive_v2_';
+const CACHE_PREFIX = '@deepdive_v3_'; // v3 — drop degraded fallbacks cached during the Groq outage
 const ASK_CACHE_PREFIX = '@ask_v1_';
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const VIOLET = '#b994ff';
@@ -54,6 +54,7 @@ interface DeepDiveData {
   tldrSections?: TldrSection[];
   narrative: string;
   storySections?: StorySection[];
+  degraded?: boolean;
   insight: string;
   questions: string[];
   tags: string[];
@@ -745,7 +746,7 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
         const json: DeepDiveData = await dd.json();
         if (cancelled) return;
         setData(json);
-        await writeDeepDiveCache(story.id, json);
+        if (!json.degraded) await writeDeepDiveCache(story.id, json); // never cache the non-AI fallback
         setStage('done');
       } catch (e) {
         if (cancelled) return;

@@ -18,7 +18,7 @@ const TOPIC_QUEUE = [
   'business',
 ];
 const DEEPDIVE_API = 'https://ireader.onrender.com/api/news/deepdive';
-const CACHE_PREFIX = '@deepdive_v2_';
+const CACHE_PREFIX = '@deepdive_v3_'; // v3 — drop degraded fallbacks cached during the Groq outage
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const FEED_LIST_CACHE = '@aifeed_list_v1';
 const VIOLET = '#b994ff';
@@ -31,6 +31,7 @@ interface DeepDiveData {
   tldrSections?: TldrSection[];
   narrative: string;
   storySections?: StorySection[];
+  degraded?: boolean;
   insight: string;
   questions: string[];
   tags: string[];
@@ -747,7 +748,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
         const json: DeepDiveData = await dd.json();
         if (cancelled) return;
         setData(json);
-        writeCache(story.id, json);
+        if (!json.degraded) writeCache(story.id, json); // never cache the non-AI fallback
         setStage('done');
       } catch (e) {
         if (cancelled) return;
