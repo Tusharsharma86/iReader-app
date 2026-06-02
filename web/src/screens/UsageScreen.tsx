@@ -12,7 +12,7 @@ const MUTED = '#666';
 
 type Range = '7d' | '30d' | 'all';
 interface AiTask { task: string; label: string; tokens: number; calls: number; errors: number; }
-interface AiModel { model: string; role: string; tokensUsed: number; tokensLimit: number | null; pct: number | null; calls: number; errors: number; tasks: AiTask[]; }
+interface AiModel { model: string; role: string; tokensUsed: number; tokensLimit: number | null; pct: number | null; calls: number; requestsLimit?: number; errors: number; tasks: AiTask[]; }
 interface AiUsage { day: string; totalTokens: number; models: AiModel[]; }
 
 export default function UsageScreen() {
@@ -159,11 +159,24 @@ function AiModelBlock({ m }: { m: AiModel }) {
         <>
           <div style={{ marginTop: 8 }}><Bar pct={pct} color={color} /></div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
-            <span style={{ color, fontSize: 10.5, fontWeight: 700 }}>{pct}% of daily</span>
-            <span style={{ color: MUTED, fontSize: 10.5 }}>{m.calls} calls{m.errors > 0 ? ` · ${m.errors} rate-limited` : ''}</span>
+            <span style={{ color, fontSize: 10.5, fontWeight: 700 }}>{pct}% of daily tokens</span>
+            <span style={{ color: MUTED, fontSize: 10.5 }}>{m.errors > 0 ? `${m.errors} rate-limited` : 'resets daily (UTC)'}</span>
           </div>
         </>
       )}
+      {/* Requests/day */}
+      {m.requestsLimit ? (() => {
+        const rPct = Math.min(100, Math.round((m.calls / m.requestsLimit!) * 100));
+        return (
+          <div style={{ marginTop: 8 }}>
+            <Bar pct={rPct} color={rPct >= 90 ? PINK : rPct >= 70 ? '#F59E0B' : BLUE} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
+              <span style={{ color: MUTED, fontSize: 10.5 }}>Requests</span>
+              <span style={{ color: MUTED, fontSize: 10.5 }}>{m.calls.toLocaleString()} / {m.requestsLimit!.toLocaleString()}/day</span>
+            </div>
+          </div>
+        );
+      })() : null}
       {/* Per-task breakdown */}
       <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
         {m.tasks.map(t => (
