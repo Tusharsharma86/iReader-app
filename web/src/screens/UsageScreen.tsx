@@ -14,6 +14,7 @@ type Range = '7d' | '30d' | 'all';
 interface GroqQuota {
   requestsPerDay?: string | null; requestsRemaining?: string | null; requestsReset?: string | null;
   tokensPerMin?: string | null; tokensRemaining?: string | null; tokensReset?: string | null;
+  tokensUsedToday?: number; tokensLimitToday?: number;
 }
 
 export default function UsageScreen() {
@@ -28,7 +29,10 @@ export default function UsageScreen() {
   useEffect(() => {
     fetch('https://ireader.onrender.com/api/news/groq-quota')
       .then(r => r.json())
-      .then((d: { limits?: GroqQuota }) => { if (d?.limits) setQuota(d.limits); else setQuotaErr(true); })
+      .then((d: { limits?: GroqQuota; daily?: { tokensUsed?: number; tokensLimit?: number } }) => {
+        if (d?.limits) setQuota({ ...d.limits, tokensUsedToday: d.daily?.tokensUsed, tokensLimitToday: d.daily?.tokensLimit });
+        else setQuotaErr(true);
+      })
       .catch(() => setQuotaErr(true));
   }, []);
 
@@ -120,41 +124,63 @@ export default function UsageScreen() {
   );
 }
 
+function Bar({ pct, color }: { pct: number; color: string }) {
+  return (
+    <div style={{ height: 8, borderRadius: 4, background: '#1A1A1A', overflow: 'hidden' }}>
+      <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 4, transition: 'width 0.3s' }} />
+    </div>
+  );
+}
+
 function GroqQuotaCard({ q }: { q: GroqQuota }) {
-  const limit = Number(q.requestsPerDay) || 0;
-  const remaining = Number(q.requestsRemaining);
-  const hasReq = limit > 0 && Number.isFinite(remaining);
-  const used = hasReq ? Math.max(0, limit - remaining) : 0;
-  const pct = hasReq ? Math.min(100, Math.round((used / limit) * 100)) : 0;
-  const barColor = pct >= 90 ? PINK : pct >= 70 ? '#F59E0B' : GREEN;
+  // Primary: daily tokens (TPD) — the limit that actually gates Deep Dive.
+  const tLimit = q.tokensLimitToday ?? 0;
+  const tUsed = q.tokensUsedToday ?? 0;
+  const hasTpd = tLimit > 0;
+  const tPct = hasTpd ? Math.min(100, Math.round((tUsed / tLimit) * 100)) : 0;
+  const tColor = tPct >= 90 ? PINK : tPct >= 70 ? '#F59E0B' : GREEN;
+
+  // Secondary: requests/day.
+  const rLimit = Number(q.requestsPerDay) || 0;
+  const rRemaining = Number(q.requestsRemaining);
+  const hasReq = rLimit > 0 && Number.isFinite(rRemaining);
+  const rUsed = hasReq ? Math.max(0, rLimit - rRemaining) : 0;
+  const rPct = hasReq ? Math.min(100, Math.round((rUsed / rLimit) * 100)) : 0;
+
   return (
     <div>
+      {/* Daily tokens (TPD) — the real ceiling */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-        <span style={{ color: '#FFF', fontSize: 13, fontWeight: 700 }}>Requests today</span>
+        <span style={{ color: '#FFF', fontSize: 13, fontWeight: 700 }}>Tokens today</span>
         <span style={{ color: MUTED, fontSize: 12 }}>
-          {hasReq ? `${used.toLocaleString()} / ${limit.toLocaleString()}` : '—'}
+          {hasTpd ? `${tUsed.toLocaleString()} / ${tLimit.toLocaleString()}` : '—'}
         </span>
       </div>
-      <div style={{ height: 8, borderRadius: 4, background: '#1A1A1A', overflow: 'hidden' }}>
-        <div style={{ width: `${pct}%`, height: '100%', background: barColor, borderRadius: 4, transition: 'width 0.3s' }} />
-      </div>
+      <Bar pct={tPct} color={tColor} />
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-        <span style={{ color: barColor, fontSize: 11, fontWeight: 700 }}>{hasReq ? `${remaining.toLocaleString()} left` : ''}</span>
-        {q.requestsReset && <span style={{ color: MUTED, fontSize: 11 }}>resets in {q.requestsReset}</span>}
+        <span style={{ color: tColor, fontSize: 11, fontWeight: 700 }}>{hasTpd ? `${tPct}% used` : ''}</span>
+        <span style={{ color: MUTED, fontSize: 11 }}>{hasTpd ? `${(tLimit - tUsed).toLocaleString()} left` : ''}</span>
       </div>
 
       <div style={{ height: 1, background: BORDER, margin: '14px 0' }} />
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <span style={{ color: '#FFF', fontSize: 13, fontWeight: 700 }}>Tokens / min</span>
-        <span style={{ color: MUTED, fontSize: 12 }}>
+      {/* Requests/day */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+        <span style={{ color: '#FFF', fontSize: 13, fontWeight: 700 }}>Requests today</span>
+        <span style={{ color: MUTED, fontSize: 12 }}>{hasReq ? `${rUsed.toLocaleString()} / ${rLimit.toLocaleString()}` : '—'}</span>
+      </div>
+      <Bar pct={rPct} color={rPct >= 90 ? PINK : rPct >= 70 ? '#F59E0B' : BLUE} />
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
+        <span style={{ color: MUTED, fontSize: 11 }}>Tokens / min left</span>
+        <span style={{ color: '#999', fontSize: 11, fontWeight: 600 }}>
           {q.tokensRemaining != null && q.tokensPerMin != null
-            ? `${Number(q.tokensRemaining).toLocaleString()} / ${Number(q.tokensPerMin).toLocaleString()} left`
+            ? `${Number(q.tokensRemaining).toLocaleString()} / ${Number(q.tokensPerMin).toLocaleString()}`
             : '—'}
         </span>
       </div>
       <div style={{ color: '#444', fontSize: 10, marginTop: 10 }}>
-        Live from Groq · model llama-4-scout · falls back to local clustering if exhausted
+        Live from Groq · llama-4-scout · daily tokens are approximate (reset on server restart) · falls back to local clustering if exhausted
       </div>
     </div>
   );
