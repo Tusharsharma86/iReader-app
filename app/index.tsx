@@ -33,7 +33,7 @@ import { tabBarTranslateY } from '../utils/tabBarAnim';
 import { loadProfile, rankStories, rankStoriesStandard } from '../utils/personalization';
 import { scoreClusterInterest } from '../utils/interestTopics';
 import { TOPIC_SUBTOPICS, storyMatchesSubTopic } from '../utils/topics';
-import { getUsageStats } from '../utils/usageTracker';
+import { getUsageStats, trackVisit } from '../utils/usageTracker';
 import { loadFollowed, annotateUpdates, markSeen, toggleFollow as toggleFollowStory } from '../utils/followStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -583,7 +583,7 @@ export default function FeedScreen() {
   const [error, setError] = useState<string | null>(null);
   const [techSourceFilter, setTechSourceFilter] = useState<string | null>(null);
   const [streak, setStreak] = useState(0);
-  useEffect(() => { getUsageStats().then(s => setStreak(s.streakDays)).catch(() => {}); }, []);
+  useEffect(() => { trackVisit().then(() => getUsageStats()).then(s => setStreak(s.streakDays)).catch(() => {}); }, []);
   const [followV, setFollowV] = useState(0);
   useEffect(() => { loadFollowed().then(() => setFollowV(v => v + 1)).catch(() => {}); }, []);
   const listRef = useRef<FlatList>(null);

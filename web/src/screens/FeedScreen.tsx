@@ -7,7 +7,7 @@ import { useRouter } from '../contexts/RouterContext';
 import { useTabBar } from '../contexts/TabBarContext';
 import { loadProfile, rankStories, rankStoriesStandard } from '../utils/personalization';
 import { scoreClusterInterest } from '../utils/interestTopics';
-import { getUsageStats } from '../utils/usageTracker';
+import { getUsageStats, trackVisit } from '../utils/usageTracker';
 import { annotateUpdates, unfollow, markSeen } from '../utils/followStore';
 import { TOPIC_SUBTOPICS, storyMatchesSubTopic } from '../utils/topics';
 
@@ -240,7 +240,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   const isVisibleRef = useRef(isVisible);
   useEffect(() => { isVisibleRef.current = isVisible; }, [isVisible]);
   const [streak, setStreak] = useState(0);
-  useEffect(() => { try { setStreak(getUsageStats().streakDays); } catch {} }, []);
+  useEffect(() => { try { trackVisit(); setStreak(getUsageStats().streakDays); } catch {} }, []);
   const [followV, setFollowV] = useState(0);
 
   const [cardWidth, setCardWidth] = useState(() => Math.min(window.innerWidth - 28, 452));

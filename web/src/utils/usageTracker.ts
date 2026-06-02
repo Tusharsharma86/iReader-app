@@ -45,6 +45,15 @@ export function trackArticleRead(source: string, category?: string, topic?: stri
   saveData(data);
 }
 
+// Mark today as an "active day" (app opened) so the streak counts daily usage,
+// not only days where a full article was opened. Creates today's record if
+// missing; harmless no-op if it already exists.
+export function trackVisit(): void {
+  const data = loadData();
+  const key = dateKey();
+  if (!data[key]) { data[key] = emptyDay(); saveData(data); }
+}
+
 export function trackAiUsage(type: 'summary' | 'fiveWs' | 'eli5'): void {
   const data = loadData();
   const key = dateKey();
@@ -153,14 +162,15 @@ export function getUsageStats(): UsageStats {
   const topCategories = buildRanking(d => d.categories, 6);
   const topTopics = buildRanking(d => d.topics, 10, TOPIC_LABELS);
 
-  // Reading streak: consecutive days (back from today) with >=1 article.
+  // Activity streak: consecutive days (back from today) the app was used at
+  // all — opened, an article read, or any AI action. A day "counts" if it has
+  // a stored record (records are only created on real activity / app open).
   let streakDays = 0;
   for (let i = 0; i < KEEP_DAYS; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
-    const s = data[dateKey(d)];
-    if (s && s.articles > 0) streakDays++;
-    else if (i > 0) break;
+    if (data[dateKey(d)]) streakDays++;
+    else break;
   }
 
   return { last7Days, last30Days, today: { articles: todayRaw.articles, ai: sumAi(todayRaw) }, week, month, allTime, topSources, topCategories, topTopics, streakDays, costPerAiCall: 0.018 };

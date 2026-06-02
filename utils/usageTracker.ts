@@ -87,6 +87,14 @@ export async function trackAiUsage(type: 'summary' | 'fiveWs' | 'eli5' | 'deepDi
   await bump((d) => { d.ai[type]++; });
 }
 
+// Mark today active (app opened) so the streak counts daily usage, not just
+// days a full article was opened. No-op if today's record already exists.
+export async function trackVisit(): Promise<void> {
+  const data = await loadData();
+  const key = dateKey();
+  if (!data[key]) { data[key] = emptyDay(); await saveData(data); }
+}
+
 export async function trackNotifReceived(kind: string): Promise<void> {
   await bump((d) => { d.notifsReceived[kind] = (d.notifsReceived[kind] ?? 0) + 1; });
 }
@@ -228,15 +236,15 @@ export async function getUsageStats(): Promise<UsageStats> {
   const topSources = Object.entries(sourceMap).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, count]) => ({ name, count }));
   const topTopics = Object.entries(topicMap).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, count]) => ({ name, count }));
 
-  // Reading streak: walk back from today, count consecutive days with >=1 article.
+  // Activity streak: consecutive days (back from today) the app was used at
+  // all — opened, an article read, or any AI action. A day counts if it has a
+  // stored record (records are only created on real activity / app open).
   let streakDays = 0;
   for (let i = 0; i < KEEP_DAYS; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
-    const k = dateKey(d);
-    const s = data[k];
-    if (s && s.articles > 0) streakDays++;
-    else if (i > 0) break;
+    if (data[dateKey(d)]) streakDays++;
+    else break;
   }
 
   return {
