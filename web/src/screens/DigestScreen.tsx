@@ -249,10 +249,7 @@ export default function DigestScreen() {
       <div style={{ padding: '16px 16px 90px' }}>
         {/* Header */}
         <div style={{ padding: '8px 0 16px' }}>
-          <div style={{ color: '#555', fontSize: 11, fontWeight: 700, letterSpacing: 1.4 }}>
-            {dateLabel().toUpperCase()}
-          </div>
-          <div style={{ color: '#fff', fontSize: 30, fontWeight: 800, marginTop: 6, letterSpacing: -0.5 }}>
+          <div style={{ color: '#fff', fontSize: 30, fontWeight: 800, letterSpacing: -0.5 }}>
             {greeting()}.
           </div>
           <div style={{ color: '#888', fontSize: 14, marginTop: 4 }}>
