@@ -11,29 +11,24 @@ const BORDER = '#1A1A1A';
 const MUTED = '#666';
 
 type Range = '7d' | '30d' | 'all';
-interface GroqQuota {
-  requestsPerDay?: string | null; requestsRemaining?: string | null; requestsReset?: string | null;
-  tokensPerMin?: string | null; tokensRemaining?: string | null; tokensReset?: string | null;
-  tokensUsedToday?: number; tokensLimitToday?: number;
-}
+interface AiTask { task: string; label: string; tokens: number; calls: number; errors: number; }
+interface AiModel { model: string; role: string; tokensUsed: number; tokensLimit: number | null; pct: number | null; calls: number; errors: number; tasks: AiTask[]; }
+interface AiUsage { day: string; totalTokens: number; models: AiModel[]; }
 
 export default function UsageScreen() {
   const { goBack } = useRouter();
   const [stats, setStats] = useState<UsageStats | null>(null);
   const [range, setRange] = useState<Range>('7d');
-  const [quota, setQuota] = useState<GroqQuota | null>(null);
-  const [quotaErr, setQuotaErr] = useState(false);
+  const [ai, setAi] = useState<AiUsage | null>(null);
+  const [aiErr, setAiErr] = useState(false);
 
   useEffect(() => { setStats(getUsageStats()); }, []);
 
   useEffect(() => {
-    fetch('https://ireader.onrender.com/api/news/groq-quota')
+    fetch('https://ireader.onrender.com/api/news/ai-usage')
       .then(r => r.json())
-      .then((d: { limits?: GroqQuota; daily?: { tokensUsed?: number; tokensLimit?: number } }) => {
-        if (d?.limits) setQuota({ ...d.limits, tokensUsedToday: d.daily?.tokensUsed, tokensLimitToday: d.daily?.tokensLimit });
-        else setQuotaErr(true);
-      })
-      .catch(() => setQuotaErr(true));
+      .then((d: AiUsage) => { if (Array.isArray(d?.models)) setAi(d); else setAiErr(true); })
+      .catch(() => setAiErr(true));
   }, []);
 
   const bucket = useMemo(() => {
@@ -103,11 +98,20 @@ export default function UsageScreen() {
           <Section title="TOP SOURCES · ALL TIME"><RankedList items={stats.topSources} color={BLUE} /></Section>
         )}
 
-        {/* AI engine quota (Groq) — live daily limits. Web-only for now. */}
-        {(quota || quotaErr) && (
-          <Section title="AI ENGINE · GROQ DAILY QUOTA">
-            {quota ? <GroqQuotaCard q={quota} /> : (
-              <div style={{ color: MUTED, fontSize: 12 }}>Couldn't load live quota.</div>
+        {/* AI engine usage — per model + per task, today. Web-only. */}
+        {(ai || aiErr) && (
+          <Section title={`AI ENGINE · TODAY${ai ? ` · ${ai.totalTokens.toLocaleString()} tokens` : ''}`}>
+            {!ai ? (
+              <div style={{ color: MUTED, fontSize: 12 }}>Couldn't load AI usage.</div>
+            ) : ai.models.length === 0 ? (
+              <div style={{ color: MUTED, fontSize: 12 }}>No AI calls yet today.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {ai.models.map(m => <AiModelBlock key={m.model} m={m} />)}
+                <div style={{ color: '#444', fontSize: 10, lineHeight: 1.5 }}>
+                  Live from Groq · per-model daily token budgets are independent · figures reset on server restart (approx).
+                </div>
+              </div>
             )}
           </Section>
         )}
@@ -132,55 +136,44 @@ function Bar({ pct, color }: { pct: number; color: string }) {
   );
 }
 
-function GroqQuotaCard({ q }: { q: GroqQuota }) {
-  // Primary: daily tokens (TPD) — the limit that actually gates Deep Dive.
-  const tLimit = q.tokensLimitToday ?? 0;
-  const tUsed = q.tokensUsedToday ?? 0;
-  const hasTpd = tLimit > 0;
-  const tPct = hasTpd ? Math.min(100, Math.round((tUsed / tLimit) * 100)) : 0;
-  const tColor = tPct >= 90 ? PINK : tPct >= 70 ? '#F59E0B' : GREEN;
-
-  // Secondary: requests/day.
-  const rLimit = Number(q.requestsPerDay) || 0;
-  const rRemaining = Number(q.requestsRemaining);
-  const hasReq = rLimit > 0 && Number.isFinite(rRemaining);
-  const rUsed = hasReq ? Math.max(0, rLimit - rRemaining) : 0;
-  const rPct = hasReq ? Math.min(100, Math.round((rUsed / rLimit) * 100)) : 0;
-
+function shortModel(m: string): string {
+  return m.replace(/^meta-llama\//, '').replace(/^openai\//, '');
+}
+function AiModelBlock({ m }: { m: AiModel }) {
+  const pct = m.pct ?? 0;
+  const color = pct >= 90 ? PINK : pct >= 70 ? '#F59E0B' : GREEN;
   return (
-    <div>
-      {/* Daily tokens (TPD) — the real ceiling */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-        <span style={{ color: '#FFF', fontSize: 13, fontWeight: 700 }}>Tokens today</span>
-        <span style={{ color: MUTED, fontSize: 12 }}>
-          {hasTpd ? `${tUsed.toLocaleString()} / ${tLimit.toLocaleString()}` : '—'}
-        </span>
+    <div style={{ background: '#121218', borderRadius: 12, border: `1px solid ${BORDER}`, padding: 14 }}>
+      {/* Model header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+        <div>
+          <div style={{ color: '#FFF', fontSize: 13.5, fontWeight: 800 }}>{shortModel(m.model)}</div>
+          <div style={{ color: VIOLET, fontSize: 10, fontWeight: 700, letterSpacing: 0.4, marginTop: 2 }}>{m.role.toUpperCase()}</div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ color: '#FFF', fontSize: 13, fontWeight: 700 }}>{m.tokensUsed.toLocaleString()}</div>
+          <div style={{ color: MUTED, fontSize: 10 }}>{m.tokensLimit ? `/ ${m.tokensLimit.toLocaleString()} tokens` : 'tokens'}</div>
+        </div>
       </div>
-      <Bar pct={tPct} color={tColor} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-        <span style={{ color: tColor, fontSize: 11, fontWeight: 700 }}>{hasTpd ? `${tPct}% used` : ''}</span>
-        <span style={{ color: MUTED, fontSize: 11 }}>{hasTpd ? `${(tLimit - tUsed).toLocaleString()} left` : ''}</span>
-      </div>
-
-      <div style={{ height: 1, background: BORDER, margin: '14px 0' }} />
-
-      {/* Requests/day */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-        <span style={{ color: '#FFF', fontSize: 13, fontWeight: 700 }}>Requests today</span>
-        <span style={{ color: MUTED, fontSize: 12 }}>{hasReq ? `${rUsed.toLocaleString()} / ${rLimit.toLocaleString()}` : '—'}</span>
-      </div>
-      <Bar pct={rPct} color={rPct >= 90 ? PINK : rPct >= 70 ? '#F59E0B' : BLUE} />
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
-        <span style={{ color: MUTED, fontSize: 11 }}>Tokens / min left</span>
-        <span style={{ color: '#999', fontSize: 11, fontWeight: 600 }}>
-          {q.tokensRemaining != null && q.tokensPerMin != null
-            ? `${Number(q.tokensRemaining).toLocaleString()} / ${Number(q.tokensPerMin).toLocaleString()}`
-            : '—'}
-        </span>
-      </div>
-      <div style={{ color: '#444', fontSize: 10, marginTop: 10 }}>
-        Live from Groq · llama-4-scout · daily tokens are approximate (reset on server restart) · falls back to local clustering if exhausted
+      {m.tokensLimit != null && (
+        <>
+          <div style={{ marginTop: 8 }}><Bar pct={pct} color={color} /></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
+            <span style={{ color, fontSize: 10.5, fontWeight: 700 }}>{pct}% of daily</span>
+            <span style={{ color: MUTED, fontSize: 10.5 }}>{m.calls} calls{m.errors > 0 ? ` · ${m.errors} rate-limited` : ''}</span>
+          </div>
+        </>
+      )}
+      {/* Per-task breakdown */}
+      <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {m.tasks.map(t => (
+          <div key={t.task} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <span style={{ color: '#bbb', fontSize: 12 }}>{t.label}</span>
+            <span style={{ color: MUTED, fontSize: 11 }}>
+              {t.tokens.toLocaleString()} tok · {t.calls}×{t.errors > 0 ? ` · ${t.errors}⚠` : ''}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
