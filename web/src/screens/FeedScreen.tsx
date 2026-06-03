@@ -269,12 +269,22 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
 
   useEffect(() => { loadProfile(); }, []);
 
-  // Restore scroll position on first load after mount (returning from ArticleScreen)
+  // Restore scroll position on first load after mount — ONLY if it was saved
+  // recently (i.e. you tapped an article and came straight back). On a fresh
+  // open after a long time the saved position is stale, so we start at the top
+  // instead of landing mid-feed.
+  const SCROLL_RESTORE_MAX_AGE_MS = 30 * 60 * 1000; // 30 min
   useEffect(() => {
     if (loading || isFirstLoadDone.current) return;
     isFirstLoadDone.current = true;
     const saved = localStorage.getItem(`@ireader_scroll_${activeTopicRef.current}`);
-    const offset = saved ? parseFloat(saved) : 0;
+    let offset = 0;
+    if (saved) {
+      try {
+        const p = JSON.parse(saved) as { y?: number; at?: number };
+        if (typeof p?.y === 'number' && typeof p?.at === 'number' && Date.now() - p.at < SCROLL_RESTORE_MAX_AGE_MS) offset = p.y;
+      } catch { /* legacy plain-number value → ignore, start at top */ }
+    }
     if (offset > 0) requestAnimationFrame(() => { containerRef.current?.scrollTo({ top: offset, behavior: 'auto' }); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
@@ -413,7 +423,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
 
   // Save offset when navigating away / closing
   useEffect(() => {
-    const save = () => { localStorage.setItem(`@ireader_scroll_${activeTopicRef.current}`, String(scrollOffsetRef.current)); };
+    const save = () => { localStorage.setItem(`@ireader_scroll_${activeTopicRef.current}`, JSON.stringify({ y: scrollOffsetRef.current, at: Date.now() })); };
     window.addEventListener('beforeunload', save);
     return () => { save(); window.removeEventListener('beforeunload', save); };
   }, []);
