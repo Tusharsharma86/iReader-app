@@ -738,6 +738,8 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
               url: story.sources?.[0]?.url ?? '',
               headline: story.headline,
               paragraphs,
+              // All distinct source URLs so the backend reads every article in full.
+              sourceUrls: (item.sources ?? []).map(s => s.url).filter(Boolean),
             }),
             signal: ctrl.signal,
           });
