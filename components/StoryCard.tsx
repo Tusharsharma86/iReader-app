@@ -52,6 +52,7 @@ export interface Story {
   id: string;
   headline: string;
   summary: string;
+  aiSummary?: string; // 25-word backend AI summary; preferred over raw summary on cards
   publishedAt: string;
   imageUrl: string;
   sources: { name: string; url: string; imageUrl?: string; publishedAt: string }[];
@@ -185,7 +186,7 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight:
       url: story.sources?.[0]?.url ?? '',
       image: story.imageUrl,
       headline: story.headline,
-      summary: story.summary,
+      summary: story.aiSummary || story.summary,
       source: story.sources?.[0]?.name ?? '',
       publishedAt: story.publishedAt,
       dominantColor: dominant,
@@ -286,7 +287,7 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight:
         })()}
 
         {!compact && (
-          <Text style={styles.summary} numberOfLines={2}>{story.summary}</Text>
+          <Text style={styles.summary} numberOfLines={2}>{story.aiSummary || story.summary}</Text>
         )}
       </View>
     </Pressable>

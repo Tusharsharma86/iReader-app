@@ -16,13 +16,26 @@ const MUTED = '#666';
 
 type Range = '7d' | '30d' | 'all';
 
+interface AiTask { task: string; label: string; tokens: number; calls: number; errors: number; }
+interface AiModel { model: string; role: string; tokensUsed: number; tokensLimit: number | null; pct: number | null; calls: number; requestsLimit?: number; errors: number; tasks: AiTask[]; }
+interface AiUsage { day: string; totalTokens: number; models: AiModel[]; }
+
 export default function UsageScreen() {
   const navigation = useNavigation();
   const [stats, setStats] = useState<UsageStats | null>(null);
   const [range, setRange] = useState<Range>('7d');
+  const [ai, setAi] = useState<AiUsage | null>(null);
+  const [aiErr, setAiErr] = useState(false);
 
   useEffect(() => {
     getUsageStats().then(setStats).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetch('https://ireader.onrender.com/api/news/ai-usage')
+      .then(r => r.json())
+      .then((d: AiUsage) => { if (Array.isArray(d?.models)) setAi(d); else setAiErr(true); })
+      .catch(() => setAiErr(true));
   }, []);
 
   if (!stats) {
@@ -120,6 +133,22 @@ export default function UsageScreen() {
         {stats.topSources.length > 0 && (
           <Section title="TOP SOURCES · ALL TIME">
             <RankedList items={stats.topSources} color={BLUE} />
+          </Section>
+        )}
+
+        {/* AI engine usage — per model + per task, today (live from Groq). */}
+        {(ai || aiErr) && (
+          <Section title={`AI ENGINE · TODAY${ai ? ` · ${ai.totalTokens.toLocaleString()} tokens` : ''}`}>
+            {!ai ? (
+              <Text style={styles.aiMutedText}>Couldn&apos;t load AI usage.</Text>
+            ) : ai.models.length === 0 ? (
+              <Text style={styles.aiMutedText}>No AI calls yet today.</Text>
+            ) : (
+              <View style={{ gap: 16 }}>
+                {ai.models.map(m => <AiModelBlock key={m.model} m={m} />)}
+                <Text style={styles.aiFootnote}>Live from Groq · per-model daily token budgets are independent · figures reset on server restart (approx).</Text>
+              </View>
+            )}
           </Section>
         )}
 
@@ -275,6 +304,68 @@ function RankedList({ items, color }: { items: { name: string; count: number }[]
   );
 }
 
+function shortModel(m: string): string {
+  return m.replace(/^meta-llama\//, '').replace(/^openai\//, '');
+}
+
+function Bar({ pct, color }: { pct: number; color: string }) {
+  return (
+    <View style={styles.aiBarBg}>
+      <View style={[styles.aiBarFill, { width: `${Math.max(0, Math.min(100, pct))}%`, backgroundColor: color }]} />
+    </View>
+  );
+}
+
+function AiModelBlock({ m }: { m: AiModel }) {
+  const pct = m.pct ?? 0;
+  const color = pct >= 90 ? PINK : pct >= 70 ? AMBER : GREEN;
+  const rPct = m.requestsLimit ? Math.min(100, Math.round((m.calls / m.requestsLimit) * 100)) : 0;
+  return (
+    <View style={styles.aiModelCard}>
+      {/* Model header */}
+      <View style={styles.aiModelHeader}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.aiModelName}>{shortModel(m.model)}</Text>
+          <Text style={styles.aiModelRole}>{m.role.toUpperCase()}</Text>
+        </View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={styles.aiModelTokens}>{m.tokensUsed.toLocaleString()}</Text>
+          <Text style={styles.aiModelTokensSub}>{m.tokensLimit ? `/ ${m.tokensLimit.toLocaleString()} tokens` : 'tokens'}</Text>
+        </View>
+      </View>
+      {/* Token budget bar */}
+      {m.tokensLimit != null && (
+        <>
+          <View style={{ marginTop: 8 }}><Bar pct={pct} color={color} /></View>
+          <View style={styles.aiBarMeta}>
+            <Text style={[styles.aiBarMetaStrong, { color }]}>{pct}% of daily tokens</Text>
+            <Text style={styles.aiBarMetaRight}>{m.errors > 0 ? `${m.errors} rate-limited` : 'resets daily (UTC)'}</Text>
+          </View>
+        </>
+      )}
+      {/* Requests/day bar */}
+      {m.requestsLimit ? (
+        <View style={{ marginTop: 8 }}>
+          <Bar pct={rPct} color={rPct >= 90 ? PINK : rPct >= 70 ? AMBER : BLUE} />
+          <View style={styles.aiBarMeta}>
+            <Text style={styles.aiBarMetaRight}>Requests</Text>
+            <Text style={styles.aiBarMetaRight}>{m.calls.toLocaleString()} / {m.requestsLimit.toLocaleString()}/day</Text>
+          </View>
+        </View>
+      ) : null}
+      {/* Per-task breakdown */}
+      <View style={{ marginTop: 12, gap: 6 }}>
+        {m.tasks.map(t => (
+          <View key={t.task} style={styles.aiTaskRow}>
+            <Text style={styles.aiTaskLabel}>{t.label}</Text>
+            <Text style={styles.aiTaskVal}>{t.tokens.toLocaleString()} tok · {t.calls}×{t.errors > 0 ? ` · ${t.errors}⚠` : ''}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#050505' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -334,6 +425,24 @@ const styles = StyleSheet.create({
   emptyState: { alignItems: 'center', padding: 40, gap: 8 },
   emptyText: { color: '#888', fontSize: 14, fontWeight: '600' },
   emptySub: { color: MUTED, fontSize: 12, textAlign: 'center' },
+
+  // AI engine dashboard
+  aiMutedText: { color: MUTED, fontSize: 12 },
+  aiFootnote: { color: '#444', fontSize: 10, lineHeight: 15 },
+  aiModelCard: { backgroundColor: '#121218', borderRadius: 12, borderWidth: 1, borderColor: BORDER, padding: 14 },
+  aiModelHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
+  aiModelName: { color: '#FFF', fontSize: 13.5, fontWeight: '800' },
+  aiModelRole: { color: VIOLET, fontSize: 10, fontWeight: '700', letterSpacing: 0.4, marginTop: 2 },
+  aiModelTokens: { color: '#FFF', fontSize: 13, fontWeight: '700' },
+  aiModelTokensSub: { color: MUTED, fontSize: 10 },
+  aiBarBg: { height: 8, borderRadius: 4, backgroundColor: '#1A1A1A', overflow: 'hidden' },
+  aiBarFill: { height: 8, borderRadius: 4 },
+  aiBarMeta: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 },
+  aiBarMetaStrong: { fontSize: 10.5, fontWeight: '700' },
+  aiBarMetaRight: { color: MUTED, fontSize: 10.5 },
+  aiTaskRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+  aiTaskLabel: { color: '#bbb', fontSize: 12 },
+  aiTaskVal: { color: MUTED, fontSize: 11 },
 });
 
 // Re-export types used by importers (back-compat).

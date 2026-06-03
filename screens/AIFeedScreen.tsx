@@ -119,6 +119,13 @@ function dedupeFeed(items: ApiItem[]): FeedItem[] {
     return { primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []) };
   }).filter((x): x is FeedItem => !!x);
 
+  return mergeSimilar(initial);
+}
+
+// Merge feed items whose primary headlines share ≥60% tokens — combines their
+// stories + sources. Promotes near-duplicate singletons the server cluster
+// missed into multi-source items. Used per-topic AND across topics.
+function mergeSimilar(initial: FeedItem[]): FeedItem[] {
   const out: FeedItem[] = [];
   for (const it of initial) {
     const sig = headlineSig(it.primary.headline);
@@ -131,6 +138,14 @@ function dedupeFeed(items: ApiItem[]): FeedItem[] {
     }
   }
   return out;
+}
+
+// Lead the feed with multi-source clusters (richest first), then single-source cards.
+function clusterForward(items: FeedItem[]): FeedItem[] {
+  const clusters = items.filter(it => it.allStories.length >= 2)
+    .sort((a, b) => b.sources.length - a.sources.length);
+  const singles = items.filter(it => it.allStories.length < 2);
+  return [...clusters, ...singles];
 }
 
 function timeAgo(iso: string): string {
@@ -275,6 +290,51 @@ export default function AIFeedScreen() {
     } catch { /* keep showing cached items */ }
   }, []);
 
+  // Cluster-forward loader — gathers multi-source clusters from ALL topics and
+  // leads with them (richest first), then fills with breaking single-source
+  // cards. This is the default AI-feed experience so clustered stories surface
+  // first.  mode 'initial' → skeleton · 'refresh' → pull spinner · 'silent' → none
+  const loadClusterForward = useCallback(async (mode: 'initial' | 'refresh' | 'silent') => {
+    if (mode === 'initial') setLoading(true);
+    else if (mode === 'refresh') setRefreshing(true);
+    try {
+      const fetchTopic = (t: string) =>
+        fetch(`${FEED_API_BASE}?topic=${t}`).then(r => (r.ok ? r.json() : null)).catch(() => null);
+      const raws = await Promise.all(TOPIC_QUEUE.map(fetchTopic));
+      const toItems = (raw: unknown): FeedItem[] => {
+        const arr = Array.isArray(raw) ? raw : Array.isArray((raw as { feed?: unknown[] })?.feed) ? (raw as { feed: unknown[] }).feed : [];
+        // Clusters always sit at the top of the server feed, so 300 keeps them
+        // all plus plenty of singles — and keeps the O(n²) merge cheap.
+        const ri = (arr as ApiItem[]).slice(0, 300);
+        return dedupeFeed(ri)
+          .filter(it => it.primary.headline && it.primary.publishedAt)
+          .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded));
+      };
+      const perTopic = raws.map(raw => (raw ? toItems(raw) : []));
+      const breakingItems = perTopic[0] ?? [];
+      const clusterPool: FeedItem[] = [];
+      for (const its of perTopic) for (const it of its) if (it.allStories.length >= 2) clusterPool.push(it);
+      const clusters = mergeSimilar(clusterPool).sort((a, b) => b.sources.length - a.sources.length);
+      const clusterSigs = clusters.map(c => headlineSig(c.primary.headline));
+      const singles = breakingItems
+        .filter(it => it.allStories.length < 2)
+        .filter(it => !clusterSigs.some(cs => jaccard(cs, headlineSig(it.primary.headline)) >= 0.6))
+        .slice(0, 150);
+      const next = [...clusters, ...singles];
+      if (next.length > 0) {
+        setItems(next);
+        setError(null);
+      } else if (mode === 'initial') {
+        await loadTopic(0, true); // fall back to single-topic load if the gather came up empty
+      }
+    } catch (e) {
+      if (mode === 'initial') setError(String(e instanceof Error ? e.message : e));
+    } finally {
+      if (mode === 'initial') setLoading(false);
+      else if (mode === 'refresh') setRefreshing(false);
+    }
+  }, [loadTopic]);
+
   // MOUNT-ONLY init: pre-warm + restore cached feed. Critical: NO screenH dep
   // — fold/unfold must not re-fetch or re-setItems. Width-only restore happens
   // in the dimension effect below.
@@ -282,8 +342,8 @@ export default function AIFeedScreen() {
   useEffect(() => {
     fetch('https://ireader.onrender.com/api/news/sources').catch(() => {});
     loadFollowed().catch(() => {});
-    AsyncStorage.getItem('@aifeed_cache_v1').then(raw => {
-      if (!raw) { loadTopic(0, true); return; }
+    AsyncStorage.getItem('@aifeed_cache_v2').then(raw => {
+      if (!raw) { loadClusterForward('initial'); return; }
       try {
         const c = JSON.parse(raw) as { items: FeedItem[]; topicCursor: number; activeIdx: number; at: number };
         if (Array.isArray(c.items) && c.items.length > 0) {
@@ -297,14 +357,15 @@ export default function AIFeedScreen() {
           setLoading(false);
           setTimeout(() => flatListRef.current?.scrollToOffset({ offset: (c.activeIdx ?? 0) * initialScreenHRef.current, animated: false }), 0);
           if (Date.now() - c.at > 10 * 60_000) {
-            setTimeout(() => silentRefresh(tc), 400);
+            // Default view → re-gather cross-topic clusters; specific topic → refresh that topic.
+            setTimeout(() => (tc === 0 ? loadClusterForward('silent') : silentRefresh(tc)), 400);
           }
           return;
         }
       } catch {}
-      loadTopic(0, true);
-    }).catch(() => loadTopic(0, true));
-  }, [loadTopic, silentRefresh]);
+      loadClusterForward('initial');
+    }).catch(() => loadClusterForward('initial'));
+  }, [loadTopic, silentRefresh, loadClusterForward]);
 
   // Dimension change (fold open/close): re-snap to current activeIdx so the
   // visible card stays put. No state reset, no refetch. activeIdx read fresh
@@ -329,7 +390,7 @@ export default function AIFeedScreen() {
   topicCursorRef.current = topicCursor;
   const writeCacheNow = useCallback(() => {
     if (itemsRef.current.length === 0) return;
-    AsyncStorage.setItem('@aifeed_cache_v1', JSON.stringify({
+    AsyncStorage.setItem('@aifeed_cache_v2', JSON.stringify({
       items: itemsRef.current, topicCursor: topicCursorRef.current, activeIdx: activeIdxRef.current, at: Date.now(),
     })).catch(() => {});
   }, []);
@@ -419,15 +480,18 @@ export default function AIFeedScreen() {
   }, []);
 
   const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    setTopicCursor(0);
     setExhausted(false);
-    setItems([]);
     setActiveIdx(0);
     flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
-    await loadTopic(0, true);
-    setRefreshing(false);
-  }, [loadTopic]);
+    if (topicCursorRef.current === 0) {
+      await loadClusterForward('refresh'); // default view: re-gather cross-topic clusters
+    } else {
+      setRefreshing(true);
+      setItems([]);
+      await loadTopic(topicCursorRef.current, true);
+      setRefreshing(false);
+    }
+  }, [loadTopic, loadClusterForward]);
 
   const onEndReached = useCallback(() => {
     if (loadingMore || exhausted) return;
@@ -468,7 +532,7 @@ export default function AIFeedScreen() {
         <View style={styles.centered}>
           <Ionicons name="cloud-offline-outline" size={28} color="#444" />
           <Text style={styles.errorText}>{error}</Text>
-          <Pressable onPress={() => { setLoading(true); loadTopic(0, true); }} style={styles.retryBtn}>
+          <Pressable onPress={() => { setLoading(true); loadClusterForward('initial'); }} style={styles.retryBtn}>
             <Text style={styles.retryText}>RETRY</Text>
           </Pressable>
         </View>
@@ -490,7 +554,8 @@ export default function AIFeedScreen() {
           setTopicCursor(idx);
           setExhausted(false);
           flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
-          loadTopic(idx, true);
+          if (idx === 0) loadClusterForward('initial'); // default view leads with clusters across all topics
+          else loadTopic(idx, true);
         }}
       />
       <FlatList
