@@ -137,8 +137,11 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
   const borderColor = lighten(dominant, 0.3);
   const articleCategory = deriveCategory(params.source ?? '', params.url ?? '', params.headline ?? '');
 
-  const BLOCKED_LONGFORM_SOURCES = ['NYT World', 'NDTV'];
-  const defaultTab: Tab = BLOCKED_LONGFORM_SOURCES.includes(params.source ?? '') ? 'Summary' : 'Long Form';
+  // Sources that block full-text fetch (paywall / scrape protection) — hide the
+  // Long Form tab entirely and default to the AI Summary. Matches all variants:
+  // "NYT", "NYT World", "New York Times", "NDTV", "NDTV Profit", etc.
+  const blockLongform = /\bnyt|new york times|\bndtv/i.test(params.source ?? '');
+  const defaultTab: Tab = blockLongform ? 'Summary' : 'Long Form';
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
   const [paragraphs, setParagraphs] = useState<string[]>([]);
   const [originalParagraphs, setOriginalParagraphs] = useState<string[]>([]);
@@ -152,7 +155,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
   const [difficulty, setDifficulty] = useState<string | null>(null);
   const [biasModalVisible, setBiasModalVisible] = useState(false);
   const [entities, setEntities] = useState<{ people: string[]; companies: string[] }>({ people: [], companies: [] });
-  const [hasBeenRead, setHasBeenRead] = useState(BLOCKED_LONGFORM_SOURCES.includes(params.source ?? ''));
+  const [hasBeenRead, setHasBeenRead] = useState(blockLongform);
   const [aiResult, setAiResult] = useState<AiResult | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -465,7 +468,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
         background: tabBg, borderRadius: 999, padding: 4,
         border: `1px solid ${borderColor}55`,
       }}>
-        {(BLOCKED_LONGFORM_SOURCES.includes(params.source ?? '') ? TABS.filter(t => t !== 'Long Form') : TABS).map(tab => {
+        {(blockLongform ? TABS.filter(t => t !== 'Long Form') : TABS).map(tab => {
           const active = activeTab === tab;
           const color = active ? '#fff' : 'rgba(255,255,255,0.4)';
           return (

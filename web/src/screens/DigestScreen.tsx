@@ -246,7 +246,7 @@ export default function DigestScreen() {
         WebkitOverflowScrolling: 'touch', color: '#fff',
       }}
     >
-      <div style={{ padding: '16px 16px 90px' }}>
+      <div style={{ padding: 'calc(16px + env(safe-area-inset-top, 0px)) 16px 90px' }}>
         {/* Header */}
         <div style={{ padding: '8px 0 16px' }}>
           <div style={{ color: '#fff', fontSize: 30, fontWeight: 800, letterSpacing: -0.5 }}>
