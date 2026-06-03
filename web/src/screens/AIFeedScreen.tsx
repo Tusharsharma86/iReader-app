@@ -20,7 +20,7 @@ const TOPIC_QUEUE = [
 const DEEPDIVE_API = 'https://ireader.onrender.com/api/news/deepdive';
 const CACHE_PREFIX = '@deepdive_v3_'; // v3 — drop degraded fallbacks cached during the Groq outage
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const FEED_LIST_CACHE = '@aifeed_list_v1';
+const FEED_LIST_CACHE = '@aifeed_list_v2';
 const VIOLET = '#b994ff';
 const GOLD   = '#FFC542';
 
@@ -113,15 +113,19 @@ function dedupeFeed(items: ApiItem[]): FeedItem[] {
       return { primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []) };
     })
     .filter((x): x is FeedItem => !!x);
+  return mergeSimilar(initial);
+}
 
-  // Headline-similarity merge — combine items whose primary headlines share ≥60% tokens
+// Combine feed items whose primary headlines share ≥60% tokens — merges their
+// stories + sources. Promotes near-duplicate singletons the server cluster missed
+// into multi-source items. Used per-topic AND across topics (cluster-forward feed).
+function mergeSimilar(initial: FeedItem[]): FeedItem[] {
   const out: FeedItem[] = [];
   for (const it of initial) {
     const sig = headlineSignature(it.primary.headline);
     let merged = false;
     for (const existing of out) {
-      const sim = jaccard(sig, headlineSignature(existing.primary.headline));
-      if (sim >= 0.6) {
+      if (jaccard(sig, headlineSignature(existing.primary.headline)) >= 0.6) {
         existing.allStories.push(...it.allStories.filter(s => !existing.allStories.some(e => e.id === s.id)));
         existing.sources = dedupeSources([...existing.sources, ...it.sources]);
         merged = true;
@@ -131,6 +135,14 @@ function dedupeFeed(items: ApiItem[]): FeedItem[] {
     if (!merged) out.push(it);
   }
   return out;
+}
+
+// Lead the feed with multi-source clusters (richest first), then single-source cards.
+function clusterForward(items: FeedItem[]): FeedItem[] {
+  const clusters = items.filter(it => it.allStories.length >= 2)
+    .sort((a, b) => b.sources.length - a.sources.length);
+  const singles = items.filter(it => it.allStories.length < 2);
+  return [...clusters, ...singles];
 }
 
 function dedupeSources(arr: { name: string; url: string }[]): { name: string; url: string }[] {
@@ -230,7 +242,7 @@ export default function AIFeedScreen() {
       }
 
       setItems(prev => {
-        const next = isInitial ? newOnes : [...prev, ...newOnes];
+        const next = isInitial ? clusterForward(newOnes) : [...prev, ...newOnes];
         if (isInitial) { try { localStorage.setItem(FEED_LIST_CACHE, JSON.stringify({ items: next, at: Date.now() })); } catch {} }
         return next;
       });
@@ -242,24 +254,53 @@ export default function AIFeedScreen() {
     }
   }, []);
 
-  // Silent background refresh — replaces items with fresh data, no skeleton.
-  // Never blanks the feed if the fetch fails/returns empty.
-  const silentRefresh = useCallback(async () => {
+  // Cluster-forward loader — gathers multi-source clusters from ALL topics and
+  // leads with them (richest first), then fills with breaking single-source cards.
+  // This is the default AI-feed experience so clustered stories surface first.
+  //   mode 'initial' → shows skeleton · 'refresh' → pull spinner · 'silent' → no UI
+  const loadClusterForward = useCallback(async (mode: 'initial' | 'refresh' | 'silent') => {
+    if (mode === 'initial') setLoading(true);
+    else if (mode === 'refresh') setRefreshing(true);
     try {
-      const r = await fetch(`${FEED_API_BASE}?topic=${TOPIC_QUEUE[0]}`);
-      if (!r.ok) return;
-      const raw = await r.json();
-      const rawItems: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
-      const fresh = dedupeFeed(rawItems)
-        .filter(it => it.primary.headline && it.primary.publishedAt)
-        .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded));
-      if (fresh.length > 0) {
-        setItems(fresh);
-        setError(null);
-        try { localStorage.setItem(FEED_LIST_CACHE, JSON.stringify({ items: fresh, at: Date.now() })); } catch {}
+      const fetchTopic = (t: string) =>
+        fetch(`${FEED_API_BASE}?topic=${t}`).then(r => (r.ok ? r.json() : null)).catch(() => null);
+      const raws = await Promise.all(TOPIC_QUEUE.map(fetchTopic));
+      const toItems = (raw: unknown): FeedItem[] => {
+        const arr = Array.isArray(raw) ? raw : Array.isArray((raw as { feed?: unknown[] })?.feed) ? (raw as { feed: unknown[] }).feed : [];
+        // Clusters always sit at the top of the server feed, so 300 keeps them all
+        // plus plenty of singles — and keeps the O(n²) merge cheap on the client.
+        const ri = (arr as ApiItem[]).slice(0, 300);
+        return dedupeFeed(ri)
+          .filter(it => it.primary.headline && it.primary.publishedAt)
+          .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded));
+      };
+      const perTopic = raws.map(raw => (raw ? toItems(raw) : []));
+      const breakingItems = perTopic[0] ?? [];
+      const clusterPool: FeedItem[] = [];
+      for (const its of perTopic) {
+        for (const it of its) if (it.allStories.length >= 2) clusterPool.push(it);
       }
-    } catch { /* keep cached */ }
-  }, []);
+      const clusters = mergeSimilar(clusterPool).sort((a, b) => b.sources.length - a.sources.length);
+      const clusterSigs = clusters.map(c => headlineSignature(c.primary.headline));
+      const singles = breakingItems
+        .filter(it => it.allStories.length < 2)
+        .filter(it => !clusterSigs.some(cs => jaccard(cs, headlineSignature(it.primary.headline)) >= 0.6))
+        .slice(0, 150);
+      const next = [...clusters, ...singles];
+      if (next.length > 0) {
+        setItems(next);
+        setError(null);
+        try { localStorage.setItem(FEED_LIST_CACHE, JSON.stringify({ items: next, at: Date.now() })); } catch {}
+      } else if (mode === 'initial') {
+        await loadTopic(0, true); // fall back to single-topic load if the gather came up empty
+      }
+    } catch (e) {
+      if (mode === 'initial') setError(String(e));
+    } finally {
+      if (mode === 'initial') setLoading(false);
+      else if (mode === 'refresh') setRefreshing(false);
+    }
+  }, [loadTopic]);
 
   useEffect(() => {
     // Pre-warm Render
@@ -273,13 +314,13 @@ export default function AIFeedScreen() {
         if (Array.isArray(c.items) && c.items.length > 0) {
           setItems(c.items);
           setLoading(false);
-          if (Date.now() - c.at > 10 * 60_000) setTimeout(() => silentRefresh(), 300);
+          if (Date.now() - c.at > 10 * 60_000) setTimeout(() => loadClusterForward('silent'), 300);
           return;
         }
       }
     } catch {}
-    loadTopic(0, true);
-  }, [loadTopic, silentRefresh]);
+    loadClusterForward('initial');
+  }, [loadClusterForward]);
 
   // ── Pull-to-refresh ─────────────────────────────────────────────────────
   const PULL_THRESHOLD = 80;
@@ -313,15 +354,19 @@ export default function AIFeedScreen() {
     const triggered = pull >= PULL_THRESHOLD;
     pullStartY.current = null;
     if (triggered) {
-      setRefreshing(true);
-      setTopicCursor(0);
       setExhausted(false);
-      setItems([]);
-      await loadTopic(0, true);
-      setRefreshing(false);
+      if (activeTopic === TOPIC_QUEUE[0]) {
+        setTopicCursor(0);
+        await loadClusterForward('refresh'); // default view: re-gather cross-topic clusters
+      } else {
+        setRefreshing(true);
+        setItems([]);
+        await loadTopic(TOPIC_QUEUE.indexOf(activeTopic), true);
+        setRefreshing(false);
+      }
     }
     setPull(0);
-  }, [pull, loadTopic]);
+  }, [pull, loadTopic, loadClusterForward, activeTopic]);
 
   // Tab-bar visibility runs every frame (cheap — stable callback, no rerenders).
   // Infinite-scroll bottom check throttled to 200ms.
@@ -360,9 +405,11 @@ export default function AIFeedScreen() {
           onChange={(t) => {
             setActiveTopic(t);
             setItems([]);
-            setTopicCursor(TOPIC_QUEUE.indexOf(t) >= 0 ? TOPIC_QUEUE.indexOf(t) : 0);
+            const idx = TOPIC_QUEUE.indexOf(t) >= 0 ? TOPIC_QUEUE.indexOf(t) : 0;
+            setTopicCursor(idx);
             setExhausted(false);
-            loadTopic(TOPIC_QUEUE.indexOf(t) >= 0 ? TOPIC_QUEUE.indexOf(t) : 0, true);
+            if (t === TOPIC_QUEUE[0]) loadClusterForward('initial'); // default view leads with clusters across all topics
+            else loadTopic(idx, true);
           }}
         />
       </div>
