@@ -21,6 +21,7 @@ export interface Story {
   id: string;
   headline: string;
   summary: string;
+  aiSummary?: string; // 25-word AI summary (preferred for display when present)
   publishedAt: string;
   imageUrl: string;
   category?: string;

@@ -96,7 +96,7 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
       url: story.sources?.[0]?.url ?? '',
       image: story.imageUrl,
       headline: story.headline,
-      summary: story.summary,
+      summary: story.aiSummary || story.summary,
       source: story.sources?.[0]?.name ?? '',
       publishedAt: story.publishedAt,
       dominantColor: dominant,
@@ -210,10 +210,10 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
           );
         })()}
 
-        {/* Summary (non-compact) */}
-        {!compact && story.summary && (
+        {/* Summary (non-compact) — prefer the 25-word AI summary when present */}
+        {!compact && (story.aiSummary || story.summary) && (
           <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: 13, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-            {story.summary}
+            {story.aiSummary || story.summary}
           </div>
         )}
       </div>
