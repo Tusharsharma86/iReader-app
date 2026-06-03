@@ -26,7 +26,9 @@ if (N?.setNotificationHandler) {
 
 const CHANNEL_BREAKING = 'breaking-news';
 const CHANNEL_SOURCES  = 'fav-sources';
+const CHANNEL_STREAK   = 'streak-reminders';
 const SEEN_KEY = '@notif_seen_v1';
+const STREAK_NUDGE_ID_KEY = '@streak_nudge_notif_id';
 
 export async function setupNotificationChannels(): Promise<void> {
   if (!N || Platform.OS !== 'android') return;
@@ -49,6 +51,37 @@ export async function setupNotificationChannels(): Promise<void> {
       enableVibrate: true,
       showBadge: false,
     });
+    await N.setNotificationChannelAsync(CHANNEL_STREAK, {
+      name: 'Streak Reminders',
+      importance: N.AndroidImportance.DEFAULT,
+      lightColor: '#b994ff',
+      lockscreenVisibility: N.AndroidNotificationVisibility.PUBLIC,
+      enableVibrate: false,
+      showBadge: true,
+    });
+  } catch {}
+}
+
+// Daily streak nudge — a single local notification at ~8 PM reminding the user
+// to read so their streak survives. Repeats daily; rescheduled on each app open
+// so the streak count in the copy stays fresh. Cancels the prior one first so
+// we never stack duplicates. Fully local — no server / push token needed.
+export async function scheduleStreakNudge(streakDays: number): Promise<void> {
+  if (!N) return;
+  try {
+    const prevId = await AsyncStorage.getItem(STREAK_NUDGE_ID_KEY);
+    if (prevId) { try { await N.cancelScheduledNotificationAsync(prevId); } catch {} }
+    const body = streakDays > 0
+      ? `Read a story today to keep your ${streakDays}-day streak alive.`
+      : 'Catch up on today’s top stories and start a reading streak.';
+    const trigger = Platform.OS === 'android'
+      ? { type: N.SchedulableTriggerInputTypes.DAILY, hour: 20, minute: 0, channelId: CHANNEL_STREAK }
+      : { type: N.SchedulableTriggerInputTypes.DAILY, hour: 20, minute: 0 };
+    const id = await N.scheduleNotificationAsync({
+      content: { title: 'Your reading streak', body, data: { type: 'streak-nudge' } },
+      trigger,
+    });
+    if (id) await AsyncStorage.setItem(STREAK_NUDGE_ID_KEY, id);
   } catch {}
 }
 

@@ -6,6 +6,7 @@ import {
   AppStateStatus,
   Dimensions,
   FlatList,
+  Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
@@ -28,12 +29,12 @@ import { FeedStackParamList } from '../types/navigation';
 import { useSource } from '../contexts/SourceContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { loadCachedFeed, saveFeedCache } from '../utils/feedCache';
-import { fireBreakingNotif, fireFavSourceNotif } from '../utils/notifications';
+import { fireBreakingNotif, fireFavSourceNotif, scheduleStreakNudge } from '../utils/notifications';
 import { tabBarTranslateY } from '../utils/tabBarAnim';
 import { loadProfile, rankStories, rankStoriesStandard } from '../utils/personalization';
 import { scoreClusterInterest } from '../utils/interestTopics';
 import { TOPIC_SUBTOPICS, storyMatchesSubTopic } from '../utils/topics';
-import { getUsageStats, trackVisit } from '../utils/usageTracker';
+import { getUsageStats, trackVisit, checkStreakMilestone } from '../utils/usageTracker';
 import { loadFollowed, annotateUpdates, markSeen, toggleFollow as toggleFollowStory } from '../utils/followStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -63,64 +64,9 @@ function useLayout() {
 }
 
 const API_BASE = 'https://ireader.onrender.com/api/news/feed';
-const CLUSTER_LABELS_API = 'https://ireader.onrender.com/api/news/cluster-labels';
-const AI_SUMMARY_API = 'https://ireader.onrender.com/api/news/ai-summary';
-
-// Module-level memory cache — survives re-renders, cleared on app restart
-const clusterAICache = new Map<string, { headline: string; summary: string }>();
-
-function useClusterAI(cluster: Cluster) {
-  const key = cluster.stories.slice(0, 4).map(s => s.id).join('_');
-  const storageKey = `@ai_cluster_${key}`;
-
-  const [ai, setAi] = useState<{ headline: string; summary: string } | null>(
-    () => clusterAICache.get(key) ?? null,
-  );
-
-  useEffect(() => {
-    if (cluster.stories.length < 2) return;
-    if (clusterAICache.has(key)) return;
-
-    // Check persisted cache first, then call API
-    AsyncStorage.getItem(storageKey)
-      .then(raw => {
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          clusterAICache.set(key, parsed);
-          setAi(parsed);
-          return;
-        }
-
-        const paragraphs = cluster.stories
-          .slice(0, 6)
-          .map(s => `${s.headline}. ${(s.summary ?? '').slice(0, 150)}`)
-          .filter(Boolean);
-
-        return fetch(AI_SUMMARY_API, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paragraphs, type: 'summary', maxWords: 160 }),
-        })
-          .then(r => r.ok ? r.json() : null)
-          .then((data: { bullets?: string[]; summary?: string } | null) => {
-            if (!data) return;
-            const bullets: string[] = data.bullets ?? (data.summary ? [data.summary] : []);
-            if (!bullets.length) return;
-            const result = {
-              headline: bullets[0],
-              summary: bullets.slice(1).join('  ') || '',
-            };
-            clusterAICache.set(key, result);
-            setAi(result);
-            AsyncStorage.setItem(storageKey, JSON.stringify(result)).catch(() => {});
-          });
-      })
-      .catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-
-  return ai;
-}
+// Cluster labels + summaries now come straight from the server feed
+// (topicTitle / topicSummary, AI-generated server-side). No per-cluster client
+// AI calls — matches web and protects the daily Groq token budget.
 
 const CATEGORIES = [
   { topic: 'myspace',        label: 'MySpace',  icon: '✨', color: '#FF6B9D' },
@@ -354,105 +300,6 @@ const ENTITY_STOP = new Set([
   'opposition','ruling','coalition','alliance','government','regime',
 ]);
 
-function clusterStories(stories: Story[]): Cluster[] {
-  const deduped = dedupeByHeadline(stories);
-  const n = deduped.length;
-  if (n === 0) return [];
-
-  // Per-story term data (headline + first 100 chars of summary)
-  const termData: TermData[] = deduped.map(s =>
-    extractTermData(s.headline + ' ' + (s.summary || '').slice(0, 100))
-  );
-
-  // Union-Find with path compression + rank
-  const parent = Array.from({ length: n }, (_, i) => i);
-  const ufRank = new Array<number>(n).fill(0);
-  function find(x: number): number {
-    if (parent[x] !== x) parent[x] = find(parent[x]);
-    return parent[x];
-  }
-  function unite(x: number, y: number) {
-    const [px, py] = [find(x), find(y)];
-    if (px === py) return;
-    if (ufRank[px] < ufRank[py]) parent[px] = py;
-    else if (ufRank[px] > ufRank[py]) parent[py] = px;
-    else { parent[py] = px; ufRank[px]++; }
-  }
-
-  // O(n²) pairwise similarity — fast for n ≤ 60
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      const srcI = deduped[i].sources?.[0]?.name;
-      const srcJ = deduped[j].sources?.[0]?.name;
-      if (srcI && srcJ && srcI === srcJ) continue; // never merge same-source
-      if (storySimilarity(termData[i], termData[j]) >= CLUSTER_THRESHOLD) unite(i, j);
-    }
-  }
-
-  // Group indices by cluster root
-  const clusterMap = new Map<number, number[]>();
-  for (let i = 0; i < n; i++) {
-    const root = find(i);
-    if (!clusterMap.has(root)) clusterMap.set(root, []);
-    clusterMap.get(root)!.push(i);
-  }
-
-  // Build Cluster objects
-  const clusters: Cluster[] = [];
-  for (const indices of clusterMap.values()) {
-    const capped = indices.slice(0, MAX_CLUSTER_SIZE);
-    const members = capped.map(i => deduped[i]);
-
-    // Best representative: most named entities + has image + longer headline
-    let repIdx = 0, repScore = -1;
-    for (let k = 0; k < capped.length; k++) {
-      const s = members[k];
-      const score = termData[capped[k]].entities.size * 2
-        + (s.imageUrl ? 3 : 0)
-        + s.headline.split(' ').length;
-      if (score > repScore) { repScore = score; repIdx = k; }
-    }
-    const rep = members[repIdx];
-
-    clusters.push({
-      id: rep.id,
-      headline: rep.headline,
-      topicLabel: generateClusterLabel(members),
-      summary: rep.summary,
-      imageUrl: rep.imageUrl,
-      publishedAt: rep.publishedAt,
-      stories: members,
-      isBreaking: members.some(s => s.isBreaking || (Date.now() - new Date(s.publishedAt).getTime()) < 60 * 60 * 1000),
-    });
-  }
-
-  // Multi-source clusters first, then most recent
-  return clusters.sort((a, b) => {
-    const diff = b.stories.length - a.stories.length;
-    return diff !== 0 ? diff : new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
-  });
-}
-
-async function fetchAILabels(topic: string, stories: Story[]): Promise<Map<string, string>> {
-  try {
-    const headlines = stories.slice(0, 80).map(s => ({ id: s.id, text: s.headline }));
-    const res = await fetch(CLUSTER_LABELS_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ topic, headlines }),
-    });
-    if (!res.ok) return new Map();
-    const data = await res.json() as { groups?: { label: string; ids: string[] }[] };
-    const map = new Map<string, string>();
-    for (const g of data.groups ?? []) {
-      for (const id of g.ids) map.set(id, g.label);
-    }
-    return map;
-  } catch {
-    return new Map();
-  }
-}
-
 const LABEL_SKIP = new Set([
   'a','an','the','in','on','at','to','for','of','and','or','but','as','is','are',
   'was','were','be','been','by','from','with','that','this','it','its','amid',
@@ -583,7 +430,20 @@ export default function FeedScreen() {
   const [error, setError] = useState<string | null>(null);
   const [techSourceFilter, setTechSourceFilter] = useState<string | null>(null);
   const [streak, setStreak] = useState(0);
-  useEffect(() => { trackVisit().then(() => getUsageStats()).then(s => setStreak(s.streakDays)).catch(() => {}); }, []);
+  const [milestone, setMilestone] = useState<number | null>(null);
+  useEffect(() => {
+    trackVisit()
+      .then(() => getUsageStats())
+      .then(async s => {
+        setStreak(s.streakDays);
+        // Daily 8 PM nudge to keep the streak alive (local notification).
+        scheduleStreakNudge(s.streakDays).catch(() => {});
+        // One-time in-app celebration when a streak milestone is freshly reached.
+        const m = await checkStreakMilestone(s.streakDays);
+        if (m) setMilestone(m);
+      })
+      .catch(() => {});
+  }, []);
   const [followV, setFollowV] = useState(0);
   useEffect(() => { loadFollowed().then(() => setFollowV(v => v + 1)).catch(() => {}); }, []);
   const listRef = useRef<FlatList>(null);
@@ -1235,9 +1095,40 @@ export default function FeedScreen() {
         }
       />
     </Animated.View>
+    <StreakMilestoneModal milestone={milestone} onClose={() => setMilestone(null)} />
     </View>
   );
 }
+
+// ── Streak milestone celebration ─────────────────────────────────────────────
+function StreakMilestoneModal({ milestone, onClose }: { milestone: number | null; onClose: () => void }) {
+  return (
+    <Modal visible={milestone != null} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <Pressable style={msStyles.backdrop} onPress={onClose}>
+        <Pressable style={msStyles.card} onPress={() => {}}>
+          <Text style={msStyles.flame}>🔥</Text>
+          <Text style={msStyles.big}>{milestone}-Day Streak!</Text>
+          <Text style={msStyles.sub}>
+            You&apos;ve read the news {milestone} day{milestone === 1 ? '' : 's'} in a row. Keep it going — come back tomorrow to extend it.
+          </Text>
+          <Pressable style={msStyles.btn} onPress={onClose} hitSlop={8}>
+            <Text style={msStyles.btnText}>Keep reading</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+const msStyles = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.78)', alignItems: 'center', justifyContent: 'center', padding: 32 },
+  card: { width: '100%', maxWidth: 340, backgroundColor: '#121218', borderRadius: 22, borderWidth: 1, borderColor: 'rgba(185,148,255,0.35)', padding: 28, alignItems: 'center' },
+  flame: { fontSize: 56, marginBottom: 6 },
+  big: { color: '#FFF', fontSize: 26, fontWeight: '900', letterSpacing: -0.5, marginBottom: 10, textAlign: 'center' },
+  sub: { color: '#9a9aa5', fontSize: 14, lineHeight: 21, textAlign: 'center', marginBottom: 22 },
+  btn: { backgroundColor: '#b994ff', borderRadius: 999, paddingVertical: 13, paddingHorizontal: 32 },
+  btnText: { color: '#0a0a0f', fontSize: 14, fontWeight: '800', letterSpacing: 0.3 },
+});
 
 interface LayoutProps {
   cardWidth: number;
@@ -1349,7 +1240,6 @@ const TopicSection = React.memo(function TopicSection({
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const count = cluster.stories.length;
-  const ai = useClusterAI(cluster);
   const navigation = useNavigation<NativeStackNavigationProp<FeedStackParamList>>();
 
   // Cluster cards stay 82% width to hint there's more to swipe, but use the
@@ -1371,8 +1261,11 @@ const TopicSection = React.memo(function TopicSection({
     );
   }
 
-  const headline = ai?.headline ?? cluster.topicLabel;
-  const summary = ai?.summary || cluster.summary;
+  // Use the server's AI-generated cluster label + summary directly (matches web).
+  // No per-cluster client AI calls — single source of truth, and saves 2 Groq
+  // requests per cluster per device (protects the daily token budget).
+  const headline = cluster.topicLabel;
+  const summary = cluster.summary;
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>

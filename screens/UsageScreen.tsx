@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { getUsageStats, type UsageStats, type DayData, type NotifBreakdown, type AiBreakdown } from '../utils/usageTracker';
+import { getUsageStats, nextStreakMilestone, type UsageStats, type DayData, type NotifBreakdown, type AiBreakdown } from '../utils/usageTracker';
 
 const BLUE = '#4A90D9';
 const VIOLET = '#b994ff';
@@ -64,6 +64,14 @@ export default function UsageScreen() {
           <Text style={styles.streakLabel}>READING STREAK</Text>
           <Text style={styles.streakNum}>{stats.streakDays}</Text>
           <Text style={styles.streakSub}>{stats.streakDays === 1 ? 'day' : 'days'} in a row</Text>
+          {(() => {
+            const next = nextStreakMilestone(stats.streakDays);
+            if (!next) return stats.streakDays > 0
+              ? <Text style={styles.streakMilestone}>🔥 You&apos;ve hit the top milestone</Text>
+              : null;
+            const left = next - stats.streakDays;
+            return <Text style={styles.streakMilestone}>{left} {left === 1 ? 'day' : 'days'} to your {next}-day milestone</Text>;
+          })()}
         </View>
 
         {/* Range picker */}
@@ -377,6 +385,7 @@ const styles = StyleSheet.create({
   streakLabel: { color: VIOLET, fontSize: 10, fontWeight: '800', letterSpacing: 1.6 },
   streakNum: { color: '#FFF', fontSize: 48, fontWeight: '900', lineHeight: 52 },
   streakSub: { color: MUTED, fontSize: 12 },
+  streakMilestone: { color: VIOLET, fontSize: 11, fontWeight: '700', letterSpacing: 0.3, marginTop: 8 },
 
   rangePicker: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 14, backgroundColor: CARD_BG, borderRadius: 12, padding: 4, gap: 4 },
   rangeBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },

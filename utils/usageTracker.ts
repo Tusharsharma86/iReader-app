@@ -103,6 +103,28 @@ export async function trackNotifOpened(kind: string): Promise<void> {
   await bump((d) => { d.notifsOpened[kind] = (d.notifsOpened[kind] ?? 0) + 1; });
 }
 
+// ── Streak milestones ───────────────────────────────────────────────────────
+export const STREAK_MILESTONES = [3, 7, 14, 30, 50, 100, 200, 365];
+const MILESTONE_SEEN_KEY = '@streak_milestones_seen';
+
+// Returns the highest newly-reached milestone (and records it so it only fires
+// once), or null if no fresh milestone. Call on app launch with the current streak.
+export async function checkStreakMilestone(streakDays: number): Promise<number | null> {
+  try {
+    const raw = await AsyncStorage.getItem(MILESTONE_SEEN_KEY);
+    const seen: number[] = raw ? JSON.parse(raw) : [];
+    const fresh = STREAK_MILESTONES.filter(m => streakDays >= m && !seen.includes(m));
+    if (fresh.length === 0) return null;
+    await AsyncStorage.setItem(MILESTONE_SEEN_KEY, JSON.stringify([...seen, ...fresh]));
+    return Math.max(...fresh);
+  } catch { return null; }
+}
+
+// The next milestone above the current streak (for progress UI), or null if past the top.
+export function nextStreakMilestone(streakDays: number): number | null {
+  return STREAK_MILESTONES.find(m => m > streakDays) ?? null;
+}
+
 export interface DayData {
   date: string;
   label: string;
