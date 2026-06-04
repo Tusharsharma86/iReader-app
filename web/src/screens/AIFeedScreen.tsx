@@ -18,9 +18,9 @@ const TOPIC_QUEUE = [
   'business',
 ];
 const DEEPDIVE_API = 'https://ireader.onrender.com/api/news/deepdive';
-const CACHE_PREFIX = '@deepdive_v3_'; // v3 — drop degraded fallbacks cached during the Groq outage
+const CACHE_PREFIX = '@deepdive_v4_'; // v4 — bust franken-cluster Deep Dives from the merge bug
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const FEED_LIST_CACHE = '@aifeed_list_v2';
+const FEED_LIST_CACHE = '@aifeed_list_v3'; // v3 — collection flag now flows through dedupeFeed
 const VIOLET = '#b994ff';
 const GOLD   = '#FFC542';
 
@@ -44,6 +44,7 @@ interface FeedItem {
   primary: Story;
   allStories: Story[];
   sources: { name: string; url: string }[];
+  collection?: boolean; // server theme collection (browse rail), NOT a same-event cluster
 }
 
 function readCache(id: string): DeepDiveData | null {
@@ -82,7 +83,7 @@ function timeAgo(iso: string): string {
   } catch { return ''; }
 }
 
-interface ApiItem { type?: string; articles?: Story[]; topicTitle?: string; }
+interface ApiItem { type?: string; articles?: Story[]; topicTitle?: string; collection?: boolean; }
 
 // Each cluster from server = one feed item. Singletons also become items.
 // Then a second-pass headline similarity dedupes the singletons that share
@@ -102,15 +103,18 @@ function isExcluded(s?: { headline?: string; summary?: string; sources?: { name?
 
 function dedupeFeed(items: ApiItem[]): FeedItem[] {
   const initial: FeedItem[] = items
-    .map(it => {
+    .map((it): FeedItem | null => {
       if (it.type === 'cluster' && Array.isArray(it.articles) && it.articles.length > 0) {
         const primary = it.articles[0];
         const sources = dedupeSources(it.articles.flatMap(a => a.sources ?? []));
-        return { primary, allStories: it.articles, sources };
+        // Carry through the server `collection` flag — theme rails (Chips,
+        // Apple, AI Agents) MUST stay separable from same-event clusters so
+        // they don't get merged into franken-clusters with unrelated stories.
+        return { primary, allStories: it.articles, sources, collection: Boolean(it.collection) };
       }
       const s = it as unknown as Story;
       if (!s.headline) return null;
-      return { primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []) };
+      return { primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []), collection: false };
     })
     .filter((x): x is FeedItem => !!x);
   return mergeSimilar(initial);
@@ -124,12 +128,18 @@ function mergeSimilar(initial: FeedItem[]): FeedItem[] {
   for (const it of initial) {
     const sig = headlineSignature(it.primary.headline);
     let merged = false;
-    for (const existing of out) {
-      if (jaccard(sig, headlineSignature(existing.primary.headline)) >= 0.6) {
-        existing.allStories.push(...it.allStories.filter(s => !existing.allStories.some(e => e.id === s.id)));
-        existing.sources = dedupeSources([...existing.sources, ...it.sources]);
-        merged = true;
-        break;
+    // Theme collections are a DIFFERENT type of grouping (different stories on
+    // a shared topic) — they must never be merged with anything else, or Deep
+    // Dive synthesizes a single narrative from unrelated articles.
+    if (!it.collection) {
+      for (const existing of out) {
+        if (existing.collection) continue;
+        if (jaccard(sig, headlineSignature(existing.primary.headline)) >= 0.6) {
+          existing.allStories.push(...it.allStories.filter(s => !existing.allStories.some(e => e.id === s.id)));
+          existing.sources = dedupeSources([...existing.sources, ...it.sources]);
+          merged = true;
+          break;
+        }
       }
     }
     if (!merged) out.push(it);
@@ -767,13 +777,19 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
         // eslint-disable-next-line no-console
         console.log('[AIFeed] deepdive →', story.headline.slice(0, 60), `(${item.allStories.length} source${item.allStories.length === 1 ? '' : 's'})`);
         // Combine context from all clustered stories — richer prompt
-        const paragraphs = [
-          story.headline + '. ' + (story.summary ?? story.headline),
-          ...item.allStories
-            .slice(1, 12)
-            .filter(s => s.summary && s.summary !== story.summary)
-            .map(s => `[${s.sources?.[0]?.name ?? 'Source'}]: ${s.summary}`),
-        ];
+        // For theme collections (browse rails of DIFFERENT stories on a topic),
+        // treat as a single-article deep dive — never synthesize unrelated
+        // articles into one narrative. Only event clusters (multiple outlets on
+        // the SAME story) feed all sources to the synthesis.
+        const paragraphs = item.collection
+          ? [story.headline + '. ' + (story.summary ?? story.headline)]
+          : [
+              story.headline + '. ' + (story.summary ?? story.headline),
+              ...item.allStories
+                .slice(1, 12)
+                .filter(s => s.summary && s.summary !== story.summary)
+                .map(s => `[${s.sources?.[0]?.name ?? 'Source'}]: ${s.summary}`),
+            ];
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 95000);
         let dd: Response;
@@ -785,8 +801,11 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
               url: story.sources?.[0]?.url ?? '',
               headline: story.headline,
               paragraphs,
-              // All distinct source URLs so the backend reads every article in full.
-              sourceUrls: (item.sources ?? []).map(s => s.url).filter(Boolean),
+              // For event clusters: read every source in full. For theme collections:
+              // only the lead article (others are different stories on the same topic).
+              sourceUrls: item.collection
+                ? [story.sources?.[0]?.url].filter(Boolean) as string[]
+                : (item.sources ?? []).map(s => s.url).filter(Boolean),
             }),
             signal: ctrl.signal,
           });
