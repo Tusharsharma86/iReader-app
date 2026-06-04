@@ -1278,27 +1278,32 @@ const TopicSection = React.memo(function TopicSection({
             disabled={count < 3}
             onPress={count >= 3 ? () => navigation.navigate('StoryTimeline', { clusterId: cluster.id, headline, stories: JSON.stringify(cluster.stories) }) : undefined}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, flexWrap: 'wrap', flex: 1 }}>
-                {count >= 3 && (
-                  <Ionicons name="time-outline" size={14} color="#3A3A3A" />
-                )}
-                <Text style={[styles.clusterHeadline, { flexShrink: 1 }]} numberOfLines={3}>{headline}</Text>
-                {isBreaking && <Text style={styles.breakingText}>BREAKING</Text>}
-                {cluster.collection && (
-                  <Text style={{ color: '#b994ff', fontSize: 9, fontWeight: '800', letterSpacing: 1, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, overflow: 'hidden', backgroundColor: 'rgba(185,148,255,0.12)' }}>TREND</Text>
-                )}
-              </View>
-              <View style={[styles.clusterCountPill, { marginTop: 2 }]}>
+            {/* Headline row: icon aligned to first line · title (2-line clamp) · stories pill */}
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+              {count >= 3 && (
+                <Ionicons name="time-outline" size={14} color="#3A3A3A" style={{ marginTop: 4 }} />
+              )}
+              <Text style={[styles.clusterHeadline, { flex: 1 }]} numberOfLines={2}>{headline}</Text>
+              <View style={[styles.clusterCountPill, { marginTop: 1 }]}>
                 <Text style={styles.clusterCountPillText}>{count} stories</Text>
               </View>
             </View>
           </TouchableOpacity>
 
-          {/* AI summary of all clustered stories — ~25 words */}
+          {/* Tags row — separate line so BREAKING/TREND never wrap into the headline */}
+          {(isBreaking || cluster.collection) && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
+              {isBreaking && <Text style={styles.breakingText}>BREAKING</Text>}
+              {cluster.collection && (
+                <Text style={{ color: '#b994ff', fontSize: 9, fontWeight: '800', letterSpacing: 1, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, overflow: 'hidden', backgroundColor: 'rgba(185,148,255,0.12)' }}>TREND</Text>
+              )}
+            </View>
+          )}
+
+          {/* AI summary of all clustered stories — ~20 words */}
           {!!summary && (
-            <Text style={styles.clusterSummary} numberOfLines={2}>
-              {summary.split(/\s+/).slice(0, 25).join(' ')}{summary.split(/\s+/).length > 25 ? '…' : ''}
+            <Text style={[styles.clusterSummary, { marginTop: 6 }]} numberOfLines={2}>
+              {summary.split(/\s+/).slice(0, 20).join(' ')}{summary.split(/\s+/).length > 20 ? '…' : ''}
             </Text>
           )}
 
@@ -1425,7 +1430,7 @@ const styles = StyleSheet.create({
   clusterCountPillText: { color: 'rgba(255,255,255,0.35)', fontSize: 11, fontWeight: '600', letterSpacing: 0.4 },
   diversityBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99, backgroundColor: 'rgba(100,180,100,0.12)', borderWidth: 1, borderColor: 'rgba(100,200,100,0.2)' },
   diversityText: { color: 'rgba(100,200,100,0.8)', fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
-  clusterHeadline: { color: '#FFFFFF', fontSize: 18, fontWeight: '700', lineHeight: 25, letterSpacing: -0.2, marginBottom: 6 },
+  clusterHeadline: { color: '#FFFFFF', fontSize: 18, fontWeight: '700', lineHeight: 24, letterSpacing: -0.2 },
   clusterSummary: { color: '#666', fontSize: 13, fontWeight: '400', lineHeight: 18, marginTop: 3 },
   clusterCountBox: { alignItems: 'center', minWidth: 48 },
   clusterCountNum: { color: '#FFFFFF', fontSize: 24, fontWeight: '800', lineHeight: 28 },
