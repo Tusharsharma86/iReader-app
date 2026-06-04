@@ -55,6 +55,7 @@ interface StoryCluster {
   subtitle: string;
   stories: Story[];
   isBreaking: boolean;
+  collection?: boolean; // theme collection (different stories, same subject) vs same-event cluster
   biasBreakdown?: { left: number; center: number; right: number; unknown: number; diversity: boolean };
 }
 
@@ -121,6 +122,13 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
             {isBreaking && (
               <span style={{ color: '#FF3B30', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>BREAKING</span>
             )}
+            {cluster.collection && (
+              <span style={{
+                color: '#b994ff', fontSize: 9, fontWeight: 800, letterSpacing: 1,
+                padding: '2px 7px', borderRadius: 999,
+                background: 'rgba(185,148,255,0.12)', border: '1px solid rgba(185,148,255,0.28)',
+              }}>TREND</span>
+            )}
           </div>
           <span style={{
             color: '#888', fontSize: 10, fontWeight: 700, letterSpacing: 0.6,
@@ -184,7 +192,7 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
 // ── Main Feed Screen ───────────────────────────────────────────────────────────
 // Server feed item types (from /api/news/feed?topic=X)
 type ServerFeedItem =
-  | { type: 'cluster'; topicTitle: string; topicSummary: string; articles: Story[] }
+  | { type: 'cluster'; topicTitle: string; topicSummary: string; articles: Story[]; collection?: boolean }
   | (Story & { type: 'article' });
 
 // Module-level cache — survives FeedScreen unmount/remount (navigation)
@@ -200,7 +208,7 @@ function parseServerFeed(raw: unknown[]): ServerFeedItem[] {
       const articles = Array.isArray(item.articles)
         ? (item.articles as Array<Record<string, unknown>>).map(normalizeStory)
         : [];
-      return { type: 'cluster' as const, topicTitle: String(item.topicTitle ?? ''), topicSummary: String(item.topicSummary ?? ''), articles };
+      return { type: 'cluster' as const, topicTitle: String(item.topicTitle ?? ''), topicSummary: String(item.topicSummary ?? ''), articles, collection: Boolean(item.collection) };
     }
     return { ...normalizeStory(item), type: 'article' as const };
   });
@@ -218,8 +226,9 @@ function serverItemToCluster(item: ServerFeedItem): StoryCluster | null {
       topicLabel: item.topicTitle,
       subtitle: item.topicSummary || (item.articles[0].summary ?? ''),
       stories: item.articles,
-      isBreaking: item.articles.some(storyIsBreaking),
-      biasBreakdown: (item.articles[0] as any).biasBreakdown,
+      isBreaking: !item.collection && item.articles.some(storyIsBreaking),
+      collection: item.collection,
+      biasBreakdown: item.collection ? undefined : (item.articles[0] as any).biasBreakdown,
     };
   }
   return {
