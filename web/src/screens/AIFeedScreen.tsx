@@ -20,7 +20,7 @@ const TOPIC_QUEUE = [
 const DEEPDIVE_API = 'https://ireader.onrender.com/api/news/deepdive';
 const CACHE_PREFIX = '@deepdive_v4_'; // v4 — bust franken-cluster Deep Dives from the merge bug
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const FEED_LIST_CACHE = '@aifeed_list_v3'; // v3 — collection flag now flows through dedupeFeed
+const FEED_LIST_CACHE = '@aifeed_list_v4'; // v4 — theme collections filtered out of AI Feed entirely
 const VIOLET = '#b994ff';
 const GOLD   = '#FFC542';
 
@@ -233,6 +233,11 @@ export default function AIFeedScreen() {
       const raw = await r.json();
       const rawItems: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
       const incoming = dedupeFeed(rawItems)
+        // Theme collections (browse rails of DIFFERENT stories on a topic) don't
+        // fit the AI Feed's "one story per swipe + N sources + deep dive" model
+        // — they cause the wrong-article Deep Dive bug. Exclude them here; they
+        // still appear in the main feed where the carousel UI makes sense.
+        .filter(it => !it.collection)
         .filter(it => it.primary.headline && it.primary.publishedAt)
         .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded));
 
@@ -281,6 +286,7 @@ export default function AIFeedScreen() {
         // plus plenty of singles — and keeps the O(n²) merge cheap on the client.
         const ri = (arr as ApiItem[]).slice(0, 300);
         return dedupeFeed(ri)
+          .filter(it => !it.collection) // theme collections don't belong in the AI Feed
           .filter(it => it.primary.headline && it.primary.publishedAt)
           .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded));
       };
