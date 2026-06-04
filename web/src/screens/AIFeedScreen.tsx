@@ -20,7 +20,7 @@ const TOPIC_QUEUE = [
 const DEEPDIVE_API = 'https://ireader.onrender.com/api/news/deepdive';
 const CACHE_PREFIX = '@deepdive_v4_'; // v4 — bust franken-cluster Deep Dives from the merge bug
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const FEED_LIST_CACHE = '@aifeed_list_v4'; // v4 — theme collections filtered out of AI Feed entirely
+const FEED_LIST_CACHE = '@aifeed_list_v5'; // v5 — server-trust rewrite, no client-side clustering
 const VIOLET = '#b994ff';
 const GOLD   = '#FFC542';
 
@@ -85,9 +85,6 @@ function timeAgo(iso: string): string {
 
 interface ApiItem { type?: string; articles?: Story[]; topicTitle?: string; collection?: boolean; }
 
-// Each cluster from server = one feed item. Singletons also become items.
-// Then a second-pass headline similarity dedupes the singletons that share
-// most of their content with another item (server cluster missed them).
 // Drop Hindi/Devanagari headlines and mobile-phone discount/deal stories.
 const PHONE_RE = /\b(phone|smartphone|mobile|iphone|android|samsung|xiaomi|redmi|oneplus|oppo|vivo|realme|motorola|moto|nokia|pixel|infinix|tecno|poco|nothing phone)\b/i;
 const DEAL_RE = /\b(discount|deal|deals|offer|offers|sale|price drop|price cut|cashback|emi|exchange offer|bank offer|coupon|lowest price|best price|under ₹|under rs\.?|under inr|% off|percent off|flat \d+|flipkart|amazon (sale|prime day|great)|big billion)\b/i;
@@ -101,58 +98,25 @@ function isExcluded(s?: { headline?: string; summary?: string; sources?: { name?
   return false;
 }
 
-function dedupeFeed(items: ApiItem[]): FeedItem[] {
-  const initial: FeedItem[] = items
-    .map((it): FeedItem | null => {
-      if (it.type === 'cluster' && Array.isArray(it.articles) && it.articles.length > 0) {
-        const primary = it.articles[0];
-        const sources = dedupeSources(it.articles.flatMap(a => a.sources ?? []));
-        // Carry through the server `collection` flag — theme rails (Chips,
-        // Apple, AI Agents) MUST stay separable from same-event clusters so
-        // they don't get merged into franken-clusters with unrelated stories.
-        return { primary, allStories: it.articles, sources, collection: Boolean(it.collection) };
-      }
-      const s = it as unknown as Story;
-      if (!s.headline) return null;
-      return { primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []), collection: false };
-    })
-    .filter((x): x is FeedItem => !!x);
-  return mergeSimilar(initial);
-}
-
-// Combine feed items whose primary headlines share ≥60% tokens — merges their
-// stories + sources. Promotes near-duplicate singletons the server cluster missed
-// into multi-source items. Used per-topic AND across topics (cluster-forward feed).
-function mergeSimilar(initial: FeedItem[]): FeedItem[] {
+// Trust the server — same clustering logic as the main feed. A server cluster
+// (multiple outlets on one event) becomes one card with its articles intact.
+// A singleton article becomes one card. NO client-side merging, no headline-
+// similarity dedupe, no cross-topic gather — those have caused every clustering
+// bug in this feed. Theme collections (browse rails) are filtered out at the
+// load site because the AI Feed UI doesn't fit them; they live on the main feed.
+function parseServerFeed(items: ApiItem[]): FeedItem[] {
   const out: FeedItem[] = [];
-  for (const it of initial) {
-    const sig = headlineSignature(it.primary.headline);
-    let merged = false;
-    // Theme collections are a DIFFERENT type of grouping (different stories on
-    // a shared topic) — they must never be merged with anything else, or Deep
-    // Dive synthesizes a single narrative from unrelated articles.
-    if (!it.collection) {
-      for (const existing of out) {
-        if (existing.collection) continue;
-        if (jaccard(sig, headlineSignature(existing.primary.headline)) >= 0.6) {
-          existing.allStories.push(...it.allStories.filter(s => !existing.allStories.some(e => e.id === s.id)));
-          existing.sources = dedupeSources([...existing.sources, ...it.sources]);
-          merged = true;
-          break;
-        }
-      }
+  for (const it of items) {
+    if (it.type === 'cluster' && Array.isArray(it.articles) && it.articles.length > 0) {
+      const primary = it.articles[0];
+      const sources = dedupeSources(it.articles.flatMap(a => a.sources ?? []));
+      out.push({ primary, allStories: it.articles, sources, collection: Boolean(it.collection) });
+    } else {
+      const s = it as unknown as Story;
+      if (s.headline) out.push({ primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []), collection: false });
     }
-    if (!merged) out.push(it);
   }
   return out;
-}
-
-// Lead the feed with multi-source clusters (richest first), then single-source cards.
-function clusterForward(items: FeedItem[]): FeedItem[] {
-  const clusters = items.filter(it => it.allStories.length >= 2)
-    .sort((a, b) => b.sources.length - a.sources.length);
-  const singles = items.filter(it => it.allStories.length < 2);
-  return [...clusters, ...singles];
 }
 
 function dedupeSources(arr: { name: string; url: string }[]): { name: string; url: string }[] {
@@ -165,29 +129,6 @@ function dedupeSources(arr: { name: string; url: string }[]): { name: string; ur
     out.push({ name: s.name, url: s.url });
   }
   return out;
-}
-
-const STOPWORDS = new Set([
-  'the','a','an','is','are','was','were','be','been','to','for','of','and','or',
-  'in','on','at','by','from','with','as','it','its','this','that','these','those',
-  'has','have','had','will','says','said','after','before','over','says','new',
-]);
-
-function headlineSignature(h: string): Set<string> {
-  return new Set(
-    (h ?? '').toLowerCase()
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .split(/\s+/)
-      .filter(w => w.length > 3 && !STOPWORDS.has(w)),
-  );
-}
-
-function jaccard(a: Set<string>, b: Set<string>): number {
-  if (a.size === 0 || b.size === 0) return 0;
-  let inter = 0;
-  for (const x of a) if (b.has(x)) inter++;
-  const union = a.size + b.size - inter;
-  return union > 0 ? inter / union : 0;
 }
 
 export default function AIFeedScreen() {
@@ -223,7 +164,10 @@ export default function AIFeedScreen() {
   const itemsRef = useRef<FeedItem[]>([]);
   itemsRef.current = items;
 
-  // Fetch one topic, dedupe against current items, append.
+  // Load one topic — same as main feed: trust the server's clusters as-is,
+  // dedupe only by article ID (so the same article doesn't appear twice on
+  // load-more), drop theme collections (browse rails don't fit the AI Feed UX).
+  // No client-side merging. No cross-topic gather. No fuzzy headline dedupe.
   const loadTopic = useCallback(async (topicIdx: number, isInitial: boolean) => {
     const topic = TOPIC_QUEUE[topicIdx % TOPIC_QUEUE.length];
     if (isInitial) setLoading(true); else setLoadingMore(true);
@@ -232,32 +176,17 @@ export default function AIFeedScreen() {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const raw = await r.json();
       const rawItems: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
-      const incoming = dedupeFeed(rawItems)
-        // Theme collections (browse rails of DIFFERENT stories on a topic) don't
-        // fit the AI Feed's "one story per swipe + N sources + deep dive" model
-        // — they cause the wrong-article Deep Dive bug. Exclude them here; they
-        // still appear in the main feed where the carousel UI makes sense.
-        .filter(it => !it.collection)
+      const incoming = parseServerFeed(rawItems)
+        .filter(it => !it.collection) // theme collections live on the main feed only
         .filter(it => it.primary.headline && it.primary.publishedAt)
         .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded));
 
-      // Dedupe against what we already have
       const existingIds = new Set(itemsRef.current.map(it => it.primary.id));
-      const existingSigs = itemsRef.current.map(it => headlineSignature(it.primary.headline));
-      const newOnes = incoming.filter(it => {
-        if (existingIds.has(it.primary.id)) return false;
-        const sig = headlineSignature(it.primary.headline);
-        return !existingSigs.some(es => jaccard(sig, es) >= 0.6);
-      });
-
-      if (newOnes.length === 0 && !isInitial) {
-        // User picked a specific topic — don't auto-cycle into others.
-        setExhausted(true);
-        return;
-      }
+      const newOnes = incoming.filter(it => !existingIds.has(it.primary.id));
+      if (newOnes.length === 0 && !isInitial) { setExhausted(true); return; }
 
       setItems(prev => {
-        const next = isInitial ? clusterForward(newOnes) : [...prev, ...newOnes];
+        const next = isInitial ? newOnes : [...prev, ...newOnes];
         if (isInitial) { try { localStorage.setItem(FEED_LIST_CACHE, JSON.stringify({ items: next, at: Date.now() })); } catch {} }
         return next;
       });
@@ -268,55 +197,6 @@ export default function AIFeedScreen() {
       if (isInitial) setLoading(false); else setLoadingMore(false);
     }
   }, []);
-
-  // Cluster-forward loader — gathers multi-source clusters from ALL topics and
-  // leads with them (richest first), then fills with breaking single-source cards.
-  // This is the default AI-feed experience so clustered stories surface first.
-  //   mode 'initial' → shows skeleton · 'refresh' → pull spinner · 'silent' → no UI
-  const loadClusterForward = useCallback(async (mode: 'initial' | 'refresh' | 'silent') => {
-    if (mode === 'initial') setLoading(true);
-    else if (mode === 'refresh') setRefreshing(true);
-    try {
-      const fetchTopic = (t: string) =>
-        fetch(`${FEED_API_BASE}?topic=${t}`).then(r => (r.ok ? r.json() : null)).catch(() => null);
-      const raws = await Promise.all(TOPIC_QUEUE.map(fetchTopic));
-      const toItems = (raw: unknown): FeedItem[] => {
-        const arr = Array.isArray(raw) ? raw : Array.isArray((raw as { feed?: unknown[] })?.feed) ? (raw as { feed: unknown[] }).feed : [];
-        // Clusters always sit at the top of the server feed, so 300 keeps them all
-        // plus plenty of singles — and keeps the O(n²) merge cheap on the client.
-        const ri = (arr as ApiItem[]).slice(0, 300);
-        return dedupeFeed(ri)
-          .filter(it => !it.collection) // theme collections don't belong in the AI Feed
-          .filter(it => it.primary.headline && it.primary.publishedAt)
-          .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded));
-      };
-      const perTopic = raws.map(raw => (raw ? toItems(raw) : []));
-      const breakingItems = perTopic[0] ?? [];
-      const clusterPool: FeedItem[] = [];
-      for (const its of perTopic) {
-        for (const it of its) if (it.allStories.length >= 2) clusterPool.push(it);
-      }
-      const clusters = mergeSimilar(clusterPool).sort((a, b) => b.sources.length - a.sources.length);
-      const clusterSigs = clusters.map(c => headlineSignature(c.primary.headline));
-      const singles = breakingItems
-        .filter(it => it.allStories.length < 2)
-        .filter(it => !clusterSigs.some(cs => jaccard(cs, headlineSignature(it.primary.headline)) >= 0.6))
-        .slice(0, 150);
-      const next = [...clusters, ...singles];
-      if (next.length > 0) {
-        setItems(next);
-        setError(null);
-        try { localStorage.setItem(FEED_LIST_CACHE, JSON.stringify({ items: next, at: Date.now() })); } catch {}
-      } else if (mode === 'initial') {
-        await loadTopic(0, true); // fall back to single-topic load if the gather came up empty
-      }
-    } catch (e) {
-      if (mode === 'initial') setError(String(e));
-    } finally {
-      if (mode === 'initial') setLoading(false);
-      else if (mode === 'refresh') setRefreshing(false);
-    }
-  }, [loadTopic]);
 
   useEffect(() => {
     // Pre-warm Render
@@ -330,13 +210,13 @@ export default function AIFeedScreen() {
         if (Array.isArray(c.items) && c.items.length > 0) {
           setItems(c.items);
           setLoading(false);
-          if (Date.now() - c.at > 10 * 60_000) setTimeout(() => loadClusterForward('silent'), 300);
+          if (Date.now() - c.at > 10 * 60_000) setTimeout(() => loadTopic(0, false), 300);
           return;
         }
       }
     } catch {}
-    loadClusterForward('initial');
-  }, [loadClusterForward]);
+    loadTopic(0, true);
+  }, [loadTopic]);
 
   // ── Pull-to-refresh ─────────────────────────────────────────────────────
   const PULL_THRESHOLD = 80;
@@ -371,18 +251,14 @@ export default function AIFeedScreen() {
     pullStartY.current = null;
     if (triggered) {
       setExhausted(false);
-      if (activeTopic === TOPIC_QUEUE[0]) {
-        setTopicCursor(0);
-        await loadClusterForward('refresh'); // default view: re-gather cross-topic clusters
-      } else {
-        setRefreshing(true);
-        setItems([]);
-        await loadTopic(TOPIC_QUEUE.indexOf(activeTopic), true);
-        setRefreshing(false);
-      }
+      setRefreshing(true);
+      setItems([]);
+      const idx = Math.max(0, TOPIC_QUEUE.indexOf(activeTopic));
+      await loadTopic(idx, true);
+      setRefreshing(false);
     }
     setPull(0);
-  }, [pull, loadTopic, loadClusterForward, activeTopic]);
+  }, [pull, loadTopic, activeTopic]);
 
   // Tab-bar visibility runs every frame (cheap — stable callback, no rerenders).
   // Infinite-scroll bottom check throttled to 200ms.
@@ -424,8 +300,7 @@ export default function AIFeedScreen() {
             const idx = TOPIC_QUEUE.indexOf(t) >= 0 ? TOPIC_QUEUE.indexOf(t) : 0;
             setTopicCursor(idx);
             setExhausted(false);
-            if (t === TOPIC_QUEUE[0]) loadClusterForward('initial'); // default view leads with clusters across all topics
-            else loadTopic(idx, true);
+            loadTopic(idx, true);
           }}
         />
       </div>
