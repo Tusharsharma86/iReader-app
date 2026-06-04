@@ -108,7 +108,7 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
     <div style={{ marginBottom: 28 }}>
       {/* Topic label */}
       <div style={{ paddingLeft: sideMargin, paddingRight: sideMargin, marginBottom: 12 }}>
-        {/* Headline row: icon aligned to first line · title (2-line clamp) · stories pill */}
+        {/* Headline row: icon · TREND/BREAKING pill (inline, leads the title) · title · stories pill */}
         <div
           onClick={canTimeline ? openTimeline : undefined}
           style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: canTimeline ? 'pointer' : 'default', WebkitTapHighlightColor: 'transparent' }}
@@ -116,11 +116,30 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
           {canTimeline && (
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3A3A3A" strokeWidth="2" style={{ flexShrink: 0, marginTop: 5 }}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           )}
-          <div style={{
-            flex: 1, color: '#fff', fontSize: 18, fontWeight: 800, letterSpacing: -0.3, lineHeight: 1.25,
-            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-          }}>
-            {cluster.topicLabel}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <span style={{
+              color: '#fff', fontSize: 18, fontWeight: 800, letterSpacing: -0.3, lineHeight: 1.25,
+            }}>
+              {cluster.collection && (
+                <span style={{
+                  display: 'inline-block', verticalAlign: 'middle',
+                  color: '#b994ff', fontSize: 9, fontWeight: 800, letterSpacing: 1,
+                  padding: '2px 7px', borderRadius: 999,
+                  background: 'rgba(185,148,255,0.12)', border: '1px solid rgba(185,148,255,0.28)',
+                  marginRight: 8, position: 'relative', top: -2,
+                }}>TREND</span>
+              )}
+              {isBreaking && (
+                <span style={{
+                  display: 'inline-block', verticalAlign: 'middle',
+                  color: '#FF3B30', fontSize: 9, fontWeight: 800, letterSpacing: 1,
+                  padding: '2px 7px', borderRadius: 999,
+                  background: 'rgba(255,59,48,0.12)', border: '1px solid rgba(255,59,48,0.3)',
+                  marginRight: 8, position: 'relative', top: -2,
+                }}>BREAKING</span>
+              )}
+              {cluster.topicLabel}
+            </span>
           </div>
           <span style={{
             flexShrink: 0,
@@ -132,22 +151,7 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
           }}>
             {cluster.stories.length} stories
           </span>
-        </div>
-        {/* Tags row — separate line so BREAKING/TREND never wrap into the headline */}
-        {(isBreaking || cluster.collection) && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-            {isBreaking && (
-              <span style={{ color: '#FF3B30', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>BREAKING</span>
-            )}
-            {cluster.collection && (
-              <span style={{
-                color: '#b994ff', fontSize: 9, fontWeight: 800, letterSpacing: 1,
-                padding: '2px 7px', borderRadius: 999,
-                background: 'rgba(185,148,255,0.12)', border: '1px solid rgba(185,148,255,0.28)',
-              }}>TREND</span>
-            )}
-          </div>
-        )}
+        </div>{/*  */}
         {cluster.subtitle && (
           <div style={{ color: '#8a8a8a', fontSize: 13, lineHeight: 1.45, marginTop: 6, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
             {cluster.subtitle.split(/\s+/).slice(0, 20).join(' ')}{cluster.subtitle.split(/\s+/).length > 20 ? '…' : ''}

@@ -1278,27 +1278,27 @@ const TopicSection = React.memo(function TopicSection({
             disabled={count < 3}
             onPress={count >= 3 ? () => navigation.navigate('StoryTimeline', { clusterId: cluster.id, headline, stories: JSON.stringify(cluster.stories) }) : undefined}
           >
-            {/* Headline row: icon aligned to first line · title (2-line clamp) · stories pill */}
+            {/* Headline row: icon · TREND/BREAKING pill (inline) · title · stories pill */}
             <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
               {count >= 3 && (
                 <Ionicons name="time-outline" size={14} color="#3A3A3A" style={{ marginTop: 4 }} />
               )}
-              <Text style={[styles.clusterHeadline, { flex: 1 }]} numberOfLines={2}>{headline}</Text>
+              <Text style={[styles.clusterHeadline, { flex: 1 }]} numberOfLines={2}>
+                {cluster.collection && (
+                  <Text style={{ color: '#b994ff', fontSize: 9, fontWeight: '800', letterSpacing: 1, backgroundColor: 'rgba(185,148,255,0.12)' }}>{' TREND '}</Text>
+                )}
+                {cluster.collection && <Text>{'  '}</Text>}
+                {isBreaking && (
+                  <Text style={{ color: '#FF3B30', fontSize: 9, fontWeight: '800', letterSpacing: 1, backgroundColor: 'rgba(255,59,48,0.12)' }}>{' BREAKING '}</Text>
+                )}
+                {isBreaking && <Text>{'  '}</Text>}
+                {headline}
+              </Text>
               <View style={[styles.clusterCountPill, { marginTop: 1 }]}>
                 <Text style={styles.clusterCountPillText}>{count} stories</Text>
               </View>
             </View>
           </TouchableOpacity>
-
-          {/* Tags row — separate line so BREAKING/TREND never wrap into the headline */}
-          {(isBreaking || cluster.collection) && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
-              {isBreaking && <Text style={styles.breakingText}>BREAKING</Text>}
-              {cluster.collection && (
-                <Text style={{ color: '#b994ff', fontSize: 9, fontWeight: '800', letterSpacing: 1, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, overflow: 'hidden', backgroundColor: 'rgba(185,148,255,0.12)' }}>TREND</Text>
-              )}
-            </View>
-          )}
 
           {/* AI summary of all clustered stories — ~20 words */}
           {!!summary && (
