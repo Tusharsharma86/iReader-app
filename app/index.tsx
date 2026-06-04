@@ -199,7 +199,7 @@ function extractKeywords(stories: Story[]): string[] {
 // ── Feed types ─────────────────────────────────────────────────────────────────
 // Shape returned by the server's /api/news/feed endpoint.
 type ApiFeedItem =
-  | { type: 'cluster'; topicTitle: string; topicSummary: string; articles: Story[]; _category?: string }
+  | { type: 'cluster'; topicTitle: string; topicSummary: string; articles: Story[]; _category?: string; collection?: boolean }
   | (Story & { type: 'article'; _category?: string });
 
 function normalizeStory(a: Record<string, unknown>): Story {
@@ -212,7 +212,7 @@ function normalizeFeedItems(raw: unknown[]): ApiFeedItem[] {
       const articles = Array.isArray(item.articles)
         ? (item.articles as Array<Record<string, unknown>>).map(normalizeStory)
         : [];
-      return { type: 'cluster', topicTitle: String(item.topicTitle ?? ''), topicSummary: String(item.topicSummary ?? ''), articles } as ApiFeedItem;
+      return { type: 'cluster', topicTitle: String(item.topicTitle ?? ''), topicSummary: String(item.topicSummary ?? ''), articles, collection: Boolean(item.collection) } as ApiFeedItem;
     }
     return { ...normalizeStory(item), type: 'article' } as ApiFeedItem;
   });
@@ -228,6 +228,7 @@ interface Cluster {
   publishedAt: string;
   stories: Story[];
   isBreaking?: boolean;
+  collection?: boolean;
   _category?: string;
   biasBreakdown?: BiasBreakdown;
 }
@@ -357,9 +358,10 @@ function feedToClusterGroups(feed: ApiFeedItem[]): Cluster[] {
         imageUrl: rep.imageUrl ?? '',
         publishedAt: rep.publishedAt,
         stories: item.articles,
-        isBreaking: item.articles.some(s => s.isBreaking || (Date.now() - new Date(s.publishedAt).getTime()) < 60 * 60 * 1000),
+        isBreaking: !item.collection && item.articles.some(s => s.isBreaking || (Date.now() - new Date(s.publishedAt).getTime()) < 60 * 60 * 1000),
+        collection: item.collection,
         _category: item._category,
-        biasBreakdown: (rep as any).biasBreakdown,
+        biasBreakdown: item.collection ? undefined : (rep as any).biasBreakdown,
       }];
     }
     return [{
@@ -1283,6 +1285,9 @@ const TopicSection = React.memo(function TopicSection({
                 )}
                 <Text style={[styles.clusterHeadline, { flexShrink: 1 }]} numberOfLines={3}>{headline}</Text>
                 {isBreaking && <Text style={styles.breakingText}>BREAKING</Text>}
+                {cluster.collection && (
+                  <Text style={{ color: '#b994ff', fontSize: 9, fontWeight: '800', letterSpacing: 1, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, overflow: 'hidden', backgroundColor: 'rgba(185,148,255,0.12)' }}>TREND</Text>
+                )}
               </View>
               <View style={[styles.clusterCountPill, { marginTop: 2 }]}>
                 <Text style={styles.clusterCountPillText}>{count} stories</Text>
