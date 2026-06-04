@@ -194,21 +194,9 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
           {story.headline}
         </div>
 
-        {/* Reading meta */}
-        {(() => {
-          const text = story.summary ?? story.headline ?? '';
-          const mins = story.readingTimeMinutes ?? clientReadingTime(text);
-          const diff = story.difficulty ?? clientDifficulty(text);
-          const color = DIFFICULTY_COLORS[diff] ?? '#FF9500';
-          return (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 5, marginBottom: compact ? 0 : 4 }}>
-              <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11, fontWeight: 500 }}>{mins} min</span>
-              <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 11 }}>·</span>
-              <div style={{ width: 5, height: 5, borderRadius: 3, background: color, flexShrink: 0 }} />
-              <span style={{ color, fontSize: 11, fontWeight: 500 }}>{diff}</span>
-            </div>
-          );
-        })()}
+        {/* Reading-time + difficulty REMOVED from card. The card-level estimate (computed
+            from the summary alone) disagreed with the article-screen estimate (computed
+            from the full body) — confusing the reader. Article screen still shows it. */}
 
         {/* Summary (non-compact) — prefer the 25-word AI summary when present */}
         {!compact && (story.aiSummary || story.summary) && (

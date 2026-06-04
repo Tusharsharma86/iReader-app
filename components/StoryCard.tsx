@@ -277,14 +277,8 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight:
 
         <HeadlineWithEntities text={story.headline} accentColor={accent} />
 
-        {(() => {
-          const text = story.summary ?? story.headline ?? '';
-          const mins = story.readingTimeMinutes ?? clientReadingTime(text);
-          const diff = story.difficulty ?? clientDifficulty(text);
-          return (
-            <Text style={styles.cardReadingMeta}>{mins} min  ·  {diff}</Text>
-          );
-        })()}
+        {/* Reading-time + difficulty REMOVED — card estimate (from summary) disagreed
+            with article-screen estimate (from full body). Article screen still shows it. */}
 
         {!compact && (
           <Text style={styles.summary} numberOfLines={2}>{story.aiSummary || story.summary}</Text>
