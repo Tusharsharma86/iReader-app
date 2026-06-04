@@ -147,11 +147,6 @@ function greeting(): string {
   return 'Good Evening';
 }
 
-function formattedDate(): string {
-  return new Date().toLocaleDateString('en-US', {
-    weekday: 'long', month: 'long', day: 'numeric',
-  });
-}
 
 const DEVANAGARI_RE = /[ऀ-ॿ]/;
 // Always-blocked: deals, promo codes, phone prices
@@ -898,7 +893,6 @@ export default function FeedScreen() {
           <Image source={require('../assets/header-logo.png')} style={styles.appIcon} contentFit="contain" />
           <View>
             <Text style={styles.greeting}>{greeting()}</Text>
-            <Text style={styles.date}>{formattedDate()}</Text>
           </View>
           {streak > 0 && (
             <View style={styles.streakChip}>
