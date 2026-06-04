@@ -475,11 +475,11 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={active ? 'tab-active-pill' : undefined}
               style={{
-                flex: 1, padding: '9px 0', borderRadius: 999, border: 'none', cursor: 'pointer',
+                flex: 1, padding: '8px 0', borderRadius: 999, border: 'none', cursor: 'pointer',
                 background: active ? lighten(dominant, 0.05) : 'transparent',
                 color,
-                fontSize: 12, fontWeight: 600,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                fontSize: 10.5, fontWeight: 600, letterSpacing: 0.2,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                 transition: 'all 0.2s',
                 WebkitTapHighlightColor: 'transparent',
               }}>
@@ -697,7 +697,7 @@ function Spinner() {
 
 function TabIcon({ tab, color }: { tab: string; color: string }) {
   // Ionicons-matched SVGs: reader-outline / document-text-outline / list-outline / happy-outline
-  const common = { width: 15, height: 15, viewBox: '0 0 512 512', fill: 'none', stroke: color, strokeWidth: 32, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  const common = { width: 13, height: 13, viewBox: '0 0 512 512', fill: 'none', stroke: color, strokeWidth: 34, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   if (tab === 'Long Form') {
     return (
       <svg {...common}>
