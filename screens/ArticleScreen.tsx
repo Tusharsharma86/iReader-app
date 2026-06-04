@@ -418,8 +418,11 @@ export default function ArticleScreen() {
   const fontSizePx = FONT_SIZE_MAP[fontSizeName] ?? 17;
   const articleCategory = deriveCategory(params.source ?? '', params.url ?? '', params.headline ?? '');
   const savedNow = isSaved(params.id);
-  const BLOCKED_LONGFORM_SOURCES = ['NYT World', 'NDTV'];
-  const defaultTab: Tab = BLOCKED_LONGFORM_SOURCES.includes(params.source ?? '') ? 'Summary' : 'Long Form';
+  // Sources that block full-text fetch (paywall / scrape protection) — hide the
+  // Long Form tab and default to AI Summary. Matches all variants: "NYT",
+  // "NYT World", "New York Times", "NDTV", "NDTV Profit", "Ars Technica", etc.
+  const blockLongform = /\bnyt|new york times|\bndtv|ars\s?technica/i.test(params.source ?? '');
+  const defaultTab: Tab = blockLongform ? 'Summary' : 'Long Form';
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
   const [paragraphs, setParagraphs] = useState<string[]>([]);
   const [originalParagraphs, setOriginalParagraphs] = useState<string[]>([]);
@@ -568,7 +571,7 @@ export default function ArticleScreen() {
 
   // Lazy AI: only generate after user has been reading for 5 seconds
   // Skip wait for sources where long form is unavailable — open straight to summary
-  const [hasBeenRead, setHasBeenRead] = useState(BLOCKED_LONGFORM_SOURCES.includes(params.source ?? ''));
+  const [hasBeenRead, setHasBeenRead] = useState(blockLongform);
   useEffect(() => {
     if (hasBeenRead) return;
     const timer = setTimeout(() => setHasBeenRead(true), 5000);
@@ -907,7 +910,7 @@ export default function ArticleScreen() {
         </View>
 
         <View style={[styles.tabBar, { backgroundColor: tabBg, borderColor: borderColor + '55' }]}>
-          {(BLOCKED_LONGFORM_SOURCES.includes(params.source ?? '') ? TABS.filter(t => t !== 'Long Form') : TABS).map(tab => {
+          {(blockLongform ? TABS.filter(t => t !== 'Long Form') : TABS).map(tab => {
             const active = activeTab === tab;
             const iconName: React.ComponentProps<typeof Ionicons>['name'] =
               tab === 'Long Form' ? 'reader-outline' :
