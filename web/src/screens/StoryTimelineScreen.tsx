@@ -68,7 +68,7 @@ export default function StoryTimelineScreen({ params }: { params: { clusterId: s
   return (
     <div style={{ height: '100%', background: '#080808', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
       {/* Header */}
-      <div style={{ position: 'sticky', top: 0, background: '#080808', borderBottom: '1px solid #141414', zIndex: 10, padding: '16px 16px 12px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+      <div style={{ position: 'sticky', top: 0, background: '#080808', borderBottom: '1px solid #141414', zIndex: 10, padding: 'calc(16px + env(safe-area-inset-top, 0px)) 16px 12px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
         <button onClick={goBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0', color: '#fff', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
         </button>
