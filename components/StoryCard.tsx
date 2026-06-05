@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
   },
   summary: {
     color: 'rgba(255,255,255,0.5)',
-    fontSize: 10.5,
+    fontSize: 12,
     lineHeight: 17,
   },
 });

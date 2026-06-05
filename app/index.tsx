@@ -1298,7 +1298,7 @@ const TopicSection = React.memo(function TopicSection({
 
           {/* AI summary of all clustered stories — ~20 words */}
           {!!summary && (
-            <Text style={[styles.clusterSummary, { marginTop: 6, fontSize: 10.5 }]}>
+            <Text style={[styles.clusterSummary, { marginTop: 6 }]}>
               {summary.split(/\s+/).slice(0, 20).join(' ')}{summary.split(/\s+/).length > 20 ? '…' : ''}
             </Text>
           )}
