@@ -1290,7 +1290,7 @@ const TopicSection = React.memo(function TopicSection({
           >
             {/* Meta row ABOVE headline: TREND/BREAKING pill + clock + stories pill */}
             {(cluster.collection || isBreaking || count >= 3 || count > 1) && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                 {cluster.collection && (
                   <Text style={{ color: '#b994ff', fontSize: 9, fontWeight: '800', letterSpacing: 1, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, overflow: 'hidden', backgroundColor: 'rgba(185,148,255,0.12)' }}>TREND</Text>
                 )}
