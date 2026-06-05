@@ -152,11 +152,7 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
         }}>
           {cluster.topicLabel}
         </div>
-        {cluster.subtitle && (
-          <div style={{ color: '#8a8a8a', fontSize: 10.5, lineHeight: 1.5, marginTop: 6 }}>
-            {cluster.subtitle}
-          </div>
-        )}
+        {/* Cluster subtitle removed — headline alone reads cleaner; stories speak for themselves. */}
         {(() => {
           const bd = cluster.biasBreakdown;
           const hasBias = bd && (bd.left + bd.center + bd.right) > 0;

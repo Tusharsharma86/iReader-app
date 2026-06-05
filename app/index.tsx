@@ -1296,10 +1296,7 @@ const TopicSection = React.memo(function TopicSection({
             <Text style={styles.clusterHeadline} numberOfLines={2}>{headline}</Text>
           </TouchableOpacity>
 
-          {/* AI summary of all clustered stories — ~20 words */}
-          {!!summary && (
-            <Text style={[styles.clusterSummary, { marginTop: 6 }]}>{summary}</Text>
-          )}
+          {/* Cluster summary removed — headline alone reads cleaner; stories speak for themselves. */}
 
           {/* Bias spectrum + diversity badge (count pill moved to headline row) */}
           {!!cluster.biasBreakdown && (
