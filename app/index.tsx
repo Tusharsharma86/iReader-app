@@ -1278,31 +1278,27 @@ const TopicSection = React.memo(function TopicSection({
             disabled={count < 3}
             onPress={count >= 3 ? () => navigation.navigate('StoryTimeline', { clusterId: cluster.id, headline, stories: JSON.stringify(cluster.stories) }) : undefined}
           >
-            {/* Headline row: icon · TREND/BREAKING pill (inline) · title · stories pill */}
-            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
-              {count >= 3 && (
-                <Ionicons name="time-outline" size={14} color="#3A3A3A" style={{ marginTop: 4 }} />
-              )}
-              <Text style={[styles.clusterHeadline, { flex: 1 }]} numberOfLines={2}>
+            {/* Meta row ABOVE headline: TREND/BREAKING pill + clock + stories pill */}
+            {(cluster.collection || isBreaking || count >= 3 || count > 1) && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                 {cluster.collection && (
-                  <Text style={{ color: '#b994ff', fontSize: 9, fontWeight: '800', letterSpacing: 1, backgroundColor: 'rgba(185,148,255,0.12)' }}>{' TREND '}</Text>
+                  <Text style={{ color: '#b994ff', fontSize: 9, fontWeight: '800', letterSpacing: 1, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, overflow: 'hidden', backgroundColor: 'rgba(185,148,255,0.12)' }}>TREND</Text>
                 )}
-                {cluster.collection && <Text>{'  '}</Text>}
-                {isBreaking && (
-                  <Text style={{ color: '#FF3B30', fontSize: 9, fontWeight: '800', letterSpacing: 1, backgroundColor: 'rgba(255,59,48,0.12)' }}>{' BREAKING '}</Text>
+                {isBreaking && <Text style={styles.breakingText}>BREAKING</Text>}
+                {count >= 3 && (
+                  <Ionicons name="time-outline" size={13} color="#5A5A5A" />
                 )}
-                {isBreaking && <Text>{'  '}</Text>}
-                {headline}
-              </Text>
-              <View style={[styles.clusterCountPill, { marginTop: 1 }]}>
-                <Text style={styles.clusterCountPillText}>{count} stories</Text>
+                <View style={[styles.clusterCountPill, { marginLeft: 'auto' }]}>
+                  <Text style={styles.clusterCountPillText}>{count} stories</Text>
+                </View>
               </View>
-            </View>
+            )}
+            <Text style={styles.clusterHeadline} numberOfLines={2}>{headline}</Text>
           </TouchableOpacity>
 
           {/* AI summary of all clustered stories — ~20 words */}
           {!!summary && (
-            <Text style={[styles.clusterSummary, { marginTop: 6 }]} numberOfLines={2}>
+            <Text style={[styles.clusterSummary, { marginTop: 6, fontSize: 11.5 }]} numberOfLines={2}>
               {summary.split(/\s+/).slice(0, 20).join(' ')}{summary.split(/\s+/).length > 20 ? '…' : ''}
             </Text>
           )}

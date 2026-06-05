@@ -560,7 +560,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
 
         {story.summary && (
           <p style={{
-            margin: 0, color: '#e5e5e5', fontSize: 15, lineHeight: 1.55,
+            margin: 0, color: '#e5e5e5', fontSize: 13, lineHeight: 1.55,
             display: '-webkit-box', WebkitLineClamp: 8, WebkitBoxOrient: 'vertical', overflow: 'hidden',
             textShadow: '0 2px 12px rgba(0,0,0,0.55)',
           }}>{story.summary.split(/\s+/).slice(0, 100).join(' ')}{story.summary.split(/\s+/).length > 100 ? '…' : ''}</p>

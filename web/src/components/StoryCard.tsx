@@ -200,7 +200,7 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
 
         {/* Summary (non-compact) — prefer the 25-word AI summary when present */}
         {!compact && (story.aiSummary || story.summary) && (
-          <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: 13, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+          <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: 11.5, lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
             {story.aiSummary || story.summary}
           </div>
         )}
