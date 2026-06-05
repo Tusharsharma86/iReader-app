@@ -465,7 +465,7 @@ export default function FeedScreen() {
       scrollSaveTimerRef.current = setTimeout(() => {
         AsyncStorage.setItem(
           `@ireader_scroll_${activeTopicRef.current}`,
-          String(visibleIndexRef.current),
+          JSON.stringify({ idx: visibleIndexRef.current, at: Date.now() }),
         ).catch(() => {});
       }, 500);
     }
@@ -534,7 +534,7 @@ export default function FeedScreen() {
       if (state === 'background' || state === 'inactive') {
         AsyncStorage.setItem(
           `@ireader_scroll_${activeTopicRef.current}`,
-          String(visibleIndexRef.current),
+          JSON.stringify({ idx: visibleIndexRef.current, at: Date.now() }),
         ).catch(() => {});
       }
     });
@@ -853,8 +853,18 @@ export default function FeedScreen() {
     lastRestoredLengthRef.current[activeTopic] = rankedClusterGroups.length;
     AsyncStorage.getItem(`@ireader_scroll_${activeTopic}`).then(saved => {
       if (!saved) return;
-      const idx = parseInt(saved, 10);
-      if (!isNaN(idx) && idx > 0 && idx < rankedClusterGroups.length) {
+      // Only restore scroll position if it's recent (<30 min). Beyond that, news
+      // has moved on and the user expects a fresh top-of-feed. Legacy plain-int
+      // values (no timestamp) are treated as expired.
+      const SCROLL_RESTORE_MAX_AGE_MS = 30 * 60 * 1000;
+      let idx = -1;
+      try {
+        const p = JSON.parse(saved) as { idx?: number; at?: number };
+        if (typeof p?.idx === 'number' && typeof p?.at === 'number' && Date.now() - p.at < SCROLL_RESTORE_MAX_AGE_MS) {
+          idx = p.idx;
+        }
+      } catch { /* legacy plain-int — treat as expired */ }
+      if (idx > 0 && idx < rankedClusterGroups.length) {
         // Hide feed immediately so user never sees scroll from position 0 → idx
         feedOpacity.setValue(0);
         t1 = setTimeout(() => {
