@@ -153,7 +153,7 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
           {cluster.topicLabel}
         </div>
         {cluster.subtitle && (
-          <div style={{ color: '#8a8a8a', fontSize: 11.5, lineHeight: 1.45, marginTop: 6 }}>
+          <div style={{ color: '#8a8a8a', fontSize: 10.5, lineHeight: 1.5, marginTop: 6 }}>
             {cluster.subtitle.split(/\s+/).slice(0, 20).join(' ')}{cluster.subtitle.split(/\s+/).length > 20 ? '…' : ''}
           </div>
         )}
