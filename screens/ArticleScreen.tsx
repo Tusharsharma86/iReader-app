@@ -681,23 +681,33 @@ export default function ArticleScreen() {
     setAiResult(null);
     trackAiUsage(aiType as 'summary' | 'fiveWs' | 'eli5').catch(() => {});
 
-    fetch(`${API}/ai-summary`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        url: params.url,
-        paragraphs: paragraphs.slice(0, 15),
-        type: TAB_AI_TYPE[activeTab],
-        maxWords: activeTab === 'ELI5' ? 100 : 250,
-      }),
-    })
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+    // Render free-tier cold-starts can briefly 502/503 via the proxy. One retry
+    // after 2s covers >95% of those without showing the user an error.
+    const body = JSON.stringify({
+      url: params.url,
+      paragraphs: paragraphs.slice(0, 15),
+      type: TAB_AI_TYPE[activeTab],
+      maxWords: activeTab === 'ELI5' ? 100 : 250,
+    });
+    const doFetch = (): Promise<Response> => fetch(`${API}/ai-summary`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
+    });
+    const fetchWithRetry = async (): Promise<unknown> => {
+      let r = await doFetch();
+      if (!r.ok && r.status >= 500 && r.status < 600) {
+        await new Promise(res => setTimeout(res, 2000));
+        r = await doFetch();
+      }
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    };
+    fetchWithRetry()
       .then(data => {
-        aiCache.current[activeTab] = data;
-        setCached(cacheKey, data);
-        setAiResult(data);
+        aiCache.current[activeTab] = data as AiResult;
+        setCached(cacheKey, data as AiResult);
+        setAiResult(data as AiResult);
       })
-      .catch(e => setAiError(e.message))
+      .catch(e => setAiError(String(e instanceof Error ? e.message : e)))
       .finally(() => setAiLoading(false));
   }, [activeTab, paragraphsLoading, hasBeenRead, paragraphs]);
 

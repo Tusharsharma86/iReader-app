@@ -235,11 +235,20 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     if (cached) { aiCache.current[activeTab] = cached; setAiResult(cached); return; }
     setAiLoading(true); setAiError(null); setAiResult(null);
     trackAiUsage(aiType as 'summary' | 'fiveWs' | 'eli5');
-    fetch(`${API}/ai-summary`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: params.url, paragraphs: paragraphs.slice(0,15), type: aiType, maxWords: activeTab === 'ELI5' ? 100 : 250 }) })
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+    // Render free-tier cold-starts can briefly 5xx — one retry after 2s covers it.
+    const body = JSON.stringify({ url: params.url, paragraphs: paragraphs.slice(0,15), type: aiType, maxWords: activeTab === 'ELI5' ? 100 : 250 });
+    const doFetch = () => fetch(`${API}/ai-summary`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+    (async () => {
+      let r = await doFetch();
+      if (!r.ok && r.status >= 500 && r.status < 600) {
+        await new Promise(res => setTimeout(res, 2000));
+        r = await doFetch();
+      }
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json() as Promise<AiResult>;
+    })()
       .then(data => { aiCache.current[activeTab] = data; setCached(cacheKey, data); setAiResult(data); })
-      .catch(e => setAiError(e.message)).finally(() => setAiLoading(false));
+      .catch(e => setAiError(String(e instanceof Error ? e.message : e))).finally(() => setAiLoading(false));
   }, [activeTab, paragraphsLoading, hasBeenRead]);
 
   const gradient = `linear-gradient(to bottom, ${dominant}, ${darken(dominant, 0.4)} 30%, ${darken(dominant, 0.85)} 100%)`;
