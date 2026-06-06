@@ -158,7 +158,15 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
         width: cardWidth, height: DENSITY_HEIGHT[cardDensity] ?? CARD_HEIGHT_BASE, borderRadius: 20, overflow: 'hidden',
         opacity: readState ? 0.55 : 1,
         position: 'relative', flexShrink: 0, cursor: 'pointer',
-        boxShadow: `0 6px 16px rgba(0,0,0,0.5), 0 0 ${pressed ? 50 : 28}px ${dominant}${pressed ? '99' : '55'}, 0 4px 20px ${dominant}66`,
+        // Particle-style colour bleed: bright accent halo + layered dominant
+        // glow. Numbers tuned to push the colour ~80-100 px past the card
+        // edge so adjacent cards/background pick up the tint.
+        boxShadow: `
+          0 8px 22px rgba(0,0,0,0.55),
+          0 0 ${pressed ? 110 : 90}px ${accent}${pressed ? 'aa' : '88'},
+          0 0 ${pressed ? 70 : 56}px ${dominant}${pressed ? 'cc' : 'aa'},
+          0 22px 70px ${dominant}99
+        `,
         WebkitTapHighlightColor: 'transparent',
         transform: pressed ? 'scale(0.97)' : 'scale(1)',
         transition: 'transform 0.16s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.24s ease, opacity 0.3s ease',
