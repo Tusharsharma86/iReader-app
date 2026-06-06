@@ -722,9 +722,6 @@ export default function ArticleScreen() {
         fontSize={fontSizePx}
         url={params.url}
         accentColor={accent}
-        borderColor={borderColor}
-        showVerifyDedup={originalParagraphs.length > 0}
-        onVerifyDedup={() => setDedupModalVisible(true)}
       />
     );
 
@@ -949,7 +946,12 @@ export default function ArticleScreen() {
           })}
         </View>
 
-        {/* Redundancy stats — real before/after from server dedup */}
+        <View style={styles.tabBody}>
+          {renderTabContent()}
+        </View>
+
+        {/* Stats card + Verify Dedup — moved to bottom so they sit AFTER
+            the article body / AI summary, not above it. */}
         {(() => {
           const wordCount = (s: string) => (s ?? '').trim().split(/\s+/).filter(Boolean).length;
           const preText = originalParagraphs.length > 0 ? originalParagraphs.join(' ') : '';
@@ -957,7 +959,6 @@ export default function ArticleScreen() {
           const preWords = wordCount(preText);
           const postWords = wordCount(postText);
 
-          // Long Form: pre-dedup vs post-dedup word count from server
           if (activeTab === 'Long Form') {
             if (preWords === 0) return null;
             const reduction = preWords > postWords
@@ -967,8 +968,8 @@ export default function ArticleScreen() {
               ? originalParagraphs.length - paragraphs.length
               : 0;
             return (
-              <View>
-                <View style={[styles.statsCard, { borderColor: borderColor + '55' }]}>
+              <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+                <View style={[styles.statsCard, { borderColor: borderColor + '55', marginHorizontal: 0 }]}>
                   <View style={[styles.statsIconCircle, { borderColor: accent + '88', backgroundColor: dominant + '40' }]}>
                     <Ionicons name="reader" size={14} color={accent} />
                   </View>
@@ -994,8 +995,16 @@ export default function ArticleScreen() {
                     </Text>
                   </View>
                 </View>
-                {/* Verify Dedup button moved to bottom of Long Form (last
-                    section of the screen). See LongFormTab below. */}
+                <Pressable
+                  onPress={() => setDedupModalVisible(true)}
+                  style={[styles.verifyLink, { borderColor: borderColor + '55', marginHorizontal: 0, marginTop: 10 }]}
+                >
+                  <Ionicons name="code-slash-outline" size={12} color={accent} />
+                  <Text style={[styles.verifyLinkText, { color: accent }]}>
+                    VERIFY DEDUP · VIEW RAW FETCH
+                  </Text>
+                  <Ionicons name="chevron-forward" size={12} color={accent} />
+                </Pressable>
               </View>
             );
           }
@@ -1005,7 +1014,9 @@ export default function ArticleScreen() {
           if (originalWords === 0) return null;
           let aiText = '';
           if (activeTab === 'Summary') {
-            aiText = aiResult?.bullets?.join(' ') ?? aiResult?.summary ?? '';
+            aiText = aiResult?.summary?.trim()
+              ? aiResult.summary
+              : (aiResult?.bullets?.join(' ') ?? '');
           } else if (activeTab === '5 Ws') {
             aiText = (aiResult?.fiveWs ?? []).join(' ');
           } else if (activeTab === 'ELI5') {
@@ -1016,7 +1027,7 @@ export default function ArticleScreen() {
           const reduction = Math.max(0, Math.round(((originalWords - aiWords) / originalWords) * 100));
 
           return (
-            <View style={[styles.statsCard, { borderColor: borderColor + '55' }]}>
+            <View style={[styles.statsCard, { borderColor: borderColor + '55', marginBottom: 16 }]}>
               <View style={[styles.statsIconCircle, { borderColor: accent + '88', backgroundColor: dominant + '40' }]}>
                 <Ionicons name="sparkles" size={13} color={accent} />
               </View>
@@ -1040,10 +1051,6 @@ export default function ArticleScreen() {
             </View>
           );
         })()}
-
-        <View style={styles.tabBody}>
-          {renderTabContent()}
-        </View>
 
         {/* Referenced Articles section — Particle-style article rows */}
         {referencedSources.length > 0 && (

@@ -270,24 +270,6 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
               style={{ display: 'block', marginTop: 20, padding: '14px', borderRadius: 12, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', textAlign: 'center', color: '#fff', fontSize: 15, fontWeight: 700, textDecoration: 'none' }}>
               Read Full Article →
             </a>
-            {/* Verify Dedup — last section of the screen. */}
-            {originalParagraphs.length > 0 && (
-              <button
-                onClick={() => setDedupModalVisible(true)}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  marginTop: 12, padding: '10px 14px',
-                  borderRadius: 999, border: `1px solid ${borderColor}55`,
-                  background: 'rgba(0,0,0,0.18)', color: accent,
-                  fontSize: 10, fontWeight: 700, letterSpacing: 1.2, cursor: 'pointer',
-                  width: '100%',
-                }}
-              >
-                <span>{'</>'}</span>
-                VERIFY DEDUP · VIEW RAW FETCH
-                <span>›</span>
-              </button>
-            )}
           </>
         )}
       </div>
@@ -560,7 +542,21 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
         })}
       </div>
 
-      {/* Redundancy stats card */}
+      {/* Dedup validation modal */}
+      {dedupModalVisible && (
+        <DedupModal
+          onClose={() => setDedupModalVisible(false)}
+          originalParagraphs={originalParagraphs}
+          paragraphs={paragraphs}
+          dedupedFlag={dedupedFlag}
+          apiUrl={params.url ? `${API}/article?url=${encodeURIComponent(params.url)}` : ''}
+        />
+      )}
+
+      {/* Tab body */}
+      <div style={{ padding: '8px 20px 24px' }}>{renderTabContent()}</div>
+
+      {/* Stats card + Verify Dedup — last section, after the article body. */}
       {(() => {
         const preText = originalParagraphs.join(' ');
         const postText = paragraphs.join(' ');
@@ -572,7 +568,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
           const reduction = preWords > postWords ? Math.round(((preWords - postWords) / preWords) * 100) : 0;
           const paraReduction = originalParagraphs.length > paragraphs.length ? originalParagraphs.length - paragraphs.length : 0;
           return (
-            <div>
+            <div style={{ margin: '0 0 24px' }}>
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 8,
                 margin: '0 16px 12px', padding: '14px',
@@ -591,8 +587,21 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
                 <span style={{ fontSize: 16, color: reduction > 0 ? '#34C759' : 'rgba(255,255,255,0.4)' }}>↘</span>
                 <StatCell value={`${reduction}%`} label={dedupedFlag ? (paraReduction > 0 ? `LESS (-${paraReduction} ¶)` : 'LESS') : 'NO DEDUP'} accent={accent} />
               </div>
-              {/* Verify Dedup button now lives at the bottom of Long Form,
-                  rendered alongside the Read Full Article link. */}
+              <button
+                onClick={() => setDedupModalVisible(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  margin: '0 16px', padding: '10px 14px',
+                  borderRadius: 999, border: `1px solid ${borderColor}55`,
+                  background: 'rgba(0,0,0,0.18)', color: accent,
+                  fontSize: 10, fontWeight: 700, letterSpacing: 1.2, cursor: 'pointer',
+                  width: 'calc(100% - 32px)',
+                }}
+              >
+                <span>{'</>'}</span>
+                VERIFY DEDUP · VIEW RAW FETCH
+                <span>›</span>
+              </button>
             </div>
           );
         }
@@ -601,9 +610,6 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
         const originalWords = postWords || preWords;
         if (originalWords === 0) return null;
         let aiText = '';
-        // Prefer narrative summary for the word count; fall back to bullets
-        // only if summary is empty. (?? would otherwise prefer empty-string
-        // bullets.join over a present summary.)
         if (activeTab === 'Summary') aiText = aiResult?.summary?.trim()
           ? aiResult.summary
           : (aiResult?.bullets?.join(' ') ?? '');
@@ -615,7 +621,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
         return (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
-            margin: '0 16px 16px', padding: '14px',
+            margin: '0 16px 24px', padding: '14px',
             borderRadius: 14, border: `1px solid ${borderColor}55`,
             background: 'rgba(0,0,0,0.25)',
           }}>
@@ -633,20 +639,6 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
           </div>
         );
       })()}
-
-      {/* Dedup validation modal */}
-      {dedupModalVisible && (
-        <DedupModal
-          onClose={() => setDedupModalVisible(false)}
-          originalParagraphs={originalParagraphs}
-          paragraphs={paragraphs}
-          dedupedFlag={dedupedFlag}
-          apiUrl={params.url ? `${API}/article?url=${encodeURIComponent(params.url)}` : ''}
-        />
-      )}
-
-      {/* Tab body */}
-      <div style={{ padding: '8px 20px 24px' }}>{renderTabContent()}</div>
 
       {/* Referenced sources */}
       {referencedSources.length > 0 && (
