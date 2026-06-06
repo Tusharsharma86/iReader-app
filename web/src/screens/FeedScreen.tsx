@@ -459,6 +459,19 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
     return () => window.removeEventListener('feed-scroll-top', scrollTop);
   }, []);
 
+  // Customize → keyboard shortcuts: J/K scroll next/prev cluster.
+  useEffect(() => {
+    const STEP = 360;
+    const next = () => containerRef.current?.scrollBy({ top: STEP, behavior: 'smooth' });
+    const prev = () => containerRef.current?.scrollBy({ top: -STEP, behavior: 'smooth' });
+    window.addEventListener('shortcut:next', next);
+    window.addEventListener('shortcut:prev', prev);
+    return () => {
+      window.removeEventListener('shortcut:next', next);
+      window.removeEventListener('shortcut:prev', prev);
+    };
+  }, []);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true); setPendingFeed(null); setNewCount(0);
     try {

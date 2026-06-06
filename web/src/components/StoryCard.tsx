@@ -7,8 +7,10 @@ import { useSaved } from '../contexts/SavedContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { trackArticleOpen } from '../utils/personalization';
 import { FALLBACK_IMG } from '../utils/fallback';
+import { isRead, markRead, subscribeRead } from '../utils/readStore';
 
-const CARD_HEIGHT = 420;
+const CARD_HEIGHT_BASE = 420;
+const DENSITY_HEIGHT: Record<string, number> = { compact: 320, comfortable: 420, spacious: 500 };
 
 
 function clientReadingTime(text: string): number {
@@ -40,6 +42,12 @@ function timeAgo(iso: string): string {
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}HR AGO`;
   return `${Math.floor(hrs / 24)}D AGO`;
+}
+// Absolute clock format, e.g. "10:42 AM".
+function timeAbs(iso: string): string {
+  try {
+    return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  } catch { return ''; }
 }
 
 const SOURCE_DOMAINS: Record<string, string> = {
@@ -75,7 +83,7 @@ interface Props {
 export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppressBreaking }: Props) {
   const { navigate } = useRouter();
   const { toggleSave, isSaved } = useSaved();
-  const { showClusterSummary, showBiasDots, showCardImages, cardDensity } = useSettings();
+  const { showClusterSummary, showBiasDots, showCardImages, cardDensity, timeFormat, autoMarkRead } = useSettings();
   const [imgError, setImgError] = useState(false);
   const saved = isSaved(story.id);
 
@@ -93,6 +101,7 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
 
   const handleClick = () => {
     trackArticleOpen(story);
+    markRead(story.id);
     const params: ArticleParams = {
       id: story.id,
       url: story.sources?.[0]?.url ?? '',
@@ -113,20 +122,46 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
 
   const [pressed, setPressed] = useState(false);
 
+  // Customize → autoMarkRead. When ON, mark this story as read once it
+  // becomes 80%-visible for ~1.2s. Visited stories are also marked
+  // immediately via handleClick.
+  const cardRef = React.useRef<HTMLDivElement | null>(null);
+  const [readState, setReadState] = React.useState<boolean>(() => isRead(story.id));
+  React.useEffect(() => {
+    const unsub = subscribeRead(() => setReadState(isRead(story.id)));
+    return unsub;
+  }, [story.id]);
+  React.useEffect(() => {
+    if (!autoMarkRead || readState || !cardRef.current) return;
+    let t: number | null = null;
+    const obs = new IntersectionObserver((entries) => {
+      const visible = entries.some(e => e.isIntersecting && e.intersectionRatio >= 0.8);
+      if (visible && t == null) {
+        t = window.setTimeout(() => { markRead(story.id); }, 1200);
+      } else if (!visible && t != null) {
+        clearTimeout(t); t = null;
+      }
+    }, { threshold: [0.8] });
+    obs.observe(cardRef.current);
+    return () => { if (t != null) clearTimeout(t); obs.disconnect(); };
+  }, [autoMarkRead, readState, story.id]);
+
   return (
     <div
+      ref={cardRef}
       onClick={handleClick}
       onPointerDown={() => { setPressed(true); try { navigator.vibrate?.(8); } catch {} }}
       onPointerUp={() => setPressed(false)}
       onPointerLeave={() => setPressed(false)}
       onPointerCancel={() => setPressed(false)}
       style={{
-        width: cardWidth, height: CARD_HEIGHT, borderRadius: 20, overflow: 'hidden',
+        width: cardWidth, height: DENSITY_HEIGHT[cardDensity] ?? CARD_HEIGHT_BASE, borderRadius: 20, overflow: 'hidden',
+        opacity: readState ? 0.55 : 1,
         position: 'relative', flexShrink: 0, cursor: 'pointer',
         boxShadow: `0 6px 16px rgba(0,0,0,0.5), 0 0 ${pressed ? 50 : 28}px ${dominant}${pressed ? '99' : '55'}, 0 4px 20px ${dominant}66`,
         WebkitTapHighlightColor: 'transparent',
         transform: pressed ? 'scale(0.97)' : 'scale(1)',
-        transition: 'transform 0.16s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.24s ease',
+        transition: 'transform 0.16s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.24s ease, opacity 0.3s ease',
       }}
     >
       {/* Background image or typographic fallback. Hidden when Customize →
@@ -172,7 +207,7 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
             <div style={{ width: 6, height: 6, borderRadius: 3, background: BIAS_CONFIG[story.sourceBias as BiasRating]?.color, flexShrink: 0 }} />
           )}
           <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>·</span>
-          <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: 600 }}>{timeAgo(story.publishedAt)}</span>
+          <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: 600 }}>{timeFormat === 'absolute' ? timeAbs(story.publishedAt) : timeAgo(story.publishedAt)}</span>
           {isBreakingBadge && !suppressBreaking && (
             <>
               <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>·</span>

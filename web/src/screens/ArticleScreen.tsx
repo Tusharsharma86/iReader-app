@@ -23,8 +23,19 @@ interface SourceEntry { name: string; url: string; imageUrl?: string; publishedA
 //   - quoted text ("…" or curly quotes) → italic + gold accent
 //   - named entities (people/companies) → white bold
 // Falls back to plain text when no matches.
-function renderParagraphHighlights(text: string, entities: string[], _accent: string): React.ReactNode {
+function renderParagraphHighlights(
+  text: string,
+  entities: string[],
+  _accent: string,
+  opts: { showEntities?: boolean; showQuotes?: boolean } = {},
+): React.ReactNode {
   if (!text) return null;
+  const showEntities = opts.showEntities !== false;
+  const showQuotes = opts.showQuotes !== false;
+  // If quotes turned off, skip the quote pass entirely.
+  if (!showQuotes) {
+    return showEntities ? renderEntities(text, entities) : text;
+  }
   // First pass: split on quotes (straight + curly). Capture group includes the quotes.
   const QUOTE_RE = /(["“][^"”]{3,}?["”])/g;
   const segments = text.split(QUOTE_RE);
@@ -37,7 +48,7 @@ function renderParagraphHighlights(text: string, entities: string[], _accent: st
       );
     }
     QUOTE_RE.lastIndex = 0;
-    return <React.Fragment key={i}>{renderEntities(seg, entities)}</React.Fragment>;
+    return <React.Fragment key={i}>{showEntities ? renderEntities(seg, entities) : seg}</React.Fragment>;
   });
 }
 
@@ -127,8 +138,9 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     showReferencedSources, showKeyPoints,
     summaryLength, keyPointsCount, linkOpen,
     // Wave 2
-    showEntityHighlights, showReadingDifficulty,
+    showEntityHighlights, showQuoteHighlights, showReadingDifficulty,
     fontFamily, lineHeightMode, columnWidth,
+    eli5Tone,
   } = useSettings();
 
   // Customize: font / line-height / column width.
@@ -259,13 +271,13 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     // length so different settings don't collide on cached responses.
     const lengthMap: Record<typeof summaryLength, number> = { short: 150, medium: 250, long: 400 };
     const maxWordsForType = activeTab === 'ELI5' ? 100 : lengthMap[summaryLength];
-    const cacheKey = `summary_v4_${params.id ?? params.url}_${aiType}_${maxWordsForType}_${keyPointsCount}`;
+    const cacheKey = `summary_v5_${params.id ?? params.url}_${aiType}_${maxWordsForType}_${keyPointsCount}_${eli5Tone}`;
     const cached = getCached(cacheKey, TTL.AI_SUMMARY);
     if (cached) { aiCache.current[activeTab] = cached; setAiResult(cached); return; }
     setAiLoading(true); setAiError(null); setAiResult(null);
     trackAiUsage(aiType as 'summary' | 'fiveWs' | 'eli5');
     // Render free-tier cold-starts can briefly 5xx — one retry after 2s covers it.
-    const body = JSON.stringify({ url: params.url, paragraphs: paragraphs.slice(0,15), type: aiType, maxWords: maxWordsForType, keyPoints: keyPointsCount });
+    const body = JSON.stringify({ url: params.url, paragraphs: paragraphs.slice(0,15), type: aiType, maxWords: maxWordsForType, keyPoints: keyPointsCount, eli5Tone });
     const doFetch = () => fetch(`${API}/ai-summary`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
     (async () => {
       let r = await doFetch();
@@ -278,8 +290,8 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     })()
       .then(data => { aiCache.current[activeTab] = data; setCached(cacheKey, data); setAiResult(data); })
       .catch(e => setAiError(String(e instanceof Error ? e.message : e))).finally(() => setAiLoading(false));
-  // Customize: re-fetch when length / key-points settings change.
-  }, [activeTab, paragraphsLoading, hasBeenRead, summaryLength, keyPointsCount]);
+  // Customize: re-fetch when length / key-points / ELI5 tone changes.
+  }, [activeTab, paragraphsLoading, hasBeenRead, summaryLength, keyPointsCount, eli5Tone]);
 
   const gradient = `linear-gradient(to bottom, ${dominant}, ${darken(dominant, 0.4)} 30%, ${darken(dominant, 0.85)} 100%)`;
 
@@ -291,9 +303,10 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
             {paragraphsError && <div style={{ color: '#FF6B6B', fontSize: 12, marginBottom: 12 }}>Full text unavailable from this publisher</div>}
             {paragraphs.map((p, i) => (
               <p key={i} style={{ color: '#DDD', fontSize: fontSizePx, lineHeight: lineHeightCss, fontFamily: fontFamilyCss, marginBottom: 16 }}>
-                {showEntityHighlights
-                  ? renderParagraphHighlights(p, [...entities.people, ...entities.companies], accent)
-                  : p}
+                {renderParagraphHighlights(p, [...entities.people, ...entities.companies], accent, {
+                  showEntities: showEntityHighlights,
+                  showQuotes: showQuoteHighlights,
+                })}
               </p>
             ))}
             <a href={params.url}

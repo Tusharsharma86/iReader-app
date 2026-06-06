@@ -1,6 +1,6 @@
-import { Suspense, lazy } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { RouterProvider, useRouter } from './contexts/RouterContext';
-import { SettingsProvider } from './contexts/SettingsContext';
+import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import { SourceProvider } from './contexts/SourceContext';
 import { SavedProvider } from './contexts/SavedContext';
 import { TabBarProvider } from './contexts/TabBarContext';
@@ -77,6 +77,65 @@ function ScreenRenderer() {
   );
 }
 
+// Customize → keyboardShortcuts. Global key listener for J/K/S/Esc.
+//   J → next story · K → previous story · S → save current article · Esc → back
+function KeyboardShortcuts() {
+  const { keyboardShortcuts } = useSettings();
+  const { goBack, canGoBack } = useRouter();
+  React.useEffect(() => {
+    if (!keyboardShortcuts) return;
+    const handler = (e: KeyboardEvent) => {
+      // Don't trigger when typing in an input.
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      const k = e.key.toLowerCase();
+      if (k === 'escape' && canGoBack) {
+        e.preventDefault();
+        goBack();
+      } else if (k === 'j') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('shortcut:next'));
+      } else if (k === 'k') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('shortcut:prev'));
+      } else if (k === 's') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('shortcut:save'));
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [keyboardShortcuts, canGoBack, goBack]);
+  return null;
+}
+
+function ThemeApplier({ children }: { children: React.ReactNode }) {
+  // Customize → themeMode. Applies a CSS `filter: invert(1) hue-rotate(180deg)`
+  // on light mode — a pragmatic stop-gap since every screen uses inline-styled
+  // hex colours. Auto follows prefers-color-scheme.
+  const { themeMode } = useSettings();
+  const [systemLight, setSystemLight] = React.useState(
+    () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: light)').matches,
+  );
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(prefers-color-scheme: light)');
+    const h = (e: MediaQueryListEvent) => setSystemLight(e.matches);
+    mq.addEventListener?.('change', h);
+    return () => mq.removeEventListener?.('change', h);
+  }, []);
+  const lightActive = themeMode === 'light' || (themeMode === 'auto' && systemLight);
+  return (
+    <div style={{
+      width: '100%', height: '100%',
+      filter: lightActive ? 'invert(1) hue-rotate(180deg)' : 'none',
+      transition: 'filter 0.25s ease',
+    }}>
+      {children}
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <SettingsProvider>
@@ -84,17 +143,20 @@ export default function App() {
         <SavedProvider>
           <TabBarProvider>
             <RouterProvider>
-              <div style={{
-                width: '100%',
-                height: '100%',
-                margin: '0 auto',
-                background: '#000',
-                overflow: 'hidden',
-                position: 'relative',
-              }}>
-                <ScreenRenderer />
-                <TabBar />
-              </div>
+              <KeyboardShortcuts />
+              <ThemeApplier>
+                <div style={{
+                  width: '100%',
+                  height: '100%',
+                  margin: '0 auto',
+                  background: '#000',
+                  overflow: 'hidden',
+                  position: 'relative',
+                }}>
+                  <ScreenRenderer />
+                  <TabBar />
+                </div>
+              </ThemeApplier>
             </RouterProvider>
           </TabBarProvider>
         </SavedProvider>

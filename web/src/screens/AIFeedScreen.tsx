@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Story } from '../types';
 import { useTabBarActions } from '../contexts/TabBarContext';
+import { useSettings } from '../contexts/SettingsContext';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 import { FALLBACK_IMG } from '../utils/fallback';
 import { trackDeepDive } from '../utils/personalization';
@@ -18,7 +19,7 @@ const TOPIC_QUEUE = [
   'business',
 ];
 const DEEPDIVE_API = 'https://ireader.onrender.com/api/news/deepdive';
-const CACHE_PREFIX = '@deepdive_v4_'; // v4 — bust franken-cluster Deep Dives from the merge bug
+const CACHE_PREFIX = '@deepdive_v5_'; // v5 — keyed by depth (quick/standard/deep)
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const FEED_LIST_CACHE = '@aifeed_list_v5'; // v5 — server-trust rewrite, no client-side clustering
 const VIOLET = '#b994ff';
@@ -47,17 +48,17 @@ interface FeedItem {
   collection?: boolean; // server theme collection (browse rail), NOT a same-event cluster
 }
 
-function readCache(id: string): DeepDiveData | null {
+function readCache(id: string, depth = 'standard'): DeepDiveData | null {
   try {
-    const raw = localStorage.getItem(CACHE_PREFIX + id);
+    const raw = localStorage.getItem(CACHE_PREFIX + depth + ':' + id);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (Date.now() - parsed.at > CACHE_TTL_MS) return null;
     return parsed;
   } catch { return null; }
 }
-function writeCache(id: string, data: DeepDiveData) {
-  try { localStorage.setItem(CACHE_PREFIX + id, JSON.stringify({ ...data, at: Date.now() })); } catch {}
+function writeCache(id: string, data: DeepDiveData, depth = 'standard') {
+  try { localStorage.setItem(CACHE_PREFIX + depth + ':' + id, JSON.stringify({ ...data, at: Date.now() })); } catch {}
 }
 
 // Favicon URL from source name (mapped) or first article URL.
@@ -582,9 +583,11 @@ function FullPreviewCard({ item, index, total, onOpen }: {
 
 function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => void }) {
   const story = item.primary;
+  // Customize → Deep Dive section toggles + depth.
+  const { showDeepDiveEntities, showDeepDiveCurious, deepDiveDepth } = useSettings();
   const dominant = useMemo(() => getArticleColor(story.id || story.headline), [story.id, story.headline]);
   const accent = useMemo(() => lighten(dominant, 0.55), [dominant]);
-  const [data, setData] = useState<DeepDiveData | null>(() => readCache(story.id));
+  const [data, setData] = useState<DeepDiveData | null>(() => readCache(story.id, deepDiveDepth));
   const [stage, setStage] = useState<'generating' | 'done' | 'error'>(data ? 'done' : 'generating');
   const [error, setError] = useState<string | null>(null);
   const [showColdHint, setShowColdHint] = useState(false);
@@ -687,6 +690,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
               sourceUrls: item.collection
                 ? [story.sources?.[0]?.url].filter(Boolean) as string[]
                 : (item.sources ?? []).map(s => s.url).filter(Boolean),
+              depth: deepDiveDepth,
             }),
             signal: ctrl.signal,
           });
@@ -697,7 +701,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
         const json: DeepDiveData = await dd.json();
         if (cancelled) return;
         setData(json);
-        if (!json.degraded) writeCache(story.id, json); // never cache the non-AI fallback
+        if (!json.degraded) writeCache(story.id, json, deepDiveDepth); // never cache the non-AI fallback
         setStage('done');
       } catch (e) {
         if (cancelled) return;
@@ -975,7 +979,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
             )}
 
             {/* ── Follow the Story — entity index (violet accents) ──────── */}
-            {(data.keyPeople?.length || data.keyCompanies?.length || data.topics?.length) ? (
+            {showDeepDiveEntities && (data.keyPeople?.length || data.keyCompanies?.length || data.topics?.length) ? (
               <div style={{ marginTop: 4 }}>
                 <div style={{ color: VIOLET, fontSize: 10, fontWeight: 800, letterSpacing: 1.8, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <SparkleIcon color={VIOLET} size={10} /> FOLLOW THE STORY
@@ -993,7 +997,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
             ) : null}
 
             {/* ── Curious? — Q&A in violet ─────────────────────────────── */}
-            {data.questions.length > 0 && (
+            {showDeepDiveCurious && data.questions.length > 0 && (
               <Section label="CURIOUS?" accent={VIOLET}>
                 <QuestionsList
                   questions={data.questions}
