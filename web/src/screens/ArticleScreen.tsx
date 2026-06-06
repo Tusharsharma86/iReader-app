@@ -293,7 +293,16 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
   // Customize: re-fetch when length / key-points / ELI5 tone changes.
   }, [activeTab, paragraphsLoading, hasBeenRead, summaryLength, keyPointsCount, eli5Tone]);
 
-  const gradient = `linear-gradient(to bottom, ${dominant}, ${darken(dominant, 0.4)} 30%, ${darken(dominant, 0.85)} 100%)`;
+  // Particle-style brighter colour bleed. Top stays bright at the lightened
+  // accent before fading through the dominant to a soft dark, leaving a
+  // visible tint at the bottom of the screen instead of full black.
+  const gradient = `linear-gradient(to bottom,
+    ${lighten(dominant, 0.18)} 0%,
+    ${dominant} 18%,
+    ${darken(dominant, 0.35)} 42%,
+    ${darken(dominant, 0.7)} 80%,
+    ${darken(dominant, 0.82)} 100%
+  )`;
 
   function renderTabContent() {
     const longForm = (
@@ -428,11 +437,16 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
             <img src={FALLBACK_IMG} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
             <div style={{
               position: 'absolute', inset: 0,
-              background: `linear-gradient(135deg, ${dominant}33 0%, transparent 45%, ${accent}1f 100%)`,
+              background: `linear-gradient(135deg, ${dominant}55 0%, transparent 45%, ${accent}33 100%)`,
             }} />
             <div style={{
               position: 'absolute', inset: 0,
-              background: `linear-gradient(to bottom, transparent 0%, transparent 55%, ${darken(dominant, 0.4)} 100%)`,
+              background: `linear-gradient(to bottom,
+                transparent 0%,
+                transparent 38%,
+                ${lighten(dominant, 0.1)}55 70%,
+                ${lighten(dominant, 0.18)} 100%
+              )`,
             }} />
           </>
         ) : (
@@ -444,10 +458,20 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
               className="hero-zoom-in"
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
             />
-            <div style={{ position: 'absolute', inset: 0, background: `${dominant}33` }} />
+            {/* Light dominant wash over the image — keeps the photo readable
+                but tints it toward the article colour like Particle. */}
+            <div style={{ position: 'absolute', inset: 0, background: `${dominant}44` }} />
+            {/* Bottom gradient: stronger + uses the LIGHTENED dominant in the
+                middle so the colour bleeds smoothly into the body gradient
+                below instead of dipping to a darker mid-tone. */}
             <div style={{
               position: 'absolute', inset: 0,
-              background: `linear-gradient(to bottom, transparent 0%, transparent 55%, ${darken(dominant, 0.4)} 100%)`,
+              background: `linear-gradient(to bottom,
+                transparent 0%,
+                transparent 38%,
+                ${lighten(dominant, 0.1)}55 70%,
+                ${lighten(dominant, 0.18)} 100%
+              )`,
             }} />
           </>
         )}
