@@ -5,12 +5,20 @@ const ALL_TOPICS: TopicKey[] = ['breaking','technology','india-politics','geopol
 
 const DEFAULT_ACTIVE_TOPICS = Object.fromEntries(ALL_TOPICS.map(t => [t, true])) as Record<TopicKey, boolean>;
 
-// ── Customize options (wave 1) ───────────────────────────────────────────────
+// ── Customize options (waves 1 + 2) ──────────────────────────────────────────
 export type CardDensity = 'compact' | 'comfortable' | 'spacious';
 export type ArticleTab = 'Long Form' | 'Summary' | '5 Ws' | 'ELI5';
 export type SummaryLength = 'short' | 'medium' | 'long';
 export type KeyPointsCount = 3 | 5 | 7;
 export type LinkOpen = 'in-app' | 'external';
+// Wave 2
+export type ThemeMode = 'dark' | 'light' | 'auto';
+export type FontFamily = 'inter' | 'serif' | 'system';
+export type LineHeightMode = 'tight' | 'normal' | 'loose';
+export type ColumnWidth = 'narrow' | 'medium' | 'wide';
+export type Eli5Tone = 'kid' | 'casual' | 'plain';
+export type DeepDiveDepth = 'quick' | 'standard' | 'deep';
+export type TimeFormat = 'relative' | 'absolute';
 
 interface SettingsCtx {
   fontSize: FontSize;
@@ -55,6 +63,33 @@ interface SettingsCtx {
   linkOpen: LinkOpen; setLinkOpen: (v: LinkOpen) => void;
   pullToRefresh: boolean; setPullToRefresh: (v: boolean) => void;
 
+  // ── Wave 2: Appearance ─────────────────────────────────────────────────
+  themeMode: ThemeMode; setThemeMode: (v: ThemeMode) => void;
+  showEntityHighlights: boolean; setShowEntityHighlights: (v: boolean) => void;
+  showQuoteHighlights: boolean; setShowQuoteHighlights: (v: boolean) => void;
+  showReadingDifficulty: boolean; setShowReadingDifficulty: (v: boolean) => void;
+  timeFormat: TimeFormat; setTimeFormat: (v: TimeFormat) => void;
+
+  // ── Wave 2: Article reader ─────────────────────────────────────────────
+  fontFamily: FontFamily; setFontFamily: (v: FontFamily) => void;
+  lineHeightMode: LineHeightMode; setLineHeightMode: (v: LineHeightMode) => void;
+  columnWidth: ColumnWidth; setColumnWidth: (v: ColumnWidth) => void;
+
+  // ── Wave 2: AI ─────────────────────────────────────────────────────────
+  eli5Tone: Eli5Tone; setEli5Tone: (v: Eli5Tone) => void;
+  deepDiveDepth: DeepDiveDepth; setDeepDiveDepth: (v: DeepDiveDepth) => void;
+  showDeepDiveQA: boolean; setShowDeepDiveQA: (v: boolean) => void;
+  showDeepDiveEntities: boolean; setShowDeepDiveEntities: (v: boolean) => void;
+  showDeepDiveCurious: boolean; setShowDeepDiveCurious: (v: boolean) => void;
+
+  // ── Wave 2: Navigation (hide/show tabs + topic pills) ──────────────────
+  hiddenTabs: string[]; toggleHiddenTab: (tab: string) => void;
+  hiddenTopics: string[]; toggleHiddenTopic: (topic: string) => void;
+
+  // ── Wave 2: Behavior ───────────────────────────────────────────────────
+  autoMarkRead: boolean; setAutoMarkRead: (v: boolean) => void;
+  keyboardShortcuts: boolean; setKeyboardShortcuts: (v: boolean) => void;
+
   // Reset just the customize block.
   resetCustomize: () => void;
 }
@@ -82,6 +117,25 @@ const DEFAULTS = {
   defaultTopic: 'breaking' as CategoryTopic,
   linkOpen: 'in-app' as LinkOpen,
   pullToRefresh: true,
+
+  // Wave 2 defaults — match current behaviour.
+  themeMode: 'dark' as ThemeMode,
+  showEntityHighlights: true,
+  showQuoteHighlights: true,
+  showReadingDifficulty: true,
+  timeFormat: 'relative' as TimeFormat,
+  fontFamily: 'inter' as FontFamily,
+  lineHeightMode: 'normal' as LineHeightMode,
+  columnWidth: 'medium' as ColumnWidth,
+  eli5Tone: 'casual' as Eli5Tone,
+  deepDiveDepth: 'standard' as DeepDiveDepth,
+  showDeepDiveQA: true,
+  showDeepDiveEntities: true,
+  showDeepDiveCurious: true,
+  hiddenTabs: [] as string[],
+  hiddenTopics: [] as string[],
+  autoMarkRead: false,
+  keyboardShortcuts: true,
 };
 
 const noop = () => {};
@@ -97,6 +151,12 @@ const SettingsContext = createContext<SettingsCtx>({
   setDefaultArticleTab: noop, setShowStatsCard: noop, setShowVerifyDedup: noop, setShowReferencedSources: noop,
   setSummaryLength: noop, setKeyPointsCount: noop, setShowKeyPoints: noop,
   setDefaultTopic: noop, setLinkOpen: noop, setPullToRefresh: noop,
+  // Wave 2 noops
+  setThemeMode: noop, setShowEntityHighlights: noop, setShowQuoteHighlights: noop, setShowReadingDifficulty: noop, setTimeFormat: noop,
+  setFontFamily: noop, setLineHeightMode: noop, setColumnWidth: noop,
+  setEli5Tone: noop, setDeepDiveDepth: noop, setShowDeepDiveQA: noop, setShowDeepDiveEntities: noop, setShowDeepDiveCurious: noop,
+  toggleHiddenTab: noop, toggleHiddenTopic: noop,
+  setAutoMarkRead: noop, setKeyboardShortcuts: noop,
   resetCustomize: noop,
 });
 
@@ -131,6 +191,25 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [defaultTopic, setDefaultTopic] = useState<CategoryTopic>(DEFAULTS.defaultTopic);
   const [linkOpen, setLinkOpen] = useState<LinkOpen>(DEFAULTS.linkOpen);
   const [pullToRefresh, setPullToRefresh] = useState(DEFAULTS.pullToRefresh);
+
+  // Wave 2 state
+  const [themeMode, setThemeMode] = useState<ThemeMode>(DEFAULTS.themeMode);
+  const [showEntityHighlights, setShowEntityHighlights] = useState(DEFAULTS.showEntityHighlights);
+  const [showQuoteHighlights, setShowQuoteHighlights] = useState(DEFAULTS.showQuoteHighlights);
+  const [showReadingDifficulty, setShowReadingDifficulty] = useState(DEFAULTS.showReadingDifficulty);
+  const [timeFormat, setTimeFormat] = useState<TimeFormat>(DEFAULTS.timeFormat);
+  const [fontFamily, setFontFamily] = useState<FontFamily>(DEFAULTS.fontFamily);
+  const [lineHeightMode, setLineHeightMode] = useState<LineHeightMode>(DEFAULTS.lineHeightMode);
+  const [columnWidth, setColumnWidth] = useState<ColumnWidth>(DEFAULTS.columnWidth);
+  const [eli5Tone, setEli5Tone] = useState<Eli5Tone>(DEFAULTS.eli5Tone);
+  const [deepDiveDepth, setDeepDiveDepth] = useState<DeepDiveDepth>(DEFAULTS.deepDiveDepth);
+  const [showDeepDiveQA, setShowDeepDiveQA] = useState(DEFAULTS.showDeepDiveQA);
+  const [showDeepDiveEntities, setShowDeepDiveEntities] = useState(DEFAULTS.showDeepDiveEntities);
+  const [showDeepDiveCurious, setShowDeepDiveCurious] = useState(DEFAULTS.showDeepDiveCurious);
+  const [hiddenTabs, setHiddenTabs] = useState<string[]>(DEFAULTS.hiddenTabs);
+  const [hiddenTopics, setHiddenTopics] = useState<string[]>(DEFAULTS.hiddenTopics);
+  const [autoMarkRead, setAutoMarkRead] = useState(DEFAULTS.autoMarkRead);
+  const [keyboardShortcuts, setKeyboardShortcuts] = useState(DEFAULTS.keyboardShortcuts);
 
   const [loaded, setLoaded] = useState(false);
 
@@ -169,6 +248,25 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         if (typeof s.defaultTopic === 'string') setDefaultTopic(s.defaultTopic as CategoryTopic);
         if (s.linkOpen === 'in-app' || s.linkOpen === 'external') setLinkOpen(s.linkOpen);
         if (typeof s.pullToRefresh === 'boolean') setPullToRefresh(s.pullToRefresh);
+
+        // Wave 2 loads
+        if (['dark','light','auto'].includes(s.themeMode)) setThemeMode(s.themeMode);
+        if (typeof s.showEntityHighlights === 'boolean') setShowEntityHighlights(s.showEntityHighlights);
+        if (typeof s.showQuoteHighlights === 'boolean') setShowQuoteHighlights(s.showQuoteHighlights);
+        if (typeof s.showReadingDifficulty === 'boolean') setShowReadingDifficulty(s.showReadingDifficulty);
+        if (s.timeFormat === 'relative' || s.timeFormat === 'absolute') setTimeFormat(s.timeFormat);
+        if (['inter','serif','system'].includes(s.fontFamily)) setFontFamily(s.fontFamily);
+        if (['tight','normal','loose'].includes(s.lineHeightMode)) setLineHeightMode(s.lineHeightMode);
+        if (['narrow','medium','wide'].includes(s.columnWidth)) setColumnWidth(s.columnWidth);
+        if (['kid','casual','plain'].includes(s.eli5Tone)) setEli5Tone(s.eli5Tone);
+        if (['quick','standard','deep'].includes(s.deepDiveDepth)) setDeepDiveDepth(s.deepDiveDepth);
+        if (typeof s.showDeepDiveQA === 'boolean') setShowDeepDiveQA(s.showDeepDiveQA);
+        if (typeof s.showDeepDiveEntities === 'boolean') setShowDeepDiveEntities(s.showDeepDiveEntities);
+        if (typeof s.showDeepDiveCurious === 'boolean') setShowDeepDiveCurious(s.showDeepDiveCurious);
+        if (Array.isArray(s.hiddenTabs)) setHiddenTabs(s.hiddenTabs);
+        if (Array.isArray(s.hiddenTopics)) setHiddenTopics(s.hiddenTopics);
+        if (typeof s.autoMarkRead === 'boolean') setAutoMarkRead(s.autoMarkRead);
+        if (typeof s.keyboardShortcuts === 'boolean') setKeyboardShortcuts(s.keyboardShortcuts);
       }
     } catch {}
     setLoaded(true);
@@ -185,9 +283,14 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         defaultArticleTab, showStatsCard, showVerifyDedup, showReferencedSources,
         summaryLength, keyPointsCount, showKeyPoints,
         defaultTopic, linkOpen, pullToRefresh,
+        // Wave 2
+        themeMode, showEntityHighlights, showQuoteHighlights, showReadingDifficulty, timeFormat,
+        fontFamily, lineHeightMode, columnWidth,
+        eli5Tone, deepDiveDepth, showDeepDiveQA, showDeepDiveEntities, showDeepDiveCurious,
+        hiddenTabs, hiddenTopics, autoMarkRead, keyboardShortcuts,
       }));
     } catch {}
-  }, [loaded, fontSize, notifBreaking, notifAiFeed, notifTech, notifDigest, notifSources, showSports, showEntertainment, activeTopics, activeSubTopics, favSources, favTopics, topicInterests, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showVerifyDedup, showReferencedSources, summaryLength, keyPointsCount, showKeyPoints, defaultTopic, linkOpen, pullToRefresh]);
+  }, [loaded, fontSize, notifBreaking, notifAiFeed, notifTech, notifDigest, notifSources, showSports, showEntertainment, activeTopics, activeSubTopics, favSources, favTopics, topicInterests, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showVerifyDedup, showReferencedSources, summaryLength, keyPointsCount, showKeyPoints, defaultTopic, linkOpen, pullToRefresh, themeMode, showEntityHighlights, showQuoteHighlights, showReadingDifficulty, timeFormat, fontFamily, lineHeightMode, columnWidth, eli5Tone, deepDiveDepth, showDeepDiveQA, showDeepDiveEntities, showDeepDiveCurious, hiddenTabs, hiddenTopics, autoMarkRead, keyboardShortcuts]);
 
   const setFontSize = useCallback((fs: FontSize) => setFontSizeS(fs), []);
   const setNotifBreaking = useCallback((v: boolean) => setNotifBreakingS(v), []);
@@ -212,6 +315,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setFavSources([]); setFavTopics([]);
     setTopicInterests({});
   }, []);
+  const toggleHiddenTab = useCallback((tab: string) =>
+    setHiddenTabs(p => p.includes(tab) ? p.filter(t => t !== tab) : [...p, tab]), []);
+  const toggleHiddenTopic = useCallback((topic: string) =>
+    setHiddenTopics(p => p.includes(topic) ? p.filter(t => t !== topic) : [...p, topic]), []);
+
   const resetCustomize = useCallback(() => {
     setShowClusterSummary(DEFAULTS.showClusterSummary);
     setShowBiasDots(DEFAULTS.showBiasDots);
@@ -228,6 +336,24 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setDefaultTopic(DEFAULTS.defaultTopic);
     setLinkOpen(DEFAULTS.linkOpen);
     setPullToRefresh(DEFAULTS.pullToRefresh);
+    // Wave 2
+    setThemeMode(DEFAULTS.themeMode);
+    setShowEntityHighlights(DEFAULTS.showEntityHighlights);
+    setShowQuoteHighlights(DEFAULTS.showQuoteHighlights);
+    setShowReadingDifficulty(DEFAULTS.showReadingDifficulty);
+    setTimeFormat(DEFAULTS.timeFormat);
+    setFontFamily(DEFAULTS.fontFamily);
+    setLineHeightMode(DEFAULTS.lineHeightMode);
+    setColumnWidth(DEFAULTS.columnWidth);
+    setEli5Tone(DEFAULTS.eli5Tone);
+    setDeepDiveDepth(DEFAULTS.deepDiveDepth);
+    setShowDeepDiveQA(DEFAULTS.showDeepDiveQA);
+    setShowDeepDiveEntities(DEFAULTS.showDeepDiveEntities);
+    setShowDeepDiveCurious(DEFAULTS.showDeepDiveCurious);
+    setHiddenTabs(DEFAULTS.hiddenTabs);
+    setHiddenTopics(DEFAULTS.hiddenTopics);
+    setAutoMarkRead(DEFAULTS.autoMarkRead);
+    setKeyboardShortcuts(DEFAULTS.keyboardShortcuts);
   }, []);
 
   const value = useMemo(() => ({
@@ -253,8 +379,26 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     defaultTopic, setDefaultTopic,
     linkOpen, setLinkOpen,
     pullToRefresh, setPullToRefresh,
+    // Wave 2
+    themeMode, setThemeMode,
+    showEntityHighlights, setShowEntityHighlights,
+    showQuoteHighlights, setShowQuoteHighlights,
+    showReadingDifficulty, setShowReadingDifficulty,
+    timeFormat, setTimeFormat,
+    fontFamily, setFontFamily,
+    lineHeightMode, setLineHeightMode,
+    columnWidth, setColumnWidth,
+    eli5Tone, setEli5Tone,
+    deepDiveDepth, setDeepDiveDepth,
+    showDeepDiveQA, setShowDeepDiveQA,
+    showDeepDiveEntities, setShowDeepDiveEntities,
+    showDeepDiveCurious, setShowDeepDiveCurious,
+    hiddenTabs, toggleHiddenTab,
+    hiddenTopics, toggleHiddenTopic,
+    autoMarkRead, setAutoMarkRead,
+    keyboardShortcuts, setKeyboardShortcuts,
     resetCustomize,
-  }), [fontSize, notifBreaking, notifAiFeed, notifTech, notifDigest, notifSources, showSports, showEntertainment, favSources, favTopics, activeTopics, activeSubTopics, topicInterests, setFontSize, setNotifBreaking, setNotifAiFeed, setNotifTech, setNotifDigest, setNotifSources, setShowSports, setShowEntertainment, toggleFavSource, toggleFavTopic, toggleTopic, toggleSubTopic, setTopicInterest, resetSettings, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showVerifyDedup, showReferencedSources, summaryLength, keyPointsCount, showKeyPoints, defaultTopic, linkOpen, pullToRefresh, resetCustomize]);
+  }), [fontSize, notifBreaking, notifAiFeed, notifTech, notifDigest, notifSources, showSports, showEntertainment, favSources, favTopics, activeTopics, activeSubTopics, topicInterests, setFontSize, setNotifBreaking, setNotifAiFeed, setNotifTech, setNotifDigest, setNotifSources, setShowSports, setShowEntertainment, toggleFavSource, toggleFavTopic, toggleTopic, toggleSubTopic, setTopicInterest, resetSettings, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showVerifyDedup, showReferencedSources, summaryLength, keyPointsCount, showKeyPoints, defaultTopic, linkOpen, pullToRefresh, themeMode, showEntityHighlights, showQuoteHighlights, showReadingDifficulty, timeFormat, fontFamily, lineHeightMode, columnWidth, eli5Tone, deepDiveDepth, showDeepDiveQA, showDeepDiveEntities, showDeepDiveCurious, hiddenTabs, hiddenTopics, autoMarkRead, keyboardShortcuts, toggleHiddenTab, toggleHiddenTopic, resetCustomize]);
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }

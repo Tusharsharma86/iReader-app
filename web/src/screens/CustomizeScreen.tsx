@@ -14,8 +14,69 @@ import {
   useSettings,
   type CardDensity, type ArticleTab, type SummaryLength,
   type KeyPointsCount, type LinkOpen,
+  type ThemeMode, type FontFamily, type LineHeightMode, type ColumnWidth,
+  type Eli5Tone, type DeepDiveDepth, type TimeFormat,
 } from '../contexts/SettingsContext';
 import type { CategoryTopic } from '../types';
+
+const TAB_OPTIONS = [
+  { key: 'feed',     label: 'Feed' },
+  { key: 'digest',   label: 'Digest' },
+  { key: 'aifeed',   label: 'AI Feed' },
+  { key: 'saved',    label: 'Saved' },
+  { key: 'settings', label: 'Settings' },
+];
+
+const ALL_TOPIC_PILLS: { key: CategoryTopic; label: string }[] = [
+  { key: 'breaking',         label: 'Breaking' },
+  { key: 'technology',       label: 'Tech' },
+  { key: 'india-politics',   label: 'India' },
+  { key: 'geopolitics',      label: 'World' },
+  { key: 'markets',          label: 'Markets' },
+  { key: 'business',         label: 'Business' },
+  { key: 'myspace',          label: 'My Space' },
+];
+
+const THEME_OPTIONS: { label: string; value: ThemeMode }[] = [
+  { label: 'Dark',  value: 'dark' },
+  { label: 'Auto',  value: 'auto' },
+  { label: 'Light', value: 'light' },
+];
+
+const FONT_OPTIONS: { label: string; value: FontFamily }[] = [
+  { label: 'Inter',  value: 'inter' },
+  { label: 'Serif',  value: 'serif' },
+  { label: 'System', value: 'system' },
+];
+
+const LINE_HEIGHT_OPTIONS: { label: string; value: LineHeightMode }[] = [
+  { label: 'Tight',  value: 'tight' },
+  { label: 'Normal', value: 'normal' },
+  { label: 'Loose',  value: 'loose' },
+];
+
+const COLUMN_WIDTH_OPTIONS: { label: string; value: ColumnWidth }[] = [
+  { label: 'Narrow', value: 'narrow' },
+  { label: 'Medium', value: 'medium' },
+  { label: 'Wide',   value: 'wide' },
+];
+
+const ELI5_TONE_OPTIONS: { label: string; value: Eli5Tone }[] = [
+  { label: 'Kid',    value: 'kid' },
+  { label: 'Casual', value: 'casual' },
+  { label: 'Plain',  value: 'plain' },
+];
+
+const DEEPDIVE_DEPTH_OPTIONS: { label: string; value: DeepDiveDepth }[] = [
+  { label: 'Quick',    value: 'quick' },
+  { label: 'Standard', value: 'standard' },
+  { label: 'Deep',     value: 'deep' },
+];
+
+const TIME_FORMAT_OPTIONS: { label: string; value: TimeFormat }[] = [
+  { label: 'Relative', value: 'relative' },
+  { label: 'Absolute', value: 'absolute' },
+];
 
 const VIOLET = '#b994ff';
 const CARD_BG = '#0E0E0E';
@@ -280,6 +341,132 @@ export default function CustomizeScreen() {
         <RowToggle border label="Pull to refresh"
           sub="Swipe down on the feed to reload."
           value={s.pullToRefresh} onChange={s.setPullToRefresh} />
+      </div>
+
+      {/* ── WAVE 2 ─────────────────────────────────────────────────────── */}
+
+      {/* APPEARANCE */}
+      <div style={sectionHeader}>APPEARANCE</div>
+      <div style={card}>
+        <RowSegmented label="Theme"
+          sub="Dark (default), Auto (follows system), Light."
+          options={THEME_OPTIONS}
+          value={s.themeMode} onChange={s.setThemeMode} />
+        <RowToggle border label="Entity highlights"
+          sub="Highlight people / companies in article body."
+          value={s.showEntityHighlights} onChange={s.setShowEntityHighlights} />
+        <RowToggle border label="Quote highlights"
+          sub="Show quoted passages in accent colour."
+          value={s.showQuoteHighlights} onChange={s.setShowQuoteHighlights} />
+        <RowToggle border label="Reading difficulty"
+          sub="Show the Hard / Medium / Easy pill on articles."
+          value={s.showReadingDifficulty} onChange={s.setShowReadingDifficulty} />
+        <RowSegmented border label="Time format"
+          sub="Relative (2h ago) vs absolute (12:45 PM)."
+          options={TIME_FORMAT_OPTIONS}
+          value={s.timeFormat} onChange={s.setTimeFormat} />
+      </div>
+
+      {/* READING (article reader) */}
+      <div style={sectionHeader}>READING</div>
+      <div style={card}>
+        <RowSegmented label="Font family"
+          sub="Inter (sans), Serif (Georgia), or System default."
+          options={FONT_OPTIONS}
+          value={s.fontFamily} onChange={s.setFontFamily} />
+        <RowSegmented border label="Line height"
+          sub="Tighter / looser vertical spacing in article body."
+          options={LINE_HEIGHT_OPTIONS}
+          value={s.lineHeightMode} onChange={s.setLineHeightMode} />
+        <RowSegmented border label="Reading column"
+          sub="Narrower or wider article column on big screens."
+          options={COLUMN_WIDTH_OPTIONS}
+          value={s.columnWidth} onChange={s.setColumnWidth} />
+      </div>
+
+      {/* AI (wave 2 — tone + depth + DD sections) */}
+      <div style={sectionHeader}>AI · MORE</div>
+      <div style={card}>
+        <RowSegmented label="ELI5 tone"
+          sub="Kid (very simple), Casual (friendly), Plain (just clear)."
+          options={ELI5_TONE_OPTIONS}
+          value={s.eli5Tone} onChange={s.setEli5Tone} />
+        <RowSegmented border label="Deep Dive depth"
+          sub="Quick (short), Standard, or Deep (longest)."
+          options={DEEPDIVE_DEPTH_OPTIONS}
+          value={s.deepDiveDepth} onChange={s.setDeepDiveDepth} />
+        <RowToggle border label="Deep Dive: Q&A section"
+          value={s.showDeepDiveQA} onChange={s.setShowDeepDiveQA} />
+        <RowToggle border label="Deep Dive: Entities section"
+          value={s.showDeepDiveEntities} onChange={s.setShowDeepDiveEntities} />
+        <RowToggle border label="Deep Dive: Curious Cats"
+          value={s.showDeepDiveCurious} onChange={s.setShowDeepDiveCurious} />
+      </div>
+
+      {/* NAVIGATION — hide/show tabs and topic pills */}
+      <div style={sectionHeader}>NAVIGATION</div>
+      <div style={card}>
+        <div style={{ padding: '14px 16px' }}>
+          <div style={rowLabel}>Tabs</div>
+          <div style={rowSub}>Untick to hide from the bottom bar. Feed and Settings always stay.</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+            {TAB_OPTIONS.map(t => {
+              const hidden = s.hiddenTabs.includes(t.key);
+              const locked = t.key === 'feed' || t.key === 'settings';
+              return (
+                <div key={t.key}
+                  onClick={() => !locked && s.toggleHiddenTab(t.key)}
+                  style={{
+                    padding: '7px 14px', borderRadius: 999,
+                    border: `1px solid ${hidden ? '#222' : 'rgba(185,148,255,0.4)'}`,
+                    background: hidden ? '#0A0A0A' : 'rgba(185,148,255,0.14)',
+                    color: hidden ? '#555' : VIOLET,
+                    fontSize: 12, fontWeight: 700, letterSpacing: 0.3,
+                    cursor: locked ? 'not-allowed' : 'pointer',
+                    opacity: locked ? 0.45 : 1,
+                  }}
+                >
+                  {t.label}{locked && ' 🔒'}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{ ...rowBorder, padding: '14px 16px' }}>
+          <div style={rowLabel}>Topic pills</div>
+          <div style={rowSub}>Untick to hide a topic from the feed.</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+            {ALL_TOPIC_PILLS.map(t => {
+              const hidden = s.hiddenTopics.includes(t.key);
+              return (
+                <div key={t.key}
+                  onClick={() => s.toggleHiddenTopic(t.key)}
+                  style={{
+                    padding: '7px 14px', borderRadius: 999,
+                    border: `1px solid ${hidden ? '#222' : 'rgba(185,148,255,0.4)'}`,
+                    background: hidden ? '#0A0A0A' : 'rgba(185,148,255,0.14)',
+                    color: hidden ? '#555' : VIOLET,
+                    fontSize: 12, fontWeight: 700, letterSpacing: 0.3,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {t.label}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* BEHAVIOR (wave 2 extras) */}
+      <div style={sectionHeader}>BEHAVIOR · MORE</div>
+      <div style={card}>
+        <RowToggle label="Auto mark-as-read on scroll"
+          sub="Stories you scroll past stop showing as new."
+          value={s.autoMarkRead} onChange={s.setAutoMarkRead} />
+        <RowToggle border label="Keyboard shortcuts"
+          sub="J / K next & previous · S save · Esc back."
+          value={s.keyboardShortcuts} onChange={s.setKeyboardShortcuts} />
       </div>
 
       {/* DATA */}

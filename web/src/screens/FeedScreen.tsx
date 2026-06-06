@@ -254,7 +254,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   const {
     activeTopics, activeSubTopics, showSports, showEntertainment, topicInterests,
     showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity,
-    defaultTopic, pullToRefresh,
+    defaultTopic, pullToRefresh, hiddenTopics,
   } = useSettings();
   const { navigate } = useRouter();
   const { reportScroll } = useTabBar();
@@ -549,7 +549,11 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   }, [visibleStories, activeTopic]);
 
   const visibleCategories = useMemo(
-    () => CATEGORIES.filter(c => c.topic === 'myspace' || activeTopics[c.topic as keyof typeof activeTopics] !== false),
+    // Customize → hiddenTopics overlays the existing activeTopics gate.
+    () => CATEGORIES.filter(c =>
+      !hiddenTopics.includes(c.topic)
+      && (c.topic === 'myspace' || activeTopics[c.topic as keyof typeof activeTopics] !== false)
+    ),
     [activeTopics],
   );
   return (

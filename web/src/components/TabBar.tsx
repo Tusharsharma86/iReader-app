@@ -2,6 +2,7 @@ import React from 'react';
 import type { TabName, NavScreen } from '../types';
 import { useRouter } from '../contexts/RouterContext';
 import { useTabBar } from '../contexts/TabBarContext';
+import { useSettings } from '../contexts/SettingsContext';
 
 type IconName = 'feed' | 'digest' | 'aifeed' | 'saved' | 'profile';
 
@@ -70,6 +71,10 @@ const HIDDEN_ROUTES = new Set(['Article', 'Sources', 'Topics', 'FavSources', 'Us
 export function TabBar() {
   const { activeTab, setTab, currentScreen } = useRouter();
   const { visible } = useTabBar();
+  const { hiddenTabs } = useSettings();
+  // Customize: hide individual tabs. Feed + Settings can't be hidden.
+  const items = TAB_ITEMS.filter(it =>
+    it.tab === 'feed' || it.tab === 'settings' || !hiddenTabs.includes(it.tab));
 
   // Always hide on Article reader and any Settings sub-screen.
   if (HIDDEN_ROUTES.has(currentScreen.name)) return null;
@@ -103,7 +108,7 @@ export function TabBar() {
           transition: 'backdrop-filter 0.35s ease, -webkit-backdrop-filter 0.35s ease',
         }}
       >
-        {TAB_ITEMS.map(item => {
+        {items.map(item => {
           const active = activeTab === item.tab;
           return (
             <button

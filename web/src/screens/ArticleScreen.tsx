@@ -126,7 +126,19 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     showStatsCard, showVerifyDedup: showVerifyDedupSetting,
     showReferencedSources, showKeyPoints,
     summaryLength, keyPointsCount, linkOpen,
+    // Wave 2
+    showEntityHighlights, showReadingDifficulty,
+    fontFamily, lineHeightMode, columnWidth,
   } = useSettings();
+
+  // Customize: font / line-height / column width.
+  const fontFamilyCss = fontFamily === 'serif'
+    ? "Georgia, 'Times New Roman', serif"
+    : fontFamily === 'system'
+      ? "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+      : "'Inter', sans-serif";
+  const lineHeightCss = lineHeightMode === 'tight' ? 1.45 : lineHeightMode === 'loose' ? 1.9 : 1.7;
+  const columnMaxPx = columnWidth === 'narrow' ? 520 : columnWidth === 'wide' ? 820 : 660;
   const { hide, show } = useTabBar();
 
   // Hide bottom tab bar while reading an article; restore on back
@@ -247,7 +259,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     // length so different settings don't collide on cached responses.
     const lengthMap: Record<typeof summaryLength, number> = { short: 150, medium: 250, long: 400 };
     const maxWordsForType = activeTab === 'ELI5' ? 100 : lengthMap[summaryLength];
-    const cacheKey = `summary_v3_${params.id ?? params.url}_${aiType}_${maxWordsForType}_${keyPointsCount}`;
+    const cacheKey = `summary_v4_${params.id ?? params.url}_${aiType}_${maxWordsForType}_${keyPointsCount}`;
     const cached = getCached(cacheKey, TTL.AI_SUMMARY);
     if (cached) { aiCache.current[activeTab] = cached; setAiResult(cached); return; }
     setAiLoading(true); setAiError(null); setAiResult(null);
@@ -278,8 +290,10 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
           <>
             {paragraphsError && <div style={{ color: '#FF6B6B', fontSize: 12, marginBottom: 12 }}>Full text unavailable from this publisher</div>}
             {paragraphs.map((p, i) => (
-              <p key={i} style={{ color: '#DDD', fontSize: fontSizePx, lineHeight: 1.7, marginBottom: 16 }}>
-                {renderParagraphHighlights(p, [...entities.people, ...entities.companies], accent)}
+              <p key={i} style={{ color: '#DDD', fontSize: fontSizePx, lineHeight: lineHeightCss, fontFamily: fontFamilyCss, marginBottom: 16 }}>
+                {showEntityHighlights
+                  ? renderParagraphHighlights(p, [...entities.people, ...entities.companies], accent)
+                  : p}
               </p>
             ))}
             <a href={params.url}
@@ -323,7 +337,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
         aiContent = (
           <div>
             {paragraphs.map((p, i) => (
-              <p key={i} style={{ color: '#DDD', fontSize: fontSizePx, lineHeight: 1.7, margin: '0 0 16px 0' }}>{p}</p>
+              <p key={i} style={{ color: '#DDD', fontSize: fontSizePx, lineHeight: lineHeightCss, fontFamily: fontFamilyCss, margin: '0 0 16px 0' }}>{p}</p>
             ))}
             {showKeyPoints && bullets.length > 0 && (
               <div style={{ marginTop: 14, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
@@ -497,7 +511,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
                   </span>
                 </>
               )}
-              {difficulty != null && (
+              {showReadingDifficulty && difficulty != null && (
                 <>
                   <span style={{ color: lighten(dominant, 0.35), fontSize: 12 }}>·</span>
                   <span style={{ color: diffColor, fontSize: 12, fontWeight: 600 }}>{difficulty}</span>
@@ -571,8 +585,8 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
         />
       )}
 
-      {/* Tab body */}
-      <div style={{ padding: '8px 20px 24px' }}>{renderTabContent()}</div>
+      {/* Tab body. Customize → columnWidth controls max-width on big screens. */}
+      <div style={{ padding: '8px 20px 24px', maxWidth: columnMaxPx, margin: '0 auto' }}>{renderTabContent()}</div>
 
       {/* Stats card + Verify Dedup — last section, after the article body.
           Both controlled by Customize → showStatsCard / showVerifyDedup. */}
