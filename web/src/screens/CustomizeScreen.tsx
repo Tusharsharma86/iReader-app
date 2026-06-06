@@ -192,7 +192,7 @@ export default function CustomizeScreen() {
   }, [s]);
 
   return (
-    <div style={{ minHeight: '100vh', background: '#050505', color: '#FFF', paddingBottom: 80 }}>
+    <div style={{ height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch', background: '#050505', color: '#FFF', paddingBottom: 80 }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 12,
         padding: 'calc(16px + env(safe-area-inset-top, 0px)) 16px 12px',
