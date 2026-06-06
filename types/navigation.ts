@@ -36,6 +36,7 @@ export type SettingsStackParamList = {
   BreakingThemes: undefined;
   NotifHistory: undefined;
   NotificationSettings: undefined;
+  Customize: undefined;
 };
 
 // Legacy alias used by ArticleScreen

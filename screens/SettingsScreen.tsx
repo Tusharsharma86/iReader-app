@@ -416,6 +416,21 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* APPEARANCE — Customize sub-screen */}
+        <Text style={styles.sectionHeader}>APPEARANCE</Text>
+        <View style={styles.card}>
+          <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('Customize')}>
+            <View style={styles.collapsibleIcon}>
+              <Ionicons name="color-palette" size={16} color={VIOLET} />
+            </View>
+            <View style={styles.rowTextCol}>
+              <Text style={styles.rowLabel}>Customize</Text>
+              <Text style={styles.rowSub}>UI density, defaults, summary length, hide/show sections</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#666" />
+          </TouchableOpacity>
+        </View>
+
         <Text style={styles.sectionHeader}>FEED</Text>
         <Collapsible icon="grid" title="Active Topics" subtitle={`${enabledTopicsCount} of 6 categories on`}>
           <InlineActiveTopics />

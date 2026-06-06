@@ -29,6 +29,7 @@ import TopicInterestsScreen from './screens/TopicInterestsScreen';
 import BreakingThemesScreen from './screens/BreakingThemesScreen';
 import NotifHistoryScreen from './screens/NotifHistoryScreen';
 import NotificationSettingsScreen from './screens/NotificationSettingsScreen';
+import CustomizeScreen from './screens/CustomizeScreen';
 import StoryTimelineScreen from './screens/StoryTimelineScreen';
 import { setupNotificationChannels, registerForPush } from './utils/notifications';
 import { trackNotifOpened, trackNotifReceived } from './utils/usageTracker';
@@ -287,6 +288,7 @@ function SettingsNavigator() {
       <SettingsStack.Screen name="BreakingThemes" component={BreakingThemesScreen} />
       <SettingsStack.Screen name="NotifHistory" component={NotifHistoryScreen} />
       <SettingsStack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
+      <SettingsStack.Screen name="Customize" component={CustomizeScreen} />
     </SettingsStack.Navigator>
   );
 }

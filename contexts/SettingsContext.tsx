@@ -5,6 +5,14 @@ import { INTEREST_TOPICS } from '../utils/interestTopics';
 
 export type FontSize = 'Small' | 'Medium' | 'Large' | 'XLarge';
 
+// Customize types — mirror web's SettingsContext.
+export type CardDensity = 'compact' | 'comfortable' | 'spacious';
+export type ArticleTab = 'Long Form' | 'Summary' | '5 Ws' | 'ELI5';
+export type SummaryLength = 'short' | 'medium' | 'long';
+export type KeyPointsCount = 3 | 5 | 7;
+export type Eli5Tone = 'kid' | 'casual' | 'plain';
+export type DeepDiveDepth = 'quick' | 'standard' | 'deep';
+
 export const ALL_TOPICS = ['breaking', 'technology', 'india-politics', 'geopolitics', 'markets', 'business'] as const;
 export type TopicKey = typeof ALL_TOPICS[number];
 
@@ -45,6 +53,32 @@ interface SettingsContextType {
   topicInterests: Record<string, number>;
   setTopicInterest: (id: string, stars: number) => void;
   resetSettings: () => void;
+
+  // ── Customize: Feed ────────────────────────────────────────────────────
+  showClusterSummary: boolean; setShowClusterSummary: (v: boolean) => void;
+  showBiasDots: boolean; setShowBiasDots: (v: boolean) => void;
+  showMetaPill: boolean; setShowMetaPill: (v: boolean) => void;
+  showCardImages: boolean; setShowCardImages: (v: boolean) => void;
+  cardDensity: CardDensity; setCardDensity: (v: CardDensity) => void;
+
+  // ── Customize: Article ─────────────────────────────────────────────────
+  defaultArticleTab: ArticleTab; setDefaultArticleTab: (v: ArticleTab) => void;
+  showStatsCard: boolean; setShowStatsCard: (v: boolean) => void;
+  showVerifyDedup: boolean; setShowVerifyDedup: (v: boolean) => void;
+  showReferencedSources: boolean; setShowReferencedSources: (v: boolean) => void;
+  showEntityHighlights: boolean; setShowEntityHighlights: (v: boolean) => void;
+  showReadingDifficulty: boolean; setShowReadingDifficulty: (v: boolean) => void;
+
+  // ── Customize: AI ──────────────────────────────────────────────────────
+  summaryLength: SummaryLength; setSummaryLength: (v: SummaryLength) => void;
+  keyPointsCount: KeyPointsCount; setKeyPointsCount: (v: KeyPointsCount) => void;
+  showKeyPoints: boolean; setShowKeyPoints: (v: boolean) => void;
+  eli5Tone: Eli5Tone; setEli5Tone: (v: Eli5Tone) => void;
+  deepDiveDepth: DeepDiveDepth; setDeepDiveDepth: (v: DeepDiveDepth) => void;
+  showDeepDiveEntities: boolean; setShowDeepDiveEntities: (v: boolean) => void;
+  showDeepDiveCurious: boolean; setShowDeepDiveCurious: (v: boolean) => void;
+
+  resetCustomize: () => void;
 }
 
 const STORAGE_KEY = '@ireader_settings';
@@ -59,6 +93,26 @@ const DEFAULTS = {
   showSports: false,
   showEntertainment: false,
   activeTopics: DEFAULT_ACTIVE_TOPICS,
+
+  // Customize defaults — match current behaviour.
+  showClusterSummary: true,
+  showBiasDots: true,
+  showMetaPill: true,
+  showCardImages: true,
+  cardDensity: 'comfortable' as CardDensity,
+  defaultArticleTab: 'Long Form' as ArticleTab,
+  showStatsCard: true,
+  showVerifyDedup: true,
+  showReferencedSources: true,
+  showEntityHighlights: true,
+  showReadingDifficulty: true,
+  summaryLength: 'medium' as SummaryLength,
+  keyPointsCount: 3 as KeyPointsCount,
+  showKeyPoints: true,
+  eli5Tone: 'casual' as Eli5Tone,
+  deepDiveDepth: 'standard' as DeepDiveDepth,
+  showDeepDiveEntities: true,
+  showDeepDiveCurious: true,
 };
 
 const SettingsContext = createContext<SettingsContextType>({
@@ -82,6 +136,16 @@ const SettingsContext = createContext<SettingsContextType>({
   toggleSubTopic: () => {},
   setTopicInterest: () => {},
   resetSettings: () => {},
+
+  // Customize noops
+  setShowClusterSummary: () => {}, setShowBiasDots: () => {}, setShowMetaPill: () => {},
+  setShowCardImages: () => {}, setCardDensity: () => {},
+  setDefaultArticleTab: () => {}, setShowStatsCard: () => {}, setShowVerifyDedup: () => {},
+  setShowReferencedSources: () => {}, setShowEntityHighlights: () => {}, setShowReadingDifficulty: () => {},
+  setSummaryLength: () => {}, setKeyPointsCount: () => {}, setShowKeyPoints: () => {},
+  setEli5Tone: () => {}, setDeepDiveDepth: () => {},
+  setShowDeepDiveEntities: () => {}, setShowDeepDiveCurious: () => {},
+  resetCustomize: () => {},
 });
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
@@ -98,6 +162,27 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [topicInterests, setTopicInterests] = useState<Record<string, number>>({});
   const [showSports, setShowSportsState] = useState(DEFAULTS.showSports);
   const [showEntertainment, setShowEntertainmentState] = useState(DEFAULTS.showEntertainment);
+
+  // Customize state
+  const [showClusterSummary, setShowClusterSummary] = useState(DEFAULTS.showClusterSummary);
+  const [showBiasDots, setShowBiasDots] = useState(DEFAULTS.showBiasDots);
+  const [showMetaPill, setShowMetaPill] = useState(DEFAULTS.showMetaPill);
+  const [showCardImages, setShowCardImages] = useState(DEFAULTS.showCardImages);
+  const [cardDensity, setCardDensity] = useState<CardDensity>(DEFAULTS.cardDensity);
+  const [defaultArticleTab, setDefaultArticleTab] = useState<ArticleTab>(DEFAULTS.defaultArticleTab);
+  const [showStatsCard, setShowStatsCard] = useState(DEFAULTS.showStatsCard);
+  const [showVerifyDedup, setShowVerifyDedup] = useState(DEFAULTS.showVerifyDedup);
+  const [showReferencedSources, setShowReferencedSources] = useState(DEFAULTS.showReferencedSources);
+  const [showEntityHighlights, setShowEntityHighlights] = useState(DEFAULTS.showEntityHighlights);
+  const [showReadingDifficulty, setShowReadingDifficulty] = useState(DEFAULTS.showReadingDifficulty);
+  const [summaryLength, setSummaryLength] = useState<SummaryLength>(DEFAULTS.summaryLength);
+  const [keyPointsCount, setKeyPointsCount] = useState<KeyPointsCount>(DEFAULTS.keyPointsCount);
+  const [showKeyPoints, setShowKeyPoints] = useState(DEFAULTS.showKeyPoints);
+  const [eli5Tone, setEli5Tone] = useState<Eli5Tone>(DEFAULTS.eli5Tone);
+  const [deepDiveDepth, setDeepDiveDepth] = useState<DeepDiveDepth>(DEFAULTS.deepDiveDepth);
+  const [showDeepDiveEntities, setShowDeepDiveEntities] = useState(DEFAULTS.showDeepDiveEntities);
+  const [showDeepDiveCurious, setShowDeepDiveCurious] = useState(DEFAULTS.showDeepDiveCurious);
+
   const [loaded, setLoaded] = useState(false);
 
   // Load persisted settings on mount
@@ -123,6 +208,25 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           if (saved.topicInterests && typeof saved.topicInterests === 'object') setTopicInterests(saved.topicInterests);
           if (typeof saved.showSports === 'boolean') setShowSportsState(saved.showSports);
           if (typeof saved.showEntertainment === 'boolean') setShowEntertainmentState(saved.showEntertainment);
+          // Customize loads
+          if (typeof saved.showClusterSummary === 'boolean') setShowClusterSummary(saved.showClusterSummary);
+          if (typeof saved.showBiasDots === 'boolean') setShowBiasDots(saved.showBiasDots);
+          if (typeof saved.showMetaPill === 'boolean') setShowMetaPill(saved.showMetaPill);
+          if (typeof saved.showCardImages === 'boolean') setShowCardImages(saved.showCardImages);
+          if (['compact','comfortable','spacious'].includes(saved.cardDensity)) setCardDensity(saved.cardDensity);
+          if (['Long Form','Summary','5 Ws','ELI5'].includes(saved.defaultArticleTab)) setDefaultArticleTab(saved.defaultArticleTab);
+          if (typeof saved.showStatsCard === 'boolean') setShowStatsCard(saved.showStatsCard);
+          if (typeof saved.showVerifyDedup === 'boolean') setShowVerifyDedup(saved.showVerifyDedup);
+          if (typeof saved.showReferencedSources === 'boolean') setShowReferencedSources(saved.showReferencedSources);
+          if (typeof saved.showEntityHighlights === 'boolean') setShowEntityHighlights(saved.showEntityHighlights);
+          if (typeof saved.showReadingDifficulty === 'boolean') setShowReadingDifficulty(saved.showReadingDifficulty);
+          if (['short','medium','long'].includes(saved.summaryLength)) setSummaryLength(saved.summaryLength);
+          if ([3,5,7].includes(saved.keyPointsCount)) setKeyPointsCount(saved.keyPointsCount);
+          if (typeof saved.showKeyPoints === 'boolean') setShowKeyPoints(saved.showKeyPoints);
+          if (['kid','casual','plain'].includes(saved.eli5Tone)) setEli5Tone(saved.eli5Tone);
+          if (['quick','standard','deep'].includes(saved.deepDiveDepth)) setDeepDiveDepth(saved.deepDiveDepth);
+          if (typeof saved.showDeepDiveEntities === 'boolean') setShowDeepDiveEntities(saved.showDeepDiveEntities);
+          if (typeof saved.showDeepDiveCurious === 'boolean') setShowDeepDiveCurious(saved.showDeepDiveCurious);
         } catch {}
       }
     }).finally(() => setLoaded(true));
@@ -135,8 +239,14 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       fontSize, notifBreaking, notifTech, notifDigest, notifAiFeed, notifSources,
       activeTopics, activeSubTopics, favSources, favTopics, topicInterests,
       showSports, showEntertainment,
+      // Customize
+      showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity,
+      defaultArticleTab, showStatsCard, showVerifyDedup, showReferencedSources,
+      showEntityHighlights, showReadingDifficulty,
+      summaryLength, keyPointsCount, showKeyPoints,
+      eli5Tone, deepDiveDepth, showDeepDiveEntities, showDeepDiveCurious,
     })).catch(() => {});
-  }, [loaded, fontSize, notifBreaking, notifTech, notifDigest, notifAiFeed, notifSources, activeTopics, activeSubTopics, favSources, favTopics, topicInterests, showSports, showEntertainment]);
+  }, [loaded, fontSize, notifBreaking, notifTech, notifDigest, notifAiFeed, notifSources, activeTopics, activeSubTopics, favSources, favTopics, topicInterests, showSports, showEntertainment, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showVerifyDedup, showReferencedSources, showEntityHighlights, showReadingDifficulty, summaryLength, keyPointsCount, showKeyPoints, eli5Tone, deepDiveDepth, showDeepDiveEntities, showDeepDiveCurious]);
 
   // Reconcile backend notification prefs with the toggles shown locally —
   // ONCE per launch, after settings load. Fixes the fresh-install / new-token
@@ -229,6 +339,27 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const setShowSports = useCallback((v: boolean) => setShowSportsState(v), []);
   const setShowEntertainment = useCallback((v: boolean) => setShowEntertainmentState(v), []);
 
+  const resetCustomize = useCallback(() => {
+    setShowClusterSummary(DEFAULTS.showClusterSummary);
+    setShowBiasDots(DEFAULTS.showBiasDots);
+    setShowMetaPill(DEFAULTS.showMetaPill);
+    setShowCardImages(DEFAULTS.showCardImages);
+    setCardDensity(DEFAULTS.cardDensity);
+    setDefaultArticleTab(DEFAULTS.defaultArticleTab);
+    setShowStatsCard(DEFAULTS.showStatsCard);
+    setShowVerifyDedup(DEFAULTS.showVerifyDedup);
+    setShowReferencedSources(DEFAULTS.showReferencedSources);
+    setShowEntityHighlights(DEFAULTS.showEntityHighlights);
+    setShowReadingDifficulty(DEFAULTS.showReadingDifficulty);
+    setSummaryLength(DEFAULTS.summaryLength);
+    setKeyPointsCount(DEFAULTS.keyPointsCount);
+    setShowKeyPoints(DEFAULTS.showKeyPoints);
+    setEli5Tone(DEFAULTS.eli5Tone);
+    setDeepDiveDepth(DEFAULTS.deepDiveDepth);
+    setShowDeepDiveEntities(DEFAULTS.showDeepDiveEntities);
+    setShowDeepDiveCurious(DEFAULTS.showDeepDiveCurious);
+  }, []);
+
   const value = useMemo(() => ({
     fontSize, setFontSize,
     notifBreaking, setNotifBreaking,
@@ -244,7 +375,27 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     activeSubTopics, toggleSubTopic,
     topicInterests, setTopicInterest,
     resetSettings,
-  }), [fontSize, notifBreaking, notifTech, notifDigest, notifAiFeed, notifSources, showSports, showEntertainment, favSources, favTopics, topicInterests, activeTopics, activeSubTopics, setFontSize, setNotifBreaking, setNotifTech, setNotifDigest, setNotifAiFeed, setNotifSources, setShowSports, setShowEntertainment, toggleFavSource, toggleFavTopic, toggleTopic, toggleSubTopic, setTopicInterest, resetSettings]);
+    // Customize
+    showClusterSummary, setShowClusterSummary,
+    showBiasDots, setShowBiasDots,
+    showMetaPill, setShowMetaPill,
+    showCardImages, setShowCardImages,
+    cardDensity, setCardDensity,
+    defaultArticleTab, setDefaultArticleTab,
+    showStatsCard, setShowStatsCard,
+    showVerifyDedup, setShowVerifyDedup,
+    showReferencedSources, setShowReferencedSources,
+    showEntityHighlights, setShowEntityHighlights,
+    showReadingDifficulty, setShowReadingDifficulty,
+    summaryLength, setSummaryLength,
+    keyPointsCount, setKeyPointsCount,
+    showKeyPoints, setShowKeyPoints,
+    eli5Tone, setEli5Tone,
+    deepDiveDepth, setDeepDiveDepth,
+    showDeepDiveEntities, setShowDeepDiveEntities,
+    showDeepDiveCurious, setShowDeepDiveCurious,
+    resetCustomize,
+  }), [fontSize, notifBreaking, notifTech, notifDigest, notifAiFeed, notifSources, showSports, showEntertainment, favSources, favTopics, topicInterests, activeTopics, activeSubTopics, setFontSize, setNotifBreaking, setNotifTech, setNotifDigest, setNotifAiFeed, setNotifSources, setShowSports, setShowEntertainment, toggleFavSource, toggleFavTopic, toggleTopic, toggleSubTopic, setTopicInterest, resetSettings, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showVerifyDedup, showReferencedSources, showEntityHighlights, showReadingDifficulty, summaryLength, keyPointsCount, showKeyPoints, eli5Tone, deepDiveDepth, showDeepDiveEntities, showDeepDiveCurious, resetCustomize]);
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }

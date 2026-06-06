@@ -413,7 +413,14 @@ export default function ArticleScreen() {
     };
   }, []));
 
-  const { fontSize: fontSizeName } = useSettings();
+  const {
+    fontSize: fontSizeName,
+    defaultArticleTab,
+    showStatsCard, showVerifyDedup: showVerifyDedupSetting,
+    showReferencedSources, showKeyPoints,
+    summaryLength, keyPointsCount, eli5Tone,
+    showEntityHighlights, showReadingDifficulty,
+  } = useSettings();
   const { isSaved, toggleSave } = useSaved();
   const fontSizePx = FONT_SIZE_MAP[fontSizeName] ?? 17;
   const articleCategory = deriveCategory(params.source ?? '', params.url ?? '', params.headline ?? '');
@@ -422,7 +429,10 @@ export default function ArticleScreen() {
   // Long Form tab and default to AI Summary. Matches all variants: "NYT",
   // "NYT World", "New York Times", "NDTV", "NDTV Profit", "Ars Technica", etc.
   const blockLongform = /\bnyt|new york times|\bndtv|ars\s?technica/i.test(params.source ?? '');
-  const defaultTab: Tab = blockLongform ? 'Summary' : 'Long Form';
+  const userDefault = defaultArticleTab as Tab;
+  const defaultTab: Tab = blockLongform
+    ? (userDefault === 'Long Form' ? 'Summary' : userDefault)
+    : userDefault;
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
   const [paragraphs, setParagraphs] = useState<string[]>([]);
   const [originalParagraphs, setOriginalParagraphs] = useState<string[]>([]);
@@ -667,9 +677,12 @@ export default function ArticleScreen() {
     if (paragraphsLoading) return;
     if (paragraphs.length === 0) { setAiError('No article text available to summarize.'); return; }
 
-    // Persistent memory cache (24-hour TTL — never recompute same article)
-    // v3 — invalidates v2 entries poisoned by lenient empty-cache guard.
-    const cacheKey = `summary_v3_${params.id ?? params.url}_${aiType}`;
+    // Persistent memory cache (24-hour TTL — never recompute same article).
+    // v5 — cache key includes maxWords / keyPoints / eli5Tone so Customize
+    // changes invalidate stale responses.
+    const lengthMap: Record<typeof summaryLength, number> = { short: 150, medium: 250, long: 400 };
+    const maxWordsForType = activeTab === 'ELI5' ? 100 : lengthMap[summaryLength];
+    const cacheKey = `summary_v5_${params.id ?? params.url}_${aiType}_${maxWordsForType}_${keyPointsCount}_${eli5Tone}`;
     const cached = getCached(cacheKey, TTL.AI_SUMMARY);
     if (cached) {
       aiCache.current[activeTab] = cached;
@@ -688,7 +701,9 @@ export default function ArticleScreen() {
       url: params.url,
       paragraphs: paragraphs.slice(0, 15),
       type: TAB_AI_TYPE[activeTab],
-      maxWords: activeTab === 'ELI5' ? 100 : 250,
+      maxWords: maxWordsForType,
+      keyPoints: keyPointsCount,
+      eli5Tone,
     });
     const doFetch = (): Promise<Response> => fetch(`${API}/ai-summary`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
@@ -739,7 +754,7 @@ export default function ArticleScreen() {
     } else {
       switch (activeTab) {
         case 'Summary':
-          aiContent = <SummaryTab loading={aiLoading} result={aiResult} error={aiError} accentColor={dominant} fontSize={fontSizePx} />;
+          aiContent = <SummaryTab loading={aiLoading} result={aiResult} error={aiError} accentColor={dominant} fontSize={fontSizePx} showKeyPoints={showKeyPoints} />;
           break;
         case '5 Ws':
           aiContent = <FiveWsTab loading={aiLoading} result={aiResult} error={aiError} accentColor={accent} />;
@@ -950,9 +965,8 @@ export default function ArticleScreen() {
           {renderTabContent()}
         </View>
 
-        {/* Stats card + Verify Dedup — moved to bottom so they sit AFTER
-            the article body / AI summary, not above it. */}
-        {(() => {
+        {/* Stats card + Verify Dedup — gated by Customize → showStatsCard. */}
+        {showStatsCard && (() => {
           const wordCount = (s: string) => (s ?? '').trim().split(/\s+/).filter(Boolean).length;
           const preText = originalParagraphs.length > 0 ? originalParagraphs.join(' ') : '';
           const postText = paragraphs.length > 0 ? paragraphs.join(' ') : '';
@@ -995,16 +1009,18 @@ export default function ArticleScreen() {
                     </Text>
                   </View>
                 </View>
-                <Pressable
-                  onPress={() => setDedupModalVisible(true)}
-                  style={[styles.verifyLink, { borderColor: borderColor + '55', marginHorizontal: 0, marginTop: 10 }]}
-                >
-                  <Ionicons name="code-slash-outline" size={12} color={accent} />
-                  <Text style={[styles.verifyLinkText, { color: accent }]}>
-                    VERIFY DEDUP · VIEW RAW FETCH
-                  </Text>
-                  <Ionicons name="chevron-forward" size={12} color={accent} />
-                </Pressable>
+                {showVerifyDedupSetting && (
+                  <Pressable
+                    onPress={() => setDedupModalVisible(true)}
+                    style={[styles.verifyLink, { borderColor: borderColor + '55', marginHorizontal: 0, marginTop: 10 }]}
+                  >
+                    <Ionicons name="code-slash-outline" size={12} color={accent} />
+                    <Text style={[styles.verifyLinkText, { color: accent }]}>
+                      VERIFY DEDUP · VIEW RAW FETCH
+                    </Text>
+                    <Ionicons name="chevron-forward" size={12} color={accent} />
+                  </Pressable>
+                )}
               </View>
             );
           }
@@ -1053,7 +1069,7 @@ export default function ArticleScreen() {
         })()}
 
         {/* Referenced Articles section — Particle-style article rows */}
-        {referencedSources.length > 0 && (
+        {showReferencedSources && referencedSources.length > 0 && (
           <View style={styles.refSection}>
             <Text style={[styles.refTitle, { color: accent }]}>
               {referencedSources.length + 1} Articles
@@ -1363,7 +1379,7 @@ function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accen
   );
 }
 
-function SummaryTab({ loading, result, error, accentColor, fontSize }: { loading: boolean; result: AiResult | null; error: string | null; accentColor: string; fontSize: number }) {
+function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoints = true }: { loading: boolean; result: AiResult | null; error: string | null; accentColor: string; fontSize: number; showKeyPoints?: boolean }) {
   if (loading) return <Spinner />;
   if (error) return <ErrorMsg msg={error} />;
   if (!result) return <ErrorMsg msg="No summary available." />;
@@ -1390,7 +1406,7 @@ function SummaryTab({ loading, result, error, accentColor, fontSize }: { loading
       {paragraphs.map((p, i) => (
         <RichParagraph key={i} text={p} fontSize={fontSize} accentColor={accentColor} />
       ))}
-      {bullets.length > 0 && rawSummary ? (
+      {showKeyPoints && bullets.length > 0 && rawSummary ? (
         <View style={{ marginTop: 18, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.08)' }}>
           <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10.5, fontWeight: '700', letterSpacing: 1, marginBottom: 10 }}>KEY POINTS</Text>
           {bullets.map((line, i) => (
