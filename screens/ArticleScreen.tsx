@@ -742,7 +742,7 @@ export default function ArticleScreen() {
     } else {
       switch (activeTab) {
         case 'Summary':
-          aiContent = <SummaryTab loading={aiLoading} result={aiResult} error={aiError} accentColor={dominant} />;
+          aiContent = <SummaryTab loading={aiLoading} result={aiResult} error={aiError} accentColor={dominant} fontSize={fontSizePx} />;
           break;
         case '5 Ws':
           aiContent = <FiveWsTab loading={aiLoading} result={aiResult} error={aiError} accentColor={accent} />;
@@ -1356,7 +1356,7 @@ function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accen
   );
 }
 
-function SummaryTab({ loading, result, error, accentColor }: { loading: boolean; result: AiResult | null; error: string | null; accentColor: string }) {
+function SummaryTab({ loading, result, error, accentColor, fontSize }: { loading: boolean; result: AiResult | null; error: string | null; accentColor: string; fontSize: number }) {
   if (loading) return <Spinner />;
   if (error) return <ErrorMsg msg={error} />;
   if (!result) return <ErrorMsg msg="No summary available." />;
@@ -1381,7 +1381,7 @@ function SummaryTab({ loading, result, error, accentColor }: { loading: boolean;
   return (
     <View>
       {paragraphs.map((p, i) => (
-        <RichParagraph key={i} text={p} fontSize={15.5} accentColor={accentColor} />
+        <RichParagraph key={i} text={p} fontSize={fontSize} accentColor={accentColor} />
       ))}
       {bullets.length > 0 && rawSummary ? (
         <View style={{ marginTop: 18, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.08)' }}>

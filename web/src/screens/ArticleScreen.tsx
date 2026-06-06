@@ -323,7 +323,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
         aiContent = (
           <div>
             {paragraphs.map((p, i) => (
-              <p key={i} style={{ color: '#DDD', fontSize: 15.5, lineHeight: 1.65, margin: '0 0 16px 0' }}>{p}</p>
+              <p key={i} style={{ color: '#DDD', fontSize: fontSizePx, lineHeight: 1.7, margin: '0 0 16px 0' }}>{p}</p>
             ))}
             {bullets.length > 0 && (
               <div style={{ marginTop: 14, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
