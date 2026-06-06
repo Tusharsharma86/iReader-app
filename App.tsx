@@ -31,6 +31,8 @@ import NotifHistoryScreen from './screens/NotifHistoryScreen';
 import StoryTimelineScreen from './screens/StoryTimelineScreen';
 import { setupNotificationChannels, registerForPush } from './utils/notifications';
 import { trackNotifOpened, trackNotifReceived } from './utils/usageTracker';
+import { pushNotifHistory, type NotifKind } from './utils/notifHistory';
+import { getArticleColor } from './utils/colors';
 
 SplashScreen.preventAutoHideAsync();
 setTimeout(() => SplashScreen.hideAsync(), 3000);
@@ -349,9 +351,53 @@ export default function App() {
       handleNotificationTap(response.notification.request.content.data);
     });
     // Track every push delivered to this device (foreground + background).
-    const recvSub = N.addNotificationReceivedListener?.((n: { request?: { content?: { data?: { kind?: string } } } }) => {
-      const kind = String(n?.request?.content?.data?.kind ?? 'unknown');
+    // Also snapshot the full payload into NotifHistory so the user can revisit
+    // any past push from the History screen — even backend-sent ones the local
+    // fireBreakingNotif path never sees.
+    const recvSub = N.addNotificationReceivedListener?.((n: {
+      request?: {
+        content?: {
+          title?: string;
+          body?: string;
+          data?: {
+            kind?: string;
+            clusterId?: string;
+            article?: {
+              id?: string;
+              headline?: string;
+              summary?: string;
+              imageUrl?: string;
+              url?: string;
+              source?: string;
+              publishedAt?: string;
+            };
+          };
+        };
+      };
+    }) => {
+      const data = n?.request?.content?.data ?? {};
+      const kind = String(data.kind ?? 'unknown');
       trackNotifReceived(kind).catch(() => {});
+      const a = data.article ?? {};
+      const id = a.id ?? data.clusterId ?? `notif-${Date.now()}`;
+      const headline = a.headline ?? n?.request?.content?.body ?? n?.request?.content?.title ?? '';
+      if (!headline) return;
+      const kindMap: Record<string, NotifKind> = {
+        breaking: 'breaking', source: 'source', topic: 'topic',
+        'ai-feed': 'aiFeed', digest: 'digest', streak: 'streak',
+      };
+      pushNotifHistory({
+        id,
+        kind: kindMap[kind] ?? 'breaking',
+        firedAt: Date.now(),
+        headline,
+        summary: a.summary ?? '',
+        imageUrl: a.imageUrl ?? '',
+        url: a.url ?? '',
+        source: a.source ?? '',
+        publishedAt: a.publishedAt ?? new Date().toISOString(),
+        dominantColor: getArticleColor(id || headline),
+      }).catch(() => {});
     });
     // Cold start path — if app was launched by tapping a notification.
     N.getLastNotificationResponseAsync?.().then((resp: unknown) => {
