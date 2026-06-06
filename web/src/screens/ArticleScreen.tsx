@@ -230,9 +230,9 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     const aiType = TAB_AI_TYPE[activeTab];
     if (!aiType || !hasBeenRead || paragraphsLoading || paragraphs.length === 0) return;
     if (aiCache.current[activeTab]) { setAiResult(aiCache.current[activeTab]!); return; }
-    // v2 — invalidates v1 bullet-only cached responses so post-deploy users
-    // get the new narrative-prose summaries on articles they read before.
-    const cacheKey = `summary_v2_${params.id ?? params.url}_${aiType}`;
+    // v3 — invalidates v2 entries that may have been poisoned by lenient
+    // empty-cache guard letting bullets-only responses through.
+    const cacheKey = `summary_v3_${params.id ?? params.url}_${aiType}`;
     const cached = getCached(cacheKey, TTL.AI_SUMMARY);
     if (cached) { aiCache.current[activeTab] = cached; setAiResult(cached); return; }
     setAiLoading(true); setAiError(null); setAiResult(null);
@@ -596,7 +596,12 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
         const originalWords = postWords || preWords;
         if (originalWords === 0) return null;
         let aiText = '';
-        if (activeTab === 'Summary') aiText = aiResult?.bullets?.join(' ') ?? aiResult?.summary ?? '';
+        // Prefer narrative summary for the word count; fall back to bullets
+        // only if summary is empty. (?? would otherwise prefer empty-string
+        // bullets.join over a present summary.)
+        if (activeTab === 'Summary') aiText = aiResult?.summary?.trim()
+          ? aiResult.summary
+          : (aiResult?.bullets?.join(' ') ?? '');
         else if (activeTab === '5 Ws') aiText = (aiResult?.fiveWs ?? []).join(' ');
         else if (activeTab === 'ELI5') aiText = aiResult?.eli5 ?? '';
         const aiWords = wordCount(aiText);
