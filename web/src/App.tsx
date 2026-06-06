@@ -19,6 +19,9 @@ const FavSourcesScreen = lazy(() => import('./screens/FavSourcesScreen'));
 const TopicInterestsScreen = lazy(() => import('./screens/TopicInterestsScreen'));
 const UsageScreen           = lazy(() => import('./screens/UsageScreen'));
 const StoryTimelineScreen   = lazy(() => import('./screens/StoryTimelineScreen'));
+const NotificationSettingsScreen = lazy(() => import('./screens/NotificationSettingsScreen'));
+const BreakingThemesScreen  = lazy(() => import('./screens/BreakingThemesScreen'));
+const NotifHistoryScreen    = lazy(() => import('./screens/NotifHistoryScreen'));
 
 const spinner = (
   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: '#000' }}>
@@ -62,6 +65,9 @@ function ScreenRenderer() {
             {currentScreen.name === 'TopicInterests' && <TopicInterestsScreen />}
             {currentScreen.name === 'Usage'      && <UsageScreen />}
             {currentScreen.name === 'StoryTimeline' && <StoryTimelineScreen params={currentScreen.params} />}
+            {currentScreen.name === 'NotificationSettings' && <NotificationSettingsScreen />}
+            {currentScreen.name === 'BreakingThemes' && <BreakingThemesScreen />}
+            {currentScreen.name === 'NotifHistory' && <NotifHistoryScreen />}
           </Suspense>
         </div>
       )}

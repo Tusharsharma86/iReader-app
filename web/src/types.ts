@@ -77,6 +77,9 @@ export type NavScreen =
   | { name: 'Sources' }
   | { name: 'FavSources' }
   | { name: 'TopicInterests' }
-  | { name: 'Usage' };
+  | { name: 'Usage' }
+  | { name: 'NotificationSettings' }
+  | { name: 'BreakingThemes' }
+  | { name: 'NotifHistory' };
 
 export type TabName = 'feed' | 'digest' | 'aifeed' | 'saved' | 'settings';

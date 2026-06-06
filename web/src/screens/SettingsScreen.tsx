@@ -192,13 +192,12 @@ function InlineSources() {
 
 export default function SettingsScreen() {
   const { navigate, goBack, canGoBack } = useRouter();
-  const { fontSize, setFontSize, notifBreaking, setNotifBreaking, notifTech, setNotifTech, notifDigest, setNotifDigest, favSources, activeTopics, topicInterests, resetSettings } = useSettings();
+  const { fontSize, setFontSize, notifBreaking, setNotifBreaking, notifAiFeed, setNotifAiFeed, notifTech, setNotifTech, notifDigest, setNotifDigest, activeTopics, topicInterests, resetSettings } = useSettings();
   const { resetSources } = useSource();
   const { reportScroll } = useTabBar();
-  const [targetingOpen, setTargetingOpen] = useState(false);
 
-  const starredCount = Object.values(topicInterests).filter(v => v > 0).length;
   const enabledTopicsCount = Object.values(activeTopics).filter(Boolean).length;
+  const anyNotifOn = notifBreaking || notifAiFeed || notifTech || notifDigest;
 
   return (
     <div onScroll={e => reportScroll((e.target as HTMLDivElement).scrollTop)} style={{ height: '100%', overflowY: 'auto', background: '#000', WebkitOverflowScrolling: 'touch' }}>
@@ -218,49 +217,30 @@ export default function SettingsScreen() {
         </div>
       </div>
 
-      {/* NOTIFICATIONS — Topic Alerts has a nested targeting sub-screen */}
+      {/* NOTIFICATIONS — collapsed to master toggle + entry to sub-screen.
+          Full config (Main/AI Breaking, Themes, Topics, Digest, History)
+          lives in NotificationSettingsScreen for parity with Android. */}
       <div style={sectionHeader}>NOTIFICATIONS</div>
       <div style={card}>
         <div style={row}>
           <div style={{ flex: 1, marginRight: 12 }}>
-            <div style={{ color: '#DDD', fontSize: 15, fontWeight: 500 }}>Breaking News</div>
-            <div style={{ color: '#555', fontSize: 12, marginTop: 2 }}>Major stories with 3+ source confirmation</div>
+            <div style={{ color: '#DDD', fontSize: 15, fontWeight: 500 }}>Notifications</div>
+            <div style={{ color: '#555', fontSize: 12, marginTop: 2 }}>{anyNotifOn ? 'Master switch — off silences everything' : 'Off — no pushes will be sent'}</div>
           </div>
-          <Toggle value={notifBreaking} onChange={setNotifBreaking} />
+          <Toggle value={anyNotifOn} onChange={v => {
+            if (!v) { setNotifBreaking(false); setNotifAiFeed(false); setNotifTech(false); setNotifDigest(false); }
+            else setNotifBreaking(true);
+          }} />
         </div>
-
-        <div style={rowBorder}>
+        <div onClick={() => navigate({ name: 'NotificationSettings' })} style={{ ...rowBorder, cursor: 'pointer' }}>
+          <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(185,148,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 12, flexShrink: 0 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={VIOLET} strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </div>
           <div style={{ flex: 1, marginRight: 12 }}>
-            <div style={{ color: '#DDD', fontSize: 15, fontWeight: 500 }}>Topic Alerts</div>
-            <div style={{ color: '#555', fontSize: 12, marginTop: 2 }}>{starredCount > 0 ? `${starredCount} topics starred · ${favSources.length} fav sources` : 'Alerts for topics you star'}</div>
+            <div style={{ color: '#DDD', fontSize: 15, fontWeight: 500 }}>Notification Settings</div>
+            <div style={{ color: '#555', fontSize: 12, marginTop: 2 }}>Breaking, themes, topics, digest, history</div>
           </div>
-          <Toggle value={notifTech} onChange={setNotifTech} />
-        </div>
-        {/* Nested targeting sub-screen */}
-        <div onClick={() => setTargetingOpen(o => !o)} style={{ ...rowBorder, cursor: 'pointer', paddingLeft: 28, background: '#0a0a0a' }}>
-          <div style={{ flex: 1, marginRight: 12 }}>
-            <div style={{ color: '#bbb', fontSize: 14, fontWeight: 500 }}>Topics &amp; Sources</div>
-            <div style={{ color: '#555', fontSize: 12, marginTop: 2 }}>Choose what triggers your alerts</div>
-          </div>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" style={{ transform: targetingOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }}><polyline points="9 18 15 12 9 6"/></svg>
-        </div>
-        {targetingOpen && (
-          <div style={{ background: '#0a0a0a', padding: '4px 16px 16px', borderTop: '1px solid #161616' }}>
-            <div style={{ color: VIOLET, fontSize: 10, fontWeight: 800, letterSpacing: 1.2, marginTop: 14 }}>TOPIC INTERESTS</div>
-            <div style={{ color: '#555', fontSize: 11, marginTop: 3 }}>Star 1-5 — higher = higher alert priority + feed weight.</div>
-            <InlineTopicInterests />
-            <div style={{ color: VIOLET, fontSize: 10, fontWeight: 800, letterSpacing: 1.2, marginTop: 18 }}>FAVORITE SOURCES</div>
-            <div style={{ color: '#555', fontSize: 11, marginTop: 3 }}>Optional — limit topic alerts to chosen publications.</div>
-            <InlineFavorites />
-          </div>
-        )}
-
-        <div style={rowBorder}>
-          <div style={{ flex: 1, marginRight: 12 }}>
-            <div style={{ color: '#DDD', fontSize: 15, fontWeight: 500 }}>Daily Digest</div>
-            <div style={{ color: '#555', fontSize: 12, marginTop: 2 }}>Morning + evening summary</div>
-          </div>
-          <Toggle value={notifDigest} onChange={setNotifDigest} />
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
         </div>
       </div>
 
