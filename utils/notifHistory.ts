@@ -64,6 +64,55 @@ export function subscribeNotifHistory(fn: () => void): () => void {
   return () => subs.delete(fn);
 }
 
+// Backfill local history from backend per-token log. Catches notifs that
+// landed while the app was killed (Expo's addNotificationReceivedListener
+// only fires for foreground/background-running, not killed-state). Merges by
+// id — existing local entries win to preserve any client-side enrichment.
+const API_BASE = 'https://ireader.onrender.com/api/news';
+let lastSync = 0;
+
+export async function syncNotifHistoryFromBackend(token: string): Promise<number> {
+  if (!token) return 0;
+  // Throttle to once per 30s to avoid hammering the endpoint on every focus.
+  if (Date.now() - lastSync < 30 * 1000) return 0;
+  lastSync = Date.now();
+  try {
+    const url = `${API_BASE}/notif-history?token=${encodeURIComponent(token)}&limit=200`;
+    const r = await fetch(url);
+    if (!r.ok) return 0;
+    const data = await r.json() as { entries?: Array<{
+      id: string; kind: string; firedAt: number;
+      headline?: string; summary?: string; imageUrl?: string;
+      url?: string; source?: string; publishedAt?: string;
+    }> };
+    const remote = data.entries ?? [];
+    if (remote.length === 0) return 0;
+    const local = await readAll();
+    const localById = new Map(local.map(e => [e.id, e]));
+    let added = 0;
+    for (const e of remote) {
+      if (localById.has(e.id)) continue;
+      added++;
+      localById.set(e.id, {
+        id: e.id,
+        kind: ((['breaking','source','topic','aiFeed','digest','streak'].includes(e.kind)) ? e.kind : 'breaking') as NotifKind,
+        firedAt: e.firedAt,
+        headline: e.headline ?? '',
+        summary: e.summary ?? '',
+        imageUrl: e.imageUrl ?? '',
+        url: e.url ?? '',
+        source: e.source ?? '',
+        publishedAt: e.publishedAt ?? new Date(e.firedAt).toISOString(),
+      });
+    }
+    if (added === 0) return 0;
+    // Re-sort by firedAt desc, cap, persist.
+    const merged = Array.from(localById.values()).sort((a, b) => b.firedAt - a.firedAt).slice(0, MAX_ENTRIES);
+    await writeAll(merged);
+    return added;
+  } catch { return 0; }
+}
+
 // Group entries by day bucket for the screen — Today, Yesterday, then dates.
 export interface NotifHistorySection {
   label: string;

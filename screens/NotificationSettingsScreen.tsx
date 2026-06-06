@@ -6,12 +6,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Pressable, ScrollView, StyleSheet, Switch, Text,
+  Alert, Pressable, ScrollView, Share, StyleSheet, Switch, Text,
   TouchableOpacity, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSettings } from '../contexts/SettingsContext';
 import {
+  getCachedPushToken,
   registerForPush, requestNotificationPermission, updatePushPreferences,
 } from '../utils/notifications';
 import { INTEREST_TOPICS } from '../utils/interestTopics';
@@ -33,6 +34,23 @@ export default function NotificationSettingsScreen() {
     topicInterests,
   } = useSettings();
   const [targetingOpen, setTargetingOpen] = useState(false);
+  const [pushToken, setPushToken] = useState<string | null>(null);
+  useEffect(() => { getCachedPushToken().then(setPushToken).catch(() => {}); }, []);
+
+  const copyPairCode = useCallback(async () => {
+    if (!pushToken) {
+      Alert.alert('Pair code unavailable', 'Turn on at least one notification toggle first.');
+      return;
+    }
+    // Use Share so the user can pick "Copy" or paste directly into the web
+    // app. Avoids adding the expo-clipboard dependency.
+    try {
+      await Share.share({
+        message: pushToken,
+        title: 'iReader pair code',
+      });
+    } catch { /* user cancelled */ }
+  }, [pushToken]);
 
   const starredKeywords = useMemo(() => {
     const starred = INTEREST_TOPICS.filter(t => (topicInterests[t.id] ?? 0) > 0);
@@ -223,6 +241,20 @@ export default function NotificationSettingsScreen() {
               <Text style={styles.rowSub}>Past pushes — tap to reopen</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#666" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.row, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#1F1F22' }]}
+            onPress={copyPairCode}>
+            <View style={styles.collapsibleIcon}>
+              <Ionicons name="link" size={16} color={VIOLET} />
+            </View>
+            <View style={styles.rowTextCol}>
+              <Text style={styles.rowLabel}>Pair Code (for web)</Text>
+              <Text style={styles.rowSub} numberOfLines={1}>
+                {pushToken ? `${pushToken.slice(0, 18)}…  · tap to copy` : 'Enable notifs first'}
+              </Text>
+            </View>
+            <Ionicons name="copy-outline" size={18} color={pushToken ? VIOLET : '#444'} />
           </TouchableOpacity>
         </View>
       </ScrollView>

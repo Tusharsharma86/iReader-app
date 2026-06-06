@@ -6,8 +6,10 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   loadNotifHistory, clearNotifHistory, subscribeNotifHistory,
-  groupByDay, type NotifHistoryEntry, type NotifKind,
+  groupByDay, syncNotifHistoryFromBackend,
+  type NotifHistoryEntry, type NotifKind,
 } from '../utils/notifHistory';
+import { getCachedPushToken } from '../utils/notifications';
 
 const VIOLET = '#b994ff';
 const CARD_BG = '#0E0E0E';
@@ -42,7 +44,18 @@ export default function NotifHistoryScreen() {
     return () => { unsub(); };
   }, [reload]);
 
-  useFocusEffect(useCallback(() => { reload(); }, [reload]));
+  // On focus: pull backend log via the device's push token and merge into
+  // local history. Catches notifs that arrived while the app was killed
+  // (Expo's receivedListener doesn't fire in that state).
+  useFocusEffect(useCallback(() => {
+    reload();
+    getCachedPushToken().then(tk => {
+      if (!tk) return;
+      syncNotifHistoryFromBackend(tk).then(added => {
+        if (added > 0) reload();
+      }).catch(() => {});
+    }).catch(() => {});
+  }, [reload]));
 
   const sections = groupByDay(entries);
 
