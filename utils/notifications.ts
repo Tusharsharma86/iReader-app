@@ -213,18 +213,47 @@ async function markSeen(id: string): Promise<void> {
   } catch {}
 }
 
-async function send(channelId: string, title: string, body: string, data: Record<string, unknown>): Promise<void> {
+async function send(
+  channelId: string,
+  title: string,
+  body: string,
+  data: Record<string, unknown>,
+  imageUrl?: string,
+): Promise<void> {
   if (!N) return;
   const trigger = Platform.OS === 'android'
     ? { type: N.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 1, channelId }
     : null;
-  await N.scheduleNotificationAsync({ content: { title, body, data }, trigger });
+  // attachments → big-picture style on iOS; Android needs a config plugin
+  // for image previews on local notifs, so this is best-effort.
+  const attachments = imageUrl ? [{ url: imageUrl, identifier: 'thumb' }] : undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const content: any = { title, body, data };
+  if (attachments) content.attachments = attachments;
+  await N.scheduleNotificationAsync({ content, trigger });
 }
 
-export async function fireBreakingNotif(id: string, headline: string): Promise<void> {
+// Detect which of the 73 breaking themes the headline matches, returning
+// the theme name or null. Used so notif titles read "Breaking · <theme>".
+function detectBreakingTheme(headline: string, summary: string): string | null {
+  // Lazy require to avoid a circular dep when this file is imported early.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { ALL_BREAKING_THEMES } = require('./breakingThemes') as {
+    ALL_BREAKING_THEMES: { name: string; pattern: RegExp }[];
+  };
+  const text = `${headline} ${summary}`;
+  for (const t of ALL_BREAKING_THEMES) {
+    if (t.pattern.test(text)) return t.name;
+  }
+  return null;
+}
+
+export async function fireBreakingNotif(id: string, headline: string, summary?: string, imageUrl?: string): Promise<void> {
   const seen = await getSeenIds();
   if (seen.has(id)) return;
-  try { await send(CHANNEL_BREAKING, '🔴 Breaking News', headline, { type: 'breaking', id }); } catch {}
+  const theme = detectBreakingTheme(headline, summary ?? '');
+  const title = theme ? `Breaking · ${theme}` : 'Breaking News';
+  try { await send(CHANNEL_BREAKING, title, headline, { type: 'breaking', id }, imageUrl); } catch {}
   await markSeen(id);
 }
 

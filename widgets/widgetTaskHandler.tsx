@@ -9,27 +9,51 @@ const MAX_ITEMS = 12;
 
 interface CacheShape { stories: WidgetStory[]; at: number; }
 
+// Devanagari range — catches Hindi / Marathi / Sanskrit headlines.
+const DEVANAGARI = /[ऀ-ॿ]/;
+// Hindi-language source names we want to exclude even if the headline is
+// transliterated to English.
+const HINDI_SOURCES = new Set([
+  'Aaj Tak', 'NDTV India', 'Zee News Hindi', 'ABP News', 'Times Now Navbharat',
+  'News18 India', 'Dainik Bhaskar', 'Amar Ujala', 'Jansatta', 'Punjab Kesari',
+]);
+const FRESH_MS = 90 * 60 * 1000; // 90 min — "breaking-ish" cutoff
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapItems(raw: any): WidgetStory[] {
   const items: any[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
+  const now = Date.now();
   const out: WidgetStory[] = [];
   for (const it of items) {
     const p = it?.primary ?? it;
     const headline = String(p?.headline ?? '').trim();
+    const summary = String(p?.summary ?? '');
     const publishedAt = String(p?.publishedAt ?? '');
     if (!headline) continue;
+
+    // Drop Hindi headlines / Hindi sources.
+    if (DEVANAGARI.test(headline) || DEVANAGARI.test(summary)) continue;
     const srcs = Array.isArray(p?.sources) ? p.sources : [];
     const src = srcs[0];
+    const srcName = String(src?.name ?? '');
+    if (HINDI_SOURCES.has(srcName)) continue;
+
+    // Only TRULY breaking: server-flagged OR ≥3 sources OR fresh (<90 min).
     const count = Number(p?.sourceCount ?? srcs.length ?? 1) || 1;
+    const ts = Date.parse(publishedAt);
+    const fresh = Number.isFinite(ts) && now - ts < FRESH_MS;
+    const flaggedBreaking = Boolean(p?.isBreaking);
+    if (!flaggedBreaking && count < 3 && !fresh) continue;
+
     out.push({
       id: String(p?.id ?? src?.url ?? headline),
       headline,
-      source: String(src?.name ?? ''),
+      source: srcName,
       sourceCount: count,
       imageUrl: String(p?.imageUrl ?? ''),
       url: String(src?.url ?? ''),
       publishedAt,
-      summary: String(p?.summary ?? ''),
+      summary,
     });
     if (out.length >= MAX_ITEMS) break;
   }

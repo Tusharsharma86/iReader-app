@@ -650,7 +650,7 @@ export default function FeedScreen() {
           firedAt: Date.now(),
         };
         if (notifBreaking && isBreakingArticle && !matchesMutedBreakingTheme(a.headline, a.summary ?? '')) {
-          fireBreakingNotif(a.id, a.headline).catch(() => {});
+          fireBreakingNotif(a.id, a.headline, a.summary ?? '', a.imageUrl ?? '').catch(() => {});
           pushNotifHistory({ ...historyBase, kind: 'breaking' }).catch(() => {});
         } else if (notifSources && (isFavSource || isFavTopic)) {
           fireFavSourceNotif(a.id, sourceName || 'iReader', a.headline).catch(() => {});
