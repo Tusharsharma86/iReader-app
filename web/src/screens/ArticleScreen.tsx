@@ -270,6 +270,24 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
               style={{ display: 'block', marginTop: 20, padding: '14px', borderRadius: 12, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', textAlign: 'center', color: '#fff', fontSize: 15, fontWeight: 700, textDecoration: 'none' }}>
               Read Full Article →
             </a>
+            {/* Verify Dedup — last section of the screen. */}
+            {originalParagraphs.length > 0 && (
+              <button
+                onClick={() => setDedupModalVisible(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  marginTop: 12, padding: '10px 14px',
+                  borderRadius: 999, border: `1px solid ${borderColor}55`,
+                  background: 'rgba(0,0,0,0.18)', color: accent,
+                  fontSize: 10, fontWeight: 700, letterSpacing: 1.2, cursor: 'pointer',
+                  width: '100%',
+                }}
+              >
+                <span>{'</>'}</span>
+                VERIFY DEDUP · VIEW RAW FETCH
+                <span>›</span>
+              </button>
+            )}
           </>
         )}
       </div>
@@ -573,21 +591,8 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
                 <span style={{ fontSize: 16, color: reduction > 0 ? '#34C759' : 'rgba(255,255,255,0.4)' }}>↘</span>
                 <StatCell value={`${reduction}%`} label={dedupedFlag ? (paraReduction > 0 ? `LESS (-${paraReduction} ¶)` : 'LESS') : 'NO DEDUP'} accent={accent} />
               </div>
-              <button
-                onClick={() => setDedupModalVisible(true)}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  margin: '0 16px 16px', padding: '8px 14px',
-                  borderRadius: 999, border: `1px solid ${borderColor}55`,
-                  background: 'rgba(0,0,0,0.18)', color: accent,
-                  fontSize: 10, fontWeight: 700, letterSpacing: 1.2, cursor: 'pointer',
-                  width: 'calc(100% - 32px)',
-                }}
-              >
-                <span>{'</>'}</span>
-                VERIFY DEDUP · VIEW RAW FETCH
-                <span>›</span>
-              </button>
+              {/* Verify Dedup button now lives at the bottom of Long Form,
+                  rendered alongside the Read Full Article link. */}
             </div>
           );
         }

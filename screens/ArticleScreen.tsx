@@ -722,6 +722,9 @@ export default function ArticleScreen() {
         fontSize={fontSizePx}
         url={params.url}
         accentColor={accent}
+        borderColor={borderColor}
+        showVerifyDedup={originalParagraphs.length > 0}
+        onVerifyDedup={() => setDedupModalVisible(true)}
       />
     );
 
@@ -991,17 +994,8 @@ export default function ArticleScreen() {
                     </Text>
                   </View>
                 </View>
-                {/* Validate button — opens modal with raw fetch + side-by-side diff */}
-                <Pressable
-                  onPress={() => setDedupModalVisible(true)}
-                  style={[styles.verifyLink, { borderColor: borderColor + '55' }]}
-                >
-                  <Ionicons name="code-slash-outline" size={12} color={accent} />
-                  <Text style={[styles.verifyLinkText, { color: accent }]}>
-                    VERIFY DEDUP · VIEW RAW FETCH
-                  </Text>
-                  <Ionicons name="chevron-forward" size={12} color={accent} />
-                </Pressable>
+                {/* Verify Dedup button moved to bottom of Long Form (last
+                    section of the screen). See LongFormTab below. */}
               </View>
             );
           }
@@ -1303,12 +1297,26 @@ function RichParagraph({ text, fontSize, accentColor }: { text: string; fontSize
   );
 }
 
-function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accentColor }: {
+function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accentColor, borderColor, showVerifyDedup, onVerifyDedup }: {
   loading: boolean; paragraphs: string[]; error: string | null; summary: string; fontSize: number; url?: string; accentColor: string;
+  borderColor?: string; showVerifyDedup?: boolean; onVerifyDedup?: () => void;
 }) {
   if (loading) return <Spinner />;
 
   const isBlocked = !!error && /50[0-9]|blocked|unavailable/i.test(error);
+
+  const verifyBtn = showVerifyDedup && onVerifyDedup ? (
+    <Pressable
+      onPress={onVerifyDedup}
+      style={[styles.verifyLink, { borderColor: (borderColor ?? accentColor) + '55', marginTop: 12, marginBottom: 0 }]}
+    >
+      <Ionicons name="code-slash-outline" size={12} color={accentColor} />
+      <Text style={[styles.verifyLinkText, { color: accentColor }]}>
+        VERIFY DEDUP · VIEW RAW FETCH
+      </Text>
+      <Ionicons name="chevron-forward" size={12} color={accentColor} />
+    </Pressable>
+  ) : null;
 
   if (!paragraphs.length || isBlocked) {
     return (
@@ -1327,6 +1335,7 @@ function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accen
             <Text style={styles.readFullText}>Read Full Article →</Text>
           </TouchableOpacity>
         ) : null}
+        {verifyBtn}
       </View>
     );
   }
@@ -1342,6 +1351,7 @@ function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accen
           <Text style={styles.readFullText}>Read Full Article →</Text>
         </TouchableOpacity>
       ) : null}
+      {verifyBtn}
     </View>
   );
 }
