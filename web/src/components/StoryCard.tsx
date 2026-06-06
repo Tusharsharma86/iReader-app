@@ -4,6 +4,7 @@ import { BIAS_CONFIG } from '../types';
 import { getArticleColor, lighten, darken } from '../utils/colors';
 import { useRouter } from '../contexts/RouterContext';
 import { useSaved } from '../contexts/SavedContext';
+import { useSettings } from '../contexts/SettingsContext';
 import { trackArticleOpen } from '../utils/personalization';
 import { FALLBACK_IMG } from '../utils/fallback';
 
@@ -74,6 +75,7 @@ interface Props {
 export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppressBreaking }: Props) {
   const { navigate } = useRouter();
   const { toggleSave, isSaved } = useSaved();
+  const { showClusterSummary, showBiasDots, showCardImages, cardDensity } = useSettings();
   const [imgError, setImgError] = useState(false);
   const saved = isSaved(story.id);
 
@@ -127,8 +129,9 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
         transition: 'transform 0.16s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.24s ease',
       }}
     >
-      {/* Background image or typographic fallback */}
-      {!imgError && story.imageUrl ? (
+      {/* Background image or typographic fallback. Hidden when Customize →
+          showCardImages is off (text-only feed mode). */}
+      {showCardImages && !imgError && story.imageUrl ? (
         <img src={story.imageUrl} alt="" onError={() => setImgError(true)}
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
       ) : (
@@ -165,7 +168,7 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
             {source.charAt(0).toUpperCase()}
           </div>
           <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: 600 }}>{source.toUpperCase()}</span>
-          {story.sourceBias && story.sourceBias !== 'unknown' && (
+          {showBiasDots && story.sourceBias && story.sourceBias !== 'unknown' && (
             <div style={{ width: 6, height: 6, borderRadius: 3, background: BIAS_CONFIG[story.sourceBias as BiasRating]?.color, flexShrink: 0 }} />
           )}
           <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>·</span>
@@ -198,8 +201,9 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
             from the summary alone) disagreed with the article-screen estimate (computed
             from the full body) — confusing the reader. Article screen still shows it. */}
 
-        {/* Summary (non-compact) — prefer the 25-word AI summary when present */}
-        {!compact && (story.aiSummary || story.summary) && (
+        {/* Summary (non-compact) — prefer the 25-word AI summary when present.
+            Hidden when Customize → showClusterSummary is off. */}
+        {!compact && showClusterSummary && (story.aiSummary || story.summary) && (
           <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: 10.5, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
             {story.aiSummary || story.summary}
           </div>

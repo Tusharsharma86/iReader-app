@@ -80,6 +80,7 @@ export type NavScreen =
   | { name: 'Usage' }
   | { name: 'NotificationSettings' }
   | { name: 'BreakingThemes' }
-  | { name: 'NotifHistory' };
+  | { name: 'NotifHistory' }
+  | { name: 'Customize' };
 
 export type TabName = 'feed' | 'digest' | 'aifeed' | 'saved' | 'settings';

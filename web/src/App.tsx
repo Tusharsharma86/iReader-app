@@ -22,6 +22,7 @@ const StoryTimelineScreen   = lazy(() => import('./screens/StoryTimelineScreen')
 const NotificationSettingsScreen = lazy(() => import('./screens/NotificationSettingsScreen'));
 const BreakingThemesScreen  = lazy(() => import('./screens/BreakingThemesScreen'));
 const NotifHistoryScreen    = lazy(() => import('./screens/NotifHistoryScreen'));
+const CustomizeScreen       = lazy(() => import('./screens/CustomizeScreen'));
 
 const spinner = (
   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: '#000' }}>
@@ -68,6 +69,7 @@ function ScreenRenderer() {
             {currentScreen.name === 'NotificationSettings' && <NotificationSettingsScreen />}
             {currentScreen.name === 'BreakingThemes' && <BreakingThemesScreen />}
             {currentScreen.name === 'NotifHistory' && <NotifHistoryScreen />}
+            {currentScreen.name === 'Customize' && <CustomizeScreen />}
           </Suspense>
         </div>
       )}

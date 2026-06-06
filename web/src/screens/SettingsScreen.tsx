@@ -244,6 +244,21 @@ export default function SettingsScreen() {
         </div>
       </div>
 
+      {/* APPEARANCE — Customize sub-screen */}
+      <div style={{ ...sectionHeader, marginTop: 14 }}>APPEARANCE</div>
+      <div style={card}>
+        <div onClick={() => navigate({ name: 'Customize' })} style={{ ...row, cursor: 'pointer' }}>
+          <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(185,148,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 12, flexShrink: 0 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={VIOLET} strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          </div>
+          <div style={{ flex: 1, marginRight: 12 }}>
+            <div style={{ color: '#DDD', fontSize: 15, fontWeight: 500 }}>Customize</div>
+            <div style={{ color: '#555', fontSize: 12, marginTop: 2 }}>UI density, defaults, summary length, hide/show sections</div>
+          </div>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+
       {/* FEED */}
       <div style={sectionHeader}>FEED</div>
       <Collapsible icon="▦" title="Active Topics" subtitle={`${enabledTopicsCount} of 6 categories on`}>

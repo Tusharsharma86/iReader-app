@@ -77,6 +77,8 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
   cluster: StoryCluster; soloCardWidth: number; allStories: Story[];
 }) {
   const { navigate } = useRouter();
+  const { showMetaPill, showClusterSummary, cardDensity: density } = useSettings();
+  const clusterGap = density === 'compact' ? 14 : density === 'spacious' ? 44 : 28;
   const isBreaking = cluster.isBreaking;
   const canTimeline = cluster.stories.length >= 3;
 
@@ -98,21 +100,21 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
 
   if (cluster.stories.length === 1) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 28 }}>
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: clusterGap }}>
         <StoryCard story={cluster.stories[0]} cardWidth={soloCardWidth} allStories={allStories} />
       </div>
     );
   }
 
   return (
-    <div style={{ marginBottom: 28 }}>
+    <div style={{ marginBottom: clusterGap }}>
       {/* Topic label */}
       <div
         onClick={canTimeline ? openTimeline : undefined}
         style={{ paddingLeft: sideMargin, paddingRight: sideMargin, marginBottom: 12, cursor: canTimeline ? 'pointer' : 'default', WebkitTapHighlightColor: 'transparent' }}
       >
         {/* Meta row ABOVE headline: TREND/BREAKING pill + clock + stories pill (right) */}
-        {(cluster.collection || isBreaking || canTimeline || cluster.stories.length > 1) && (
+        {showMetaPill && (cluster.collection || isBreaking || canTimeline || cluster.stories.length > 1) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             {cluster.collection && (
               <span style={{
@@ -249,7 +251,11 @@ function serverItemToCluster(item: ServerFeedItem): StoryCluster | null {
 
 export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }) {
   const { activeSources } = useSource();
-  const { activeTopics, activeSubTopics, showSports, showEntertainment, topicInterests } = useSettings();
+  const {
+    activeTopics, activeSubTopics, showSports, showEntertainment, topicInterests,
+    showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity,
+    defaultTopic, pullToRefresh,
+  } = useSettings();
   const { navigate } = useRouter();
   const { reportScroll } = useTabBar();
   const isVisibleRef = useRef(isVisible);
@@ -266,7 +272,9 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   }, []);
 
   const [activeTopic, setActiveTopic] = useState<CategoryTopic>(() => {
-    return (localStorage.getItem('@ireader_active_topic') as CategoryTopic) ?? 'breaking';
+    // Restore last topic if present, else fall back to the user's Customize
+    // → defaultTopic preference (breaking by default).
+    return (localStorage.getItem('@ireader_active_topic') as CategoryTopic) ?? defaultTopic;
   });
   const [allFeed, setAllFeed] = useState<ServerFeedItem[]>(() => feedCache.get(activeTopic)?.data ?? []);
   const [pendingFeed, setPendingFeed] = useState<ServerFeedItem[] | null>(null);

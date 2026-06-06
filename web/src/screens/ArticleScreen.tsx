@@ -120,7 +120,13 @@ function extractEntityTokens(text: string): string[] {
 
 export default function ArticleScreen({ params }: { params: ArticleParams }) {
   const { goBack, navigate } = useRouter();
-  const { fontSize: fontSizeName } = useSettings();
+  const {
+    fontSize: fontSizeName,
+    defaultArticleTab,
+    showStatsCard, showVerifyDedup: showVerifyDedupSetting,
+    showReferencedSources, showKeyPoints,
+    summaryLength, keyPointsCount, linkOpen,
+  } = useSettings();
   const { hide, show } = useTabBar();
 
   // Hide bottom tab bar while reading an article; restore on back
@@ -141,7 +147,12 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
   // Long Form tab entirely and default to the AI Summary. Matches all variants:
   // "NYT", "NYT World", "New York Times", "NDTV", "NDTV Profit", "Ars Technica", etc.
   const blockLongform = /\bnyt|new york times|\bndtv|ars\s?technica/i.test(params.source ?? '');
-  const defaultTab: Tab = blockLongform ? 'Summary' : 'Long Form';
+  // Respect the user's Customize → Default tab preference unless the source
+  // blocks Long Form (then we force-fall to Summary).
+  const userDefaultTab = defaultArticleTab as Tab;
+  const defaultTab: Tab = blockLongform
+    ? (userDefaultTab === 'Long Form' ? 'Summary' : userDefaultTab)
+    : userDefaultTab;
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
   const [paragraphs, setParagraphs] = useState<string[]>([]);
   const [originalParagraphs, setOriginalParagraphs] = useState<string[]>([]);
@@ -232,13 +243,17 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     if (aiCache.current[activeTab]) { setAiResult(aiCache.current[activeTab]!); return; }
     // v3 — invalidates v2 entries that may have been poisoned by lenient
     // empty-cache guard letting bullets-only responses through.
-    const cacheKey = `summary_v3_${params.id ?? params.url}_${aiType}`;
+    // Customize: summary length → backend maxWords. Cache key includes the
+    // length so different settings don't collide on cached responses.
+    const lengthMap: Record<typeof summaryLength, number> = { short: 150, medium: 250, long: 400 };
+    const maxWordsForType = activeTab === 'ELI5' ? 100 : lengthMap[summaryLength];
+    const cacheKey = `summary_v3_${params.id ?? params.url}_${aiType}_${maxWordsForType}_${keyPointsCount}`;
     const cached = getCached(cacheKey, TTL.AI_SUMMARY);
     if (cached) { aiCache.current[activeTab] = cached; setAiResult(cached); return; }
     setAiLoading(true); setAiError(null); setAiResult(null);
     trackAiUsage(aiType as 'summary' | 'fiveWs' | 'eli5');
     // Render free-tier cold-starts can briefly 5xx — one retry after 2s covers it.
-    const body = JSON.stringify({ url: params.url, paragraphs: paragraphs.slice(0,15), type: aiType, maxWords: activeTab === 'ELI5' ? 100 : 250 });
+    const body = JSON.stringify({ url: params.url, paragraphs: paragraphs.slice(0,15), type: aiType, maxWords: maxWordsForType, keyPoints: keyPointsCount });
     const doFetch = () => fetch(`${API}/ai-summary`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
     (async () => {
       let r = await doFetch();
@@ -251,7 +266,8 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     })()
       .then(data => { aiCache.current[activeTab] = data; setCached(cacheKey, data); setAiResult(data); })
       .catch(e => setAiError(String(e instanceof Error ? e.message : e))).finally(() => setAiLoading(false));
-  }, [activeTab, paragraphsLoading, hasBeenRead]);
+  // Customize: re-fetch when length / key-points settings change.
+  }, [activeTab, paragraphsLoading, hasBeenRead, summaryLength, keyPointsCount]);
 
   const gradient = `linear-gradient(to bottom, ${dominant}, ${darken(dominant, 0.4)} 30%, ${darken(dominant, 0.85)} 100%)`;
 
@@ -266,7 +282,9 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
                 {renderParagraphHighlights(p, [...entities.people, ...entities.companies], accent)}
               </p>
             ))}
-            <a href={params.url} target="_blank" rel="noopener noreferrer"
+            <a href={params.url}
+              target={linkOpen === 'external' ? '_blank' : '_self'}
+              rel="noopener noreferrer"
               style={{ display: 'block', marginTop: 20, padding: '14px', borderRadius: 12, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', textAlign: 'center', color: '#fff', fontSize: 15, fontWeight: 700, textDecoration: 'none' }}>
               Read Full Article →
             </a>
@@ -307,7 +325,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
             {paragraphs.map((p, i) => (
               <p key={i} style={{ color: '#DDD', fontSize: fontSizePx, lineHeight: 1.7, margin: '0 0 16px 0' }}>{p}</p>
             ))}
-            {bullets.length > 0 && (
+            {showKeyPoints && bullets.length > 0 && (
               <div style={{ marginTop: 14, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
                 <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10.5, fontWeight: 700, letterSpacing: 1, marginBottom: 10 }}>KEY POINTS</div>
                 {bullets.map((line, i) => (
@@ -556,8 +574,9 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
       {/* Tab body */}
       <div style={{ padding: '8px 20px 24px' }}>{renderTabContent()}</div>
 
-      {/* Stats card + Verify Dedup — last section, after the article body. */}
-      {(() => {
+      {/* Stats card + Verify Dedup — last section, after the article body.
+          Both controlled by Customize → showStatsCard / showVerifyDedup. */}
+      {showStatsCard && (() => {
         const preText = originalParagraphs.join(' ');
         const postText = paragraphs.join(' ');
         const preWords = wordCount(preText);
@@ -587,21 +606,23 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
                 <span style={{ fontSize: 16, color: reduction > 0 ? '#34C759' : 'rgba(255,255,255,0.4)' }}>↘</span>
                 <StatCell value={`${reduction}%`} label={dedupedFlag ? (paraReduction > 0 ? `LESS (-${paraReduction} ¶)` : 'LESS') : 'NO DEDUP'} accent={accent} />
               </div>
-              <button
-                onClick={() => setDedupModalVisible(true)}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  margin: '0 16px', padding: '10px 14px',
-                  borderRadius: 999, border: `1px solid ${borderColor}55`,
-                  background: 'rgba(0,0,0,0.18)', color: accent,
-                  fontSize: 10, fontWeight: 700, letterSpacing: 1.2, cursor: 'pointer',
-                  width: 'calc(100% - 32px)',
-                }}
-              >
-                <span>{'</>'}</span>
-                VERIFY DEDUP · VIEW RAW FETCH
-                <span>›</span>
-              </button>
+              {showVerifyDedupSetting && (
+                <button
+                  onClick={() => setDedupModalVisible(true)}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    margin: '0 16px', padding: '10px 14px',
+                    borderRadius: 999, border: `1px solid ${borderColor}55`,
+                    background: 'rgba(0,0,0,0.18)', color: accent,
+                    fontSize: 10, fontWeight: 700, letterSpacing: 1.2, cursor: 'pointer',
+                    width: 'calc(100% - 32px)',
+                  }}
+                >
+                  <span>{'</>'}</span>
+                  VERIFY DEDUP · VIEW RAW FETCH
+                  <span>›</span>
+                </button>
+              )}
             </div>
           );
         }
@@ -641,7 +662,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
       })()}
 
       {/* Referenced sources */}
-      {referencedSources.length > 0 && (
+      {showReferencedSources && referencedSources.length > 0 && (
         <div style={{ margin: '24px 20px 0' }}>
           <div style={{ color: accent, fontSize: 18, fontWeight: 800, letterSpacing: -0.3, marginBottom: 16 }}>{allSources.length} Articles</div>
           {referencedSources.map((src, i) => {
