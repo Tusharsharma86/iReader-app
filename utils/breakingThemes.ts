@@ -92,11 +92,18 @@ export const COMPANY_THEMES: ThemeRule[] = [
   { name: 'Nintendo', pattern: /\b(nintendo|switch 2)\b/i },
 ];
 
+// Pseudo-theme — matches NOTHING; used so users can mute "Other Breaking"
+// (anything that doesn't fit any of the named themes). Backend honours it.
+const OTHER_THEMES: ThemeRule[] = [
+  { name: 'Other Breaking', pattern: /(?!x)x/ }, // never matches
+];
+
 export const THEME_FAMILIES: ThemeFamily[] = [
   { family: 'World & Politics', icon: 'earth', themes: WORLD_THEMES },
   { family: 'Tech',             icon: 'hardware-chip', themes: TECH_THEMES },
   { family: 'Business',         icon: 'briefcase',  themes: BIZ_THEMES },
   { family: 'Companies',        icon: 'business',   themes: COMPANY_THEMES },
+  { family: 'Catch-all',        icon: 'filter',     themes: OTHER_THEMES },
 ];
 
 export const ALL_BREAKING_THEMES: ThemeRule[] = THEME_FAMILIES.flatMap(f => f.themes);
