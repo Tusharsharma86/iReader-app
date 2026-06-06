@@ -1276,11 +1276,13 @@ const TopicSection = React.memo(function TopicSection({
   const [activeIndex, setActiveIndex] = useState(0);
   const count = cluster.stories.length;
   const navigation = useNavigation<NativeStackNavigationProp<FeedStackParamList>>();
+  const { showMetaPill, showClusterSummary, cardDensity } = useSettings();
 
   // Cluster cards stay 82% width to hint there's more to swipe, but use the
   // FULL-WIDTH image height so they feel as tall as individual cards.
   const clusterCardWidth = count > 1 ? Math.round(cardWidth * 0.82) : cardWidth;
-  const clusterImageHeight = Math.round(cardWidth * 0.72);
+  const densityScale = cardDensity === 'compact' ? 0.55 : cardDensity === 'spacious' ? 0.85 : 0.72;
+  const clusterImageHeight = Math.round(cardWidth * densityScale);
   const snapInterval = clusterCardWidth + CARD_GAP;
 
   const onScrollSettle = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -1312,7 +1314,7 @@ const TopicSection = React.memo(function TopicSection({
             onPress={count >= 3 ? () => navigation.navigate('StoryTimeline', { clusterId: cluster.id, headline, stories: JSON.stringify(cluster.stories) }) : undefined}
           >
             {/* Meta row ABOVE headline: TREND/BREAKING pill + clock + stories pill */}
-            {(cluster.collection || isBreaking || count >= 3 || count > 1) && (
+            {showMetaPill && (cluster.collection || isBreaking || count >= 3 || count > 1) && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                 {cluster.collection && (
                   <Text style={{ color: '#b994ff', fontSize: 9, fontWeight: '800', letterSpacing: 1, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, overflow: 'hidden', backgroundColor: 'rgba(185,148,255,0.12)' }}>TREND</Text>
@@ -1330,7 +1332,7 @@ const TopicSection = React.memo(function TopicSection({
           </TouchableOpacity>
 
           {/* AI summary of all clustered stories — ~20 words */}
-          {!!summary && (
+          {showClusterSummary && !!summary && (
             <Text style={[styles.clusterSummary, { marginTop: 6 }]}>{summary}</Text>
           )}
 

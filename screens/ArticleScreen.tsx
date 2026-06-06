@@ -737,6 +737,7 @@ export default function ArticleScreen() {
         fontSize={fontSizePx}
         url={params.url}
         accentColor={accent}
+        highlights={showEntityHighlights}
       />
     );
 
@@ -754,7 +755,7 @@ export default function ArticleScreen() {
     } else {
       switch (activeTab) {
         case 'Summary':
-          aiContent = <SummaryTab loading={aiLoading} result={aiResult} error={aiError} accentColor={dominant} fontSize={fontSizePx} showKeyPoints={showKeyPoints} />;
+          aiContent = <SummaryTab loading={aiLoading} result={aiResult} error={aiError} accentColor={dominant} fontSize={fontSizePx} showKeyPoints={showKeyPoints} highlights={showEntityHighlights} />;
           break;
         case '5 Ws':
           aiContent = <FiveWsTab loading={aiLoading} result={aiResult} error={aiError} accentColor={accent} />;
@@ -918,7 +919,7 @@ export default function ArticleScreen() {
                 </Text>
               </>
             )}
-            {difficulty != null && (
+            {showReadingDifficulty && difficulty != null && (
               <>
                 <Text style={[styles.metaInlineDot, { color: lighten(dominant, 0.35) }]}>·</Text>
                 <Text
@@ -1301,11 +1302,12 @@ function tokenize(text: string): Seg[] {
   return out;
 }
 
-function RichParagraph({ text, fontSize, accentColor }: { text: string; fontSize: number; accentColor: string }) {
+function RichParagraph({ text, fontSize, accentColor, highlights = true }: { text: string; fontSize: number; accentColor: string; highlights?: boolean }) {
   const segs = useMemo(() => tokenize(text), [text]);
   return (
     <Text style={[styles.paragraph, { fontSize, lineHeight: fontSize * 1.65 }]}>
       {segs.map((seg, i) => {
+        if (!highlights) return <Text key={i}>{seg.text}</Text>;
         if (seg.kind === 'quote')
           return <Text key={i} style={{ color: '#FFD166', fontStyle: 'italic' }}>{seg.text}</Text>;
         if (seg.kind === 'stat')
@@ -1320,9 +1322,9 @@ function RichParagraph({ text, fontSize, accentColor }: { text: string; fontSize
   );
 }
 
-function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accentColor, borderColor, showVerifyDedup, onVerifyDedup }: {
+function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accentColor, borderColor, showVerifyDedup, onVerifyDedup, highlights = true }: {
   loading: boolean; paragraphs: string[]; error: string | null; summary: string; fontSize: number; url?: string; accentColor: string;
-  borderColor?: string; showVerifyDedup?: boolean; onVerifyDedup?: () => void;
+  borderColor?: string; showVerifyDedup?: boolean; onVerifyDedup?: () => void; highlights?: boolean;
 }) {
   if (loading) return <Spinner />;
 
@@ -1346,7 +1348,7 @@ function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accen
       <View>
         <Text style={styles.errorHint}>Full text unavailable from this publisher</Text>
         {summary ? (
-          <RichParagraph text={summary} fontSize={fontSize} accentColor={accentColor} />
+          <RichParagraph text={summary} fontSize={fontSize} accentColor={accentColor} highlights={highlights} />
         ) : (
           <ErrorMsg msg="No content available." />
         )}
@@ -1365,7 +1367,7 @@ function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accen
 
   return (
     <View>
-      {paragraphs.map((p, i) => <RichParagraph key={i} text={p} fontSize={fontSize} accentColor={accentColor} />)}
+      {paragraphs.map((p, i) => <RichParagraph key={i} text={p} fontSize={fontSize} accentColor={accentColor} highlights={highlights} />)}
       {url ? (
         <TouchableOpacity
           style={styles.readFullBtn}
@@ -1379,7 +1381,7 @@ function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accen
   );
 }
 
-function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoints = true }: { loading: boolean; result: AiResult | null; error: string | null; accentColor: string; fontSize: number; showKeyPoints?: boolean }) {
+function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoints = true, highlights = true }: { loading: boolean; result: AiResult | null; error: string | null; accentColor: string; fontSize: number; showKeyPoints?: boolean; highlights?: boolean }) {
   if (loading) return <Spinner />;
   if (error) return <ErrorMsg msg={error} />;
   if (!result) return <ErrorMsg msg="No summary available." />;
@@ -1404,7 +1406,7 @@ function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoin
   return (
     <View>
       {paragraphs.map((p, i) => (
-        <RichParagraph key={i} text={p} fontSize={fontSize} accentColor={accentColor} />
+        <RichParagraph key={i} text={p} fontSize={fontSize} accentColor={accentColor} highlights={highlights} />
       ))}
       {showKeyPoints && bullets.length > 0 && rawSummary ? (
         <View style={{ marginTop: 18, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.08)' }}>

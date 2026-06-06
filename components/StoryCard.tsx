@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Dimensions, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 import { FeedStackParamList } from '../types/navigation';
+import { useSettings } from '../contexts/SettingsContext';
 import { trackArticleOpen } from '../utils/personalization';
 import { FALLBACK_IMG } from '../utils/fallback';
 
@@ -148,6 +149,10 @@ interface Props {
 }
 
 function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight: imageHeightProp, allStories }: Props) {
+  // Customize options — gate UI elements per user preference.
+  const {
+    showClusterSummary, showBiasDots, showCardImages, cardDensity,
+  } = useSettings();
   const { width: hookWidth } = useWindowDimensions();
   const [dimWidth, setDimWidth] = useState(() => Dimensions.get('window').width);
   useEffect(() => {
@@ -158,7 +163,10 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight:
   const cardWidth = cardWidthProp ?? (width >= 768 ? Math.round(width * 0.46) : width - 28);
   // Image takes ~72% of card width in height — unless a caller overrides it
   // (e.g. cluster carousel passes full-card height while keeping width narrow).
-  const imageHeight = imageHeightProp ?? Math.round(cardWidth * 0.72);
+  // Customize → cardDensity scales image height. Compact crops the image,
+  // spacious gives it more room. Caller-provided imageHeightProp wins.
+  const densityScale = cardDensity === 'compact' ? 0.55 : cardDensity === 'spacious' ? 0.85 : 0.72;
+  const imageHeight = imageHeightProp ?? Math.round(cardWidth * densityScale);
 
   const navigation = useNavigation<NativeStackNavigationProp<FeedStackParamList, 'FeedHome'>>();
   const [imageError, setImageError] = React.useState(false);
@@ -213,7 +221,7 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight:
     >
       {/* ── IMAGE ─────────────────────────────────── */}
       <View style={{ height: imageHeight, backgroundColor: textBg }}>
-        {!imageError && story.imageUrl ? (
+        {showCardImages && !imageError && story.imageUrl ? (
           <Image
             source={{ uri: story.imageUrl }}
             style={StyleSheet.absoluteFill}
@@ -269,7 +277,7 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight:
         {/* Article count · time · badges */}
         <View style={styles.metaRow}>
           <Text style={styles.metaLabel}>{source.toUpperCase()}  ·  {timeAgo(story.publishedAt)}</Text>
-          <BiasDot bias={story.sourceBias} size={6} />
+          {showBiasDots && <BiasDot bias={story.sourceBias} size={6} />}
           {isBreakingBadge && <Text style={styles.breakingText}>·  BREAKING</Text>}
           {isTrending && !isBreakingBadge && <Text style={styles.badge}>🔥</Text>}
           {isOngoing && <Text style={styles.badge}>📍</Text>}
@@ -280,7 +288,7 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight:
         {/* Reading-time + difficulty REMOVED — card estimate (from summary) disagreed
             with article-screen estimate (from full body). Article screen still shows it. */}
 
-        {!compact && (
+        {!compact && showClusterSummary && (
           <Text style={styles.summary} numberOfLines={2}>{story.aiSummary || story.summary}</Text>
         )}
       </View>

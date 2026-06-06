@@ -23,6 +23,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { type Story, getSourceDomain, domainFromUrl } from '../components/StoryCard';
+import { useSettings } from '../contexts/SettingsContext';
 import { tabBarTranslateY, useTabBarAutoHide } from '../utils/tabBarAnim';
 import { trackAiUsage, trackArticleRead } from '../utils/usageTracker';
 import { trackDeepDive } from '../utils/personalization';
@@ -33,7 +34,7 @@ import { darken, lighten, getArticleColor } from '../utils/colors';
 const FEED_API_BASE = 'https://ireader.onrender.com/api/news/feed';
 const DEEPDIVE_API = 'https://ireader.onrender.com/api/news/deepdive';
 const ASK_API = 'https://ireader.onrender.com/api/news/ask';
-const CACHE_PREFIX = '@deepdive_v3_'; // v3 — drop degraded fallbacks cached during the Groq outage
+const CACHE_PREFIX = '@deepdive_v4_'; // v4 — keyed by depth (quick/standard/deep)
 const ASK_CACHE_PREFIX = '@ask_v1_';
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const VIOLET = '#b994ff';
@@ -158,17 +159,17 @@ function timeAgo(iso: string): string {
 }
 
 // ── Cache helpers ───────────────────────────────────────────────────────────
-async function readDeepDiveCache(id: string): Promise<DeepDiveData | null> {
+async function readDeepDiveCache(id: string, depth = 'standard'): Promise<DeepDiveData | null> {
   try {
-    const raw = await AsyncStorage.getItem(CACHE_PREFIX + id);
+    const raw = await AsyncStorage.getItem(CACHE_PREFIX + depth + ':' + id);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (Date.now() - parsed.at > CACHE_TTL_MS) return null;
     return parsed;
   } catch { return null; }
 }
-async function writeDeepDiveCache(id: string, data: DeepDiveData) {
-  try { await AsyncStorage.setItem(CACHE_PREFIX + id, JSON.stringify({ ...data, at: Date.now() })); } catch {}
+async function writeDeepDiveCache(id: string, data: DeepDiveData, depth = 'standard') {
+  try { await AsyncStorage.setItem(CACHE_PREFIX + depth + ':' + id, JSON.stringify({ ...data, at: Date.now() })); } catch {}
 }
 
 // ── Main Screen ─────────────────────────────────────────────────────────────
@@ -749,6 +750,8 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: _h, to
 // ── Deep Dive Overlay ──────────────────────────────────────────────────────
 function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored?: boolean; onClose: () => void }) {
   const story = item.primary;
+  // Customize → Deep Dive section toggles + depth.
+  const { showDeepDiveEntities, showDeepDiveCurious, deepDiveDepth } = useSettings();
   const dominant = useMemo(() => getArticleColor(story.id || story.headline), [story.id, story.headline]);
   const accent = useMemo(() => lighten(dominant, 0.55), [dominant]);
   const sourceName = item.sources[0]?.name ?? story.sources?.[0]?.name ?? 'Unknown';
@@ -784,7 +787,7 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
         setError(null);
         // Check cache first (skip on manual retry so we force a fresh call).
         if (reloadKey === 0) {
-          const cached = await readDeepDiveCache(story.id);
+          const cached = await readDeepDiveCache(story.id, deepDiveDepth);
           if (cached && !cancelled) { setData(cached); setStage('done'); return; }
         }
         setStage('generating');
@@ -803,8 +806,8 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
               url: story.sources?.[0]?.url ?? '',
               headline: story.headline,
               paragraphs,
-              // All distinct source URLs so the backend reads every article in full.
               sourceUrls: (item.sources ?? []).map(s => s.url).filter(Boolean),
+              depth: deepDiveDepth,
             }),
             signal: ctrl.signal,
           });
@@ -813,7 +816,7 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
         const json: DeepDiveData = await dd.json();
         if (cancelled) return;
         setData(json);
-        if (!json.degraded) await writeDeepDiveCache(story.id, json); // never cache the non-AI fallback
+        if (!json.degraded) await writeDeepDiveCache(story.id, json, deepDiveDepth); // never cache the non-AI fallback
         setStage('done');
       } catch (e) {
         if (cancelled) return;
@@ -963,8 +966,8 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
                     </View></Stagger>
                   )}
 
-                  {/* Follow the Story */}
-                  {(data.keyPeople?.length || data.keyCompanies?.length || data.topics?.length) ? (
+                  {/* Follow the Story — gated by Customize → showDeepDiveEntities. */}
+                  {showDeepDiveEntities && (data.keyPeople?.length || data.keyCompanies?.length || data.topics?.length) ? (
                     <Stagger delay={240}><View style={{ marginTop: 4 }}>
                       <View style={overlayStyles.sectionLabelRow}>
                         <Ionicons name="sparkles" size={11} color={VIOLET} />
@@ -977,8 +980,8 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
                     </View></Stagger>
                   ) : null}
 
-                  {/* Curious? Questions */}
-                  {data.questions.length > 0 && (
+                  {/* Curious? Questions — gated by Customize → showDeepDiveCurious. */}
+                  {showDeepDiveCurious && data.questions.length > 0 && (
                     <Stagger delay={320}><View style={{ marginTop: 4 }}>
                       <View style={overlayStyles.sectionLabelRow}>
                         <Ionicons name="sparkles" size={11} color={VIOLET} />
