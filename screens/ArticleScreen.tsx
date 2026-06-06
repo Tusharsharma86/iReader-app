@@ -668,7 +668,8 @@ export default function ArticleScreen() {
     if (paragraphs.length === 0) { setAiError('No article text available to summarize.'); return; }
 
     // Persistent memory cache (24-hour TTL — never recompute same article)
-    const cacheKey = `summary_${params.id ?? params.url}_${aiType}`;
+    // v2 — invalidates v1 bullet-only cached responses post backend upgrade.
+    const cacheKey = `summary_v2_${params.id ?? params.url}_${aiType}`;
     const cached = getCached(cacheKey, TTL.AI_SUMMARY);
     if (cached) {
       aiCache.current[activeTab] = cached;
