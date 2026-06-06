@@ -34,7 +34,7 @@ import { setupNotificationChannels, registerForPush } from './utils/notification
 import { trackNotifOpened, trackNotifReceived } from './utils/usageTracker';
 import { pushNotifHistory, type NotifKind } from './utils/notifHistory';
 import { getArticleColor } from './utils/colors';
-import { loadBreakingThemeMutes, matchesMutedBreakingTheme } from './utils/breakingThemes';
+import { loadBreakingThemeMutes, matchesMutedBreakingTheme, syncMutedThemesToBackend } from './utils/breakingThemes';
 
 SplashScreen.preventAutoHideAsync();
 setTimeout(() => SplashScreen.hideAsync(), 3000);
@@ -359,7 +359,12 @@ export default function App() {
     // fireBreakingNotif path never sees.
     // Pre-load breaking-theme mute set so the listener can synchronously
     // dismiss muted-theme pushes.
-    loadBreakingThemeMutes().catch(() => {});
+    loadBreakingThemeMutes().then(() => {
+      // Sync to backend so background/killed pushes are gated server-side.
+      // Server-side mute is authoritative; the listener dismiss is just a
+      // belt-and-braces fallback for foreground races.
+      syncMutedThemesToBackend().catch(() => {});
+    }).catch(() => {});
     const recvSub = N.addNotificationReceivedListener?.(async (n: {
       request?: {
         identifier?: string;

@@ -119,6 +119,25 @@ export async function loadBreakingThemeMutes(): Promise<Set<string>> {
 export async function setBreakingThemeMuted(name: string, muted: boolean): Promise<void> {
   if (muted) mutedCache.add(name); else mutedCache.delete(name);
   try { await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(mutedCache))); } catch { /* ignore */ }
+  // Sync to backend so muted themes are dropped server-side before sending
+  // (the client receivedListener can't catch pushes when the app is killed).
+  syncMutedThemesToBackend().catch(() => {});
+}
+
+// Fire-and-forget sync to backend. Best-effort — silently ignores errors.
+const BACKEND_API = 'https://ireader.onrender.com/api/news';
+export async function syncMutedThemesToBackend(): Promise<void> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getCachedPushToken } = require('./notifications') as { getCachedPushToken: () => Promise<string | null> };
+    const token = await getCachedPushToken();
+    if (!token) return;
+    await fetch(`${BACKEND_API}/muted-themes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, themes: Array.from(mutedCache) }),
+    });
+  } catch { /* ignore */ }
 }
 
 export function getMutedBreakingThemes(): Set<string> {
