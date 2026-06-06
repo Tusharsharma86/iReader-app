@@ -106,7 +106,7 @@ function StarRow({ value, onChange }: { value: number; onChange: (n: number) => 
 }
 
 // ── Inline Topic Interests ──────────────────────────────────────────────────
-function InlineTopicInterests() {
+export function InlineTopicInterests() {
   const { topicInterests, setTopicInterest } = useSettings();
   const [q, setQ] = useState('');
   const grouped = useMemo(() => {
@@ -146,7 +146,7 @@ function InlineTopicInterests() {
 }
 
 // ── Inline Favorite Sources / Topics ────────────────────────────────────────
-function InlineFavorites() {
+export function InlineFavorites() {
   const { favSources, toggleFavSource } = useSettings();
   return (
     <View>
@@ -381,12 +381,14 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* NOTIFICATIONS */}
+        {/* NOTIFICATIONS — master toggle + entry into dedicated sub-screen.
+            The full notif config (Main Breaking, AI Feed Breaking, Themes,
+            Topic Alerts, Daily Digest, History) lives in NotificationSettings. */}
         <Text style={styles.sectionHeader}>NOTIFICATIONS</Text>
         <View style={styles.card}>
           <View style={styles.row}>
             <View style={styles.rowTextCol}>
-              <Text style={styles.rowLabel}>All Notifications</Text>
+              <Text style={styles.rowLabel}>Notifications</Text>
               <Text style={styles.rowSub}>{(notifBreaking || notifTech || notifDigest || notifAiFeed) ? 'Master switch — off silences everything' : 'Off — no pushes will be sent'}</Text>
             </View>
             <Switch
@@ -402,71 +404,16 @@ export default function SettingsScreen() {
               trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }}
               thumbColor={(notifBreaking || notifTech || notifDigest || notifAiFeed) ? BLUE : '#444'} />
           </View>
-          <View style={[styles.row, styles.rowBorder]}>
-            <View style={styles.rowTextCol}>
-              <Text style={styles.rowLabel}>Breaking News</Text>
-              <Text style={styles.rowSub}>3+ source confirmation</Text>
+          <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => navigation.navigate('NotificationSettings')}>
+            <View style={styles.collapsibleIcon}>
+              <Ionicons name="options" size={16} color={VIOLET} />
             </View>
-            <Switch value={notifBreaking} onValueChange={v => handleNotifToggle(v, setNotifBreaking, 'breaking')}
-              trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }} thumbColor={notifBreaking ? BLUE : '#444'} />
-          </View>
-          <TouchableOpacity style={[styles.row, styles.rowBorder, styles.nestedRow]} onPress={() => navigation.navigate('BreakingThemes')}>
             <View style={styles.rowTextCol}>
-              <Text style={styles.nestedLabel}>Themes</Text>
-              <Text style={styles.rowSub}>Mute specific themes (Trump, Crypto, etc.)</Text>
+              <Text style={styles.rowLabel}>Notification Settings</Text>
+              <Text style={styles.rowSub}>Breaking, themes, topics, digest, history</Text>
             </View>
-            <Ionicons name="chevron-forward" size={16} color="#666" />
+            <Ionicons name="chevron-forward" size={18} color="#666" />
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.row, styles.rowBorder, styles.nestedRow]} onPress={() => navigation.navigate('NotifHistory')}>
-            <View style={styles.rowTextCol}>
-              <Text style={styles.nestedLabel}>History</Text>
-              <Text style={styles.rowSub}>Past notifications — tap to reopen</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color="#666" />
-          </TouchableOpacity>
-          <View style={[styles.row, styles.rowBorder]}>
-            <View style={styles.rowTextCol}>
-              <Text style={styles.rowLabel}>AI Feed Breaking</Text>
-              <Text style={styles.rowSub}>Tap opens Deep Dive</Text>
-            </View>
-            <Switch value={notifAiFeed} onValueChange={v => handleNotifToggle(v, setNotifAiFeed, 'aiFeed')}
-              trackColor={{ false: '#1A1A1A', true: '#3a2270' }} thumbColor={notifAiFeed ? VIOLET : '#444'} />
-          </View>
-          <View style={[styles.row, styles.rowBorder]}>
-            <View style={styles.rowTextCol}>
-              <Text style={styles.rowLabel}>Topic Alerts</Text>
-              <Text style={styles.rowSub}>{starredCount > 0 ? `${starredCount} topics starred · ${favSources.length} fav sources` : 'Alerts for topics you star'}</Text>
-            </View>
-            <Switch value={notifTech} onValueChange={v => handleNotifToggle(v, setNotifTech, 'topics')}
-              trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }} thumbColor={notifTech ? BLUE : '#444'} />
-          </View>
-          {/* Nested targeting sub-screen — what drives Topic Alerts. */}
-          <Pressable onPress={() => setTargetingOpen(o => !o)} style={[styles.row, styles.rowBorder, styles.nestedRow]}>
-            <View style={styles.rowTextCol}>
-              <Text style={styles.nestedLabel}>Topics & Sources</Text>
-              <Text style={styles.rowSub}>Choose what triggers your alerts</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color="#666" style={{ transform: [{ rotate: targetingOpen ? '90deg' : '0deg' }] }} />
-          </Pressable>
-          {targetingOpen && (
-            <View style={styles.nestedBody}>
-              <Text style={styles.nestedHeader}>TOPIC INTERESTS</Text>
-              <Text style={styles.nestedHint}>Star 1-5 — higher = higher alert priority + feed weight.</Text>
-              <InlineTopicInterests />
-              <View style={{ height: 18 }} />
-              <Text style={styles.nestedHeader}>FAVORITE SOURCES</Text>
-              <Text style={styles.nestedHint}>Optional — limit topic alerts to chosen publications.</Text>
-              <InlineFavorites />
-            </View>
-          )}
-          <View style={[styles.row, styles.rowBorder]}>
-            <View style={styles.rowTextCol}>
-              <Text style={styles.rowLabel}>Daily Digest</Text>
-              <Text style={styles.rowSub}>8am + 6pm summary</Text>
-            </View>
-            <Switch value={notifDigest} onValueChange={v => handleNotifToggle(v, setNotifDigest, 'digest')}
-              trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }} thumbColor={notifDigest ? BLUE : '#444'} />
-          </View>
         </View>
 
         <Text style={styles.sectionHeader}>FEED</Text>

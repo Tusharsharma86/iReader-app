@@ -28,11 +28,13 @@ import CostDashboardScreen from './screens/CostDashboardScreen';
 import TopicInterestsScreen from './screens/TopicInterestsScreen';
 import BreakingThemesScreen from './screens/BreakingThemesScreen';
 import NotifHistoryScreen from './screens/NotifHistoryScreen';
+import NotificationSettingsScreen from './screens/NotificationSettingsScreen';
 import StoryTimelineScreen from './screens/StoryTimelineScreen';
 import { setupNotificationChannels, registerForPush } from './utils/notifications';
 import { trackNotifOpened, trackNotifReceived } from './utils/usageTracker';
 import { pushNotifHistory, type NotifKind } from './utils/notifHistory';
 import { getArticleColor } from './utils/colors';
+import { loadBreakingThemeMutes, matchesMutedBreakingTheme } from './utils/breakingThemes';
 
 SplashScreen.preventAutoHideAsync();
 setTimeout(() => SplashScreen.hideAsync(), 3000);
@@ -284,6 +286,7 @@ function SettingsNavigator() {
       <SettingsStack.Screen name="TopicInterests" component={TopicInterestsScreen} />
       <SettingsStack.Screen name="BreakingThemes" component={BreakingThemesScreen} />
       <SettingsStack.Screen name="NotifHistory" component={NotifHistoryScreen} />
+      <SettingsStack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
     </SettingsStack.Navigator>
   );
 }
@@ -354,8 +357,12 @@ export default function App() {
     // Also snapshot the full payload into NotifHistory so the user can revisit
     // any past push from the History screen — even backend-sent ones the local
     // fireBreakingNotif path never sees.
-    const recvSub = N.addNotificationReceivedListener?.((n: {
+    // Pre-load breaking-theme mute set so the listener can synchronously
+    // dismiss muted-theme pushes.
+    loadBreakingThemeMutes().catch(() => {});
+    const recvSub = N.addNotificationReceivedListener?.(async (n: {
       request?: {
+        identifier?: string;
         content?: {
           title?: string;
           body?: string;
@@ -377,10 +384,25 @@ export default function App() {
     }) => {
       const data = n?.request?.content?.data ?? {};
       const kind = String(data.kind ?? 'unknown');
-      trackNotifReceived(kind).catch(() => {});
       const a = data.article ?? {};
       const id = a.id ?? data.clusterId ?? `notif-${Date.now()}`;
       const headline = a.headline ?? n?.request?.content?.body ?? n?.request?.content?.title ?? '';
+
+      // Theme mute applies to BOTH Main Breaking and AI Feed Breaking pushes.
+      // Dismiss the visible notification, drop the history write, no usage
+      // ping. The user effectively never saw it.
+      if ((kind === 'breaking' || kind === 'ai-feed') && headline) {
+        const muted = matchesMutedBreakingTheme(headline, a.summary ?? '');
+        if (muted) {
+          const ident = n?.request?.identifier;
+          if (ident) {
+            try { await N.dismissNotificationAsync?.(ident); } catch {}
+          }
+          return;
+        }
+      }
+
+      trackNotifReceived(kind).catch(() => {});
       if (!headline) return;
       const kindMap: Record<string, NotifKind> = {
         breaking: 'breaking', source: 'source', topic: 'topic',
