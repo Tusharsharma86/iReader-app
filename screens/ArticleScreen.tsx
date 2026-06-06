@@ -1339,18 +1339,53 @@ function SummaryTab({ loading, result, error, accentColor }: { loading: boolean;
   if (loading) return <Spinner />;
   if (error) return <ErrorMsg msg={error} />;
   if (!result) return <ErrorMsg msg="No summary available." />;
-  const bullets = result.bullets ?? (result.summary ? [result.summary] : []);
-  if (!bullets.length) return <ErrorMsg msg="No summary available." />;
+
+  // Prefer narrative `summary` (paragraph prose) over `bullets`. If the model
+  // returned only bullets (older cache), stitch them into prose so the user
+  // still gets a readable flow instead of a bullet dump.
+  const rawSummary = (result.summary ?? '').trim();
+  const bullets = result.bullets ?? [];
+  const narrative = rawSummary
+    || bullets.join(' ').trim()
+    || '';
+
+  if (!narrative) return <ErrorMsg msg="No summary available." />;
+
+  // Split on blank-line paragraph breaks; fall back to sentence-batched
+  // paragraphs (~3 sentences each) if the model returned one wall of text.
+  const paragraphs = narrative.includes('\n\n')
+    ? narrative.split(/\n{2,}/).map(p => p.trim()).filter(Boolean)
+    : sentenceParagraphs(narrative, 3);
+
   return (
     <View>
-      {bullets.map((line, i) => (
-        <View key={i} style={styles.bulletRow}>
-          <View style={[styles.bulletDot, { backgroundColor: accentColor }]} />
-          <Text style={styles.bulletText}>{line}</Text>
-        </View>
+      {paragraphs.map((p, i) => (
+        <RichParagraph key={i} text={p} fontSize={15.5} accentColor={accentColor} />
       ))}
+      {bullets.length > 0 && rawSummary ? (
+        <View style={{ marginTop: 18, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.08)' }}>
+          <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10.5, fontWeight: '700', letterSpacing: 1, marginBottom: 10 }}>KEY POINTS</Text>
+          {bullets.map((line, i) => (
+            <View key={i} style={styles.bulletRow}>
+              <View style={[styles.bulletDot, { backgroundColor: accentColor }]} />
+              <Text style={styles.bulletText}>{line}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
+}
+
+// Splits a single paragraph string into N-sentence chunks for readability
+// when the model didn't honor the \n\n paragraph instruction.
+function sentenceParagraphs(text: string, sentencesPer: number): string[] {
+  const sentences = text.match(/[^.!?]+[.!?]+(\s|$)/g)?.map(s => s.trim()).filter(Boolean) ?? [text];
+  const out: string[] = [];
+  for (let i = 0; i < sentences.length; i += sentencesPer) {
+    out.push(sentences.slice(i, i + sentencesPer).join(' '));
+  }
+  return out;
 }
 
 function FiveWsTab({ loading, result, error, accentColor }: { loading: boolean; result: AiResult | null; error: string | null; accentColor: string }) {

@@ -36,6 +36,9 @@ import { scoreClusterInterest } from '../utils/interestTopics';
 import { TOPIC_SUBTOPICS, storyMatchesSubTopic } from '../utils/topics';
 import { getUsageStats, trackVisit, checkStreakMilestone } from '../utils/usageTracker';
 import { loadFollowed, annotateUpdates, markSeen, toggleFollow as toggleFollowStory } from '../utils/followStore';
+import { loadBreakingThemeMutes, matchesMutedBreakingTheme } from '../utils/breakingThemes';
+import { pushNotifHistory } from '../utils/notifHistory';
+import { getArticleColor } from '../utils/colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const CARD_GAP = 12;
@@ -433,6 +436,9 @@ export default function FeedScreen() {
   const [techSourceFilter, setTechSourceFilter] = useState<string | null>(null);
   const [streak, setStreak] = useState(0);
   const [milestone, setMilestone] = useState<number | null>(null);
+  // Load breaking-theme mute set on mount — used to suppress breaking notifs
+  // for themes the user has turned off in BreakingThemesScreen.
+  useEffect(() => { loadBreakingThemeMutes().catch(() => {}); }, []);
   useEffect(() => {
     trackVisit()
       .then(() => getUsageStats())
@@ -628,10 +634,27 @@ export default function FeedScreen() {
         const isBreakingArticle = a.isBreaking ?? false;
         const isFavSource = favSources.includes(sourceName);
         const isFavTopic = favTopics.includes(topic);
-        if (notifBreaking && isBreakingArticle) {
+        // Build the history snapshot once so both branches share it. Stored
+        // even if the notif itself is suppressed (e.g. seen-dedup) — useful so
+        // the user can browse "what would have been pushed" later. We only
+        // skip writing it when there's no notif intent at all.
+        const historyBase = {
+          id: a.id,
+          headline: a.headline,
+          summary: a.summary ?? '',
+          imageUrl: a.imageUrl ?? '',
+          url: a.sources?.[0]?.url ?? '',
+          source: sourceName,
+          publishedAt: a.publishedAt,
+          dominantColor: getArticleColor(a.id || a.headline),
+          firedAt: Date.now(),
+        };
+        if (notifBreaking && isBreakingArticle && !matchesMutedBreakingTheme(a.headline, a.summary ?? '')) {
           fireBreakingNotif(a.id, a.headline).catch(() => {});
+          pushNotifHistory({ ...historyBase, kind: 'breaking' }).catch(() => {});
         } else if (notifSources && (isFavSource || isFavTopic)) {
           fireFavSourceNotif(a.id, sourceName || 'iReader', a.headline).catch(() => {});
+          pushNotifHistory({ ...historyBase, kind: isFavSource ? 'source' : 'topic' }).catch(() => {});
         }
       }
 

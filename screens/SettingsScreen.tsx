@@ -410,6 +410,20 @@ export default function SettingsScreen() {
             <Switch value={notifBreaking} onValueChange={v => handleNotifToggle(v, setNotifBreaking, 'breaking')}
               trackColor={{ false: '#1A1A1A', true: '#1C3A6A' }} thumbColor={notifBreaking ? BLUE : '#444'} />
           </View>
+          <TouchableOpacity style={[styles.row, styles.rowBorder, styles.nestedRow]} onPress={() => navigation.navigate('BreakingThemes')}>
+            <View style={styles.rowTextCol}>
+              <Text style={styles.nestedLabel}>Themes</Text>
+              <Text style={styles.rowSub}>Mute specific themes (Trump, Crypto, etc.)</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#666" />
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.row, styles.rowBorder, styles.nestedRow]} onPress={() => navigation.navigate('NotifHistory')}>
+            <View style={styles.rowTextCol}>
+              <Text style={styles.nestedLabel}>History</Text>
+              <Text style={styles.rowSub}>Past notifications — tap to reopen</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#666" />
+          </TouchableOpacity>
           <View style={[styles.row, styles.rowBorder]}>
             <View style={styles.rowTextCol}>
               <Text style={styles.rowLabel}>AI Feed Breaking</Text>

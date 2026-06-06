@@ -273,14 +273,39 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     } else if (aiError) {
       aiContent = <div style={{ color: '#666', textAlign: 'center', paddingBlock: 40 }}>{aiError}</div>;
     } else if (activeTab === 'Summary') {
-      const bullets = aiResult?.bullets ?? (aiResult?.summary ? [aiResult.summary] : []);
-      aiContent = !bullets.length ? <div style={{ color: '#444', textAlign: 'center', paddingBlock: 40 }}>No summary available.</div> : (
-        <div>{bullets.map((line, i) => (
-          <div key={i} style={{ display: 'flex', gap: 14, marginBottom: 18, alignItems: 'flex-start' }}>
-            <div style={{ width: 8, height: 8, borderRadius: 4, background: dominant, flexShrink: 0, marginTop: 7 }} />
-            <p style={{ color: '#DDD', fontSize: 15, lineHeight: 1.6, margin: 0 }}>{line}</p>
-          </div>
-        ))}</div>
+      // Prefer narrative `summary` (paragraph prose). If only bullets came back
+      // (legacy v1 cache), stitch them into prose so it still reads as a story.
+      const rawSummary = (aiResult?.summary ?? '').trim();
+      const bullets = aiResult?.bullets ?? [];
+      const narrative = rawSummary || bullets.join(' ').trim() || '';
+      // Split on blank-line paragraph breaks; fall back to ~3-sentence chunks
+      // if the model returned one wall of text.
+      const splitSentences = (t: string): string[] => {
+        const out: string[] = [];
+        const sents = t.match(/[^.!?]+[.!?]+(\s|$)/g)?.map(s => s.trim()).filter(Boolean) ?? [t];
+        for (let i = 0; i < sents.length; i += 3) out.push(sents.slice(i, i + 3).join(' '));
+        return out;
+      };
+      const paragraphs = narrative.includes('\n\n')
+        ? narrative.split(/\n{2,}/).map(p => p.trim()).filter(Boolean)
+        : splitSentences(narrative);
+      aiContent = !narrative ? <div style={{ color: '#444', textAlign: 'center', paddingBlock: 40 }}>No summary available.</div> : (
+        <div>
+          {paragraphs.map((p, i) => (
+            <p key={i} style={{ color: '#DDD', fontSize: 15.5, lineHeight: 1.65, margin: '0 0 16px 0' }}>{p}</p>
+          ))}
+          {bullets.length > 0 && rawSummary ? (
+            <div style={{ marginTop: 14, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10.5, fontWeight: 700, letterSpacing: 1, marginBottom: 10 }}>KEY POINTS</div>
+              {bullets.map((line, i) => (
+                <div key={i} style={{ display: 'flex', gap: 12, marginBottom: 10, alignItems: 'flex-start' }}>
+                  <div style={{ width: 6, height: 6, borderRadius: 3, background: dominant, flexShrink: 0, marginTop: 7 }} />
+                  <p style={{ color: '#BBB', fontSize: 13.5, lineHeight: 1.55, margin: 0 }}>{line}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
       );
     } else if (activeTab === '5 Ws') {
       const lines = aiResult?.fiveWs ?? [];

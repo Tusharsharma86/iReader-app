@@ -33,6 +33,8 @@ export type SettingsStackParamList = {
   Usage: undefined;
   CostDashboard: undefined;
   TopicInterests: undefined;
+  BreakingThemes: undefined;
+  NotifHistory: undefined;
 };
 
 // Legacy alias used by ArticleScreen

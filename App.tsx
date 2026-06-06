@@ -26,6 +26,8 @@ import FavSourcesScreen from './screens/FavSourcesScreen';
 import UsageScreen from './screens/UsageScreen';
 import CostDashboardScreen from './screens/CostDashboardScreen';
 import TopicInterestsScreen from './screens/TopicInterestsScreen';
+import BreakingThemesScreen from './screens/BreakingThemesScreen';
+import NotifHistoryScreen from './screens/NotifHistoryScreen';
 import StoryTimelineScreen from './screens/StoryTimelineScreen';
 import { setupNotificationChannels, registerForPush } from './utils/notifications';
 import { trackNotifOpened, trackNotifReceived } from './utils/usageTracker';
@@ -278,6 +280,8 @@ function SettingsNavigator() {
       <SettingsStack.Screen name="Usage" component={UsageScreen} />
       <SettingsStack.Screen name="CostDashboard" component={CostDashboardScreen} />
       <SettingsStack.Screen name="TopicInterests" component={TopicInterestsScreen} />
+      <SettingsStack.Screen name="BreakingThemes" component={BreakingThemesScreen} />
+      <SettingsStack.Screen name="NotifHistory" component={NotifHistoryScreen} />
     </SettingsStack.Navigator>
   );
 }
