@@ -204,7 +204,7 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
       </div>
 
       {/* Content overlay bottom */}
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 14 }}>
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '14px 14px 16px 20px' }}>
         {/* Meta row */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
           <div style={{ width: 18, height: 18, borderRadius: 9, background: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
