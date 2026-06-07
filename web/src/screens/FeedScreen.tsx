@@ -181,9 +181,9 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
       {/* Horizontal carousel — narrower cards, next card peeks */}
       <div ref={scrollRef} onScroll={handleScroll}
         style={{ display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', paddingLeft: sideMargin, paddingRight: sideMargin, gap: CARD_GAP, scrollbarWidth: 'none' }}>
-        {cluster.stories.map(story => (
+        {cluster.stories.map((story, idx) => (
           <div key={story.id} style={{ scrollSnapAlign: 'start', flexShrink: 0 }}>
-            <StoryCard story={story} cardWidth={clusterCardWidth} allStories={allStories} suppressBreaking={isBreaking} />
+            <StoryCard story={story} cardWidth={clusterCardWidth} allStories={allStories} suppressBreaking={isBreaking} clusterCard={idx === 0} />
           </div>
         ))}
       </div>
