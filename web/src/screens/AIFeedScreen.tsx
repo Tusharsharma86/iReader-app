@@ -584,7 +584,13 @@ function FullPreviewCard({ item, index, total, onOpen }: {
 function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => void }) {
   const story = item.primary;
   // Customize → Deep Dive section toggles + depth.
-  const { showDeepDiveEntities, showDeepDiveCurious, deepDiveDepth } = useSettings();
+  const { showDeepDiveEntities, showDeepDiveCurious, deepDiveDepth, fontSize: globalFontSize } = useSettings();
+  // Scale Deep Dive body text by the user's Article font size. Headers/labels
+  // stay branded; only reading content scales.
+  const ddScale = globalFontSize === 'Small' ? 0.88
+    : globalFontSize === 'Large' ? 1.12
+    : globalFontSize === 'XLarge' ? 1.24
+    : 1;
   const dominant = useMemo(() => getArticleColor(story.id || story.headline), [story.id, story.headline]);
   const accent = useMemo(() => lighten(dominant, 0.55), [dominant]);
   const [data, setData] = useState<DeepDiveData | null>(() => readCache(story.id, deepDiveDepth));
@@ -619,7 +625,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
           {section.bullets.map((b, i) => (
             <div key={i} style={{ display: 'flex', gap: 12, padding: '7px 0', alignItems: 'flex-start' }}>
               <div style={{ width: 6, height: 6, borderRadius: 4, marginTop: 9, background: VIOLET, flexShrink: 0 }} />
-              <div style={{ flex: 1, color: '#cfcfd8', fontSize: 15.5, lineHeight: 1.6 }}>{highlightEntities(b, tagList, accent)}</div>
+              <div style={{ flex: 1, color: '#cfcfd8', fontSize: 15.5 * ddScale, lineHeight: 1.6 }}>{highlightEntities(b, tagList, accent)}</div>
             </div>
           ))}
         </div>
@@ -628,14 +634,14 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
     return data.tldr.map((b, i) => (
       <div key={i} style={{ display: 'flex', gap: 12, padding: '7px 0', alignItems: 'flex-start' }}>
         <div style={{ width: 6, height: 6, borderRadius: 4, marginTop: 9, background: VIOLET, flexShrink: 0 }} />
-        <div style={{ flex: 1, color: '#cfcfd8', fontSize: 15.5, lineHeight: 1.6 }}>{highlightEntities(b, tagList, accent)}</div>
+        <div style={{ flex: 1, color: '#cfcfd8', fontSize: 15.5 * ddScale, lineHeight: 1.6 }}>{highlightEntities(b, tagList, accent)}</div>
       </div>
     ));
-  }, [data, tagList, accent]);
+  }, [data, tagList, accent, ddScale]);
   const narrativeBody = useMemo(() => {
     if (!data) return null;
     const para = (p: string, key: string) => (
-      <p key={key} style={{ margin: '0 0 16px', color: '#c8c8d4', fontSize: 16, lineHeight: 1.7, letterSpacing: 0.05 }}>{highlightEntities(p, tagList, accent)}</p>
+      <p key={key} style={{ margin: '0 0 16px', color: '#c8c8d4', fontSize: 16 * ddScale, lineHeight: 1.7, letterSpacing: 0.05 }}>{highlightEntities(p, tagList, accent)}</p>
     );
     // Render all sections as a continuous narrative — no headings.
     if (data.storySections && data.storySections.length > 0) {
@@ -645,7 +651,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
     }
     if (!data.narrative) return null;
     return data.narrative.split(/\n\n+/).map((p, i) => para(p, String(i)));
-  }, [data, tagList, accent]);
+  }, [data, tagList, accent, ddScale]);
 
   useEffect(() => {
     if (data) return;
@@ -956,7 +962,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
                   KEY INSIGHT
                 </div>
                 <p style={{
-                  margin: 0, color: '#fff', fontSize: 15.5, lineHeight: 1.55,
+                  margin: 0, color: '#fff', fontSize: 15.5 * ddScale, lineHeight: 1.55,
                   fontWeight: 500, fontStyle: 'italic',
                 }}>{data.insight}</p>
               </div>
@@ -1001,6 +1007,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
                   story={story}
                   narrative={data.narrative}
                   accent={VIOLET}
+                  scale={ddScale}
                 />
               </Section>
             )}
@@ -1083,8 +1090,8 @@ function askKey(headline: string, question: string): string {
   return (h >>> 0).toString(36);
 }
 
-function QuestionsList({ questions, story, narrative, accent }: {
-  questions: string[]; story: Story; narrative?: string; accent: string;
+function QuestionsList({ questions, story, narrative, accent, scale = 1 }: {
+  questions: string[]; story: Story; narrative?: string; accent: string; scale?: number;
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1095,14 +1102,15 @@ function QuestionsList({ questions, story, narrative, accent }: {
           story={story}
           narrative={narrative}
           accent={accent}
+          scale={scale}
         />
       ))}
     </div>
   );
 }
 
-function QuestionItem({ question, story, narrative, accent }: {
-  question: string; story: Story; narrative?: string; accent: string;
+function QuestionItem({ question, story, narrative, accent, scale = 1 }: {
+  question: string; story: Story; narrative?: string; accent: string; scale?: number;
 }) {
   const key = useMemo(() => askKey(story.headline, question), [story.headline, question]);
   const [open, setOpen] = useState(false);
@@ -1161,7 +1169,7 @@ function QuestionItem({ question, story, narrative, accent }: {
           width: '100%', textAlign: 'left',
           padding: '12px 14px',
           background: 'transparent', border: 'none',
-          color: '#e8e8e8', fontSize: 13, lineHeight: 1.4, fontWeight: 500,
+          color: '#e8e8e8', fontSize: 13 * scale, lineHeight: 1.4, fontWeight: 500,
           cursor: 'pointer',
           display: 'flex', alignItems: 'center', gap: 10,
         }}
@@ -1196,7 +1204,7 @@ function QuestionItem({ question, story, narrative, accent }: {
             </div>
           ) : answer ? (
             <p style={{
-              margin: 0, color: '#cfcfd8', fontSize: 13.5, lineHeight: 1.6,
+              margin: 0, color: '#cfcfd8', fontSize: 13.5 * scale, lineHeight: 1.6,
             }}>{answer}</p>
           ) : null}
         </div>
