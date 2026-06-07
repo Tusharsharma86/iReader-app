@@ -643,7 +643,12 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
     const para = (p: string, key: string) => (
       <p key={key} style={{ margin: '0 0 16px', color: '#c8c8d4', fontSize: 16 * ddScale, lineHeight: 1.7, letterSpacing: 0.05 }}>{highlightEntities(p, tagList, accent)}</p>
     );
-    // Render all sections as a continuous narrative — no headings.
+    // Use narrative field — designed as flowing prose. Fall back to
+    // concatenated section bodies if narrative is missing or too short.
+    const narrativeText = data.narrative && data.narrative.trim().length > 200 ? data.narrative : null;
+    if (narrativeText) {
+      return narrativeText.split(/\n\n+/).filter(Boolean).map((p, i) => para(p, String(i)));
+    }
     if (data.storySections && data.storySections.length > 0) {
       return data.storySections.flatMap((sec, si) =>
         sec.body.split(/\n\n+/).filter(Boolean).map((p, pi) => para(p, `${si}-${pi}`))
