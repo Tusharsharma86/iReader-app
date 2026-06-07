@@ -637,14 +637,11 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
     const para = (p: string, key: string) => (
       <p key={key} style={{ margin: '0 0 16px', color: '#c8c8d4', fontSize: 16, lineHeight: 1.7, letterSpacing: 0.05 }}>{highlightEntities(p, tagList, accent)}</p>
     );
-    // Preferred: labelled sections (What Happened / Why It Matters / …).
+    // Render all sections as a continuous narrative — no headings.
     if (data.storySections && data.storySections.length > 0) {
-      return data.storySections.map((sec, si) => (
-        <div key={si} style={{ marginTop: si > 0 ? 24 : 0 }}>
-          <div style={{ color: accent, fontSize: 11, fontWeight: 800, letterSpacing: 1.6, marginBottom: 10, textTransform: 'uppercase' }}>{sec.heading}</div>
-          {sec.body.split(/\n\n+/).filter(Boolean).map((p, pi) => para(p, `${si}-${pi}`))}
-        </div>
-      ));
+      return data.storySections.flatMap((sec, si) =>
+        sec.body.split(/\n\n+/).filter(Boolean).map((p, pi) => para(p, `${si}-${pi}`))
+      );
     }
     if (!data.narrative) return null;
     return data.narrative.split(/\n\n+/).map((p, i) => para(p, String(i)));
