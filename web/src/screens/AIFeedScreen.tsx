@@ -19,7 +19,7 @@ const TOPIC_QUEUE = [
   'business',
 ];
 const DEEPDIVE_API = 'https://ireader.onrender.com/api/news/deepdive';
-const CACHE_PREFIX = '@deepdive_v5_'; // v5 — keyed by depth (quick/standard/deep)
+const CACHE_PREFIX = '@deepdive_v6_'; // v6 — narrative-first rendering
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const FEED_LIST_CACHE = '@aifeed_list_v5'; // v5 — server-trust rewrite, no client-side clustering
 const VIOLET = '#b994ff';

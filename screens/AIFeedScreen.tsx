@@ -34,7 +34,7 @@ import { darken, lighten, getArticleColor } from '../utils/colors';
 const FEED_API_BASE = 'https://ireader.onrender.com/api/news/feed';
 const DEEPDIVE_API = 'https://ireader.onrender.com/api/news/deepdive';
 const ASK_API = 'https://ireader.onrender.com/api/news/ask';
-const CACHE_PREFIX = '@deepdive_v4_'; // v4 — keyed by depth (quick/standard/deep)
+const CACHE_PREFIX = '@deepdive_v5_'; // v5 — narrative-first rendering
 const ASK_CACHE_PREFIX = '@ask_v1_';
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const VIOLET = '#b994ff';
@@ -951,24 +951,30 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
                         <Text style={overlayStyles.sectionLabel}>CURIOUSCATS FULL STORY</Text>
                         <View style={overlayStyles.labelDivider} />
                       </View>
-                      {data.storySections && data.storySections.length > 0 ? (
-                        data.storySections.map((sec, si) => (
-                          <View key={si} style={{ marginTop: si > 0 ? 20 : 0 }}>
-                            <Text style={overlayStyles.storyHeading}>{sec.heading}</Text>
-                            {sec.body.split(/\n\n+/).filter(Boolean).map((p, pi) => (
-                              <Text key={pi} style={[overlayStyles.narrativePara, { fontSize: 16 * ddScale, lineHeight: 27 * ddScale }]}>
+                      {(() => {
+                        const narrativeText = data.narrative && data.narrative.trim().length > 200 ? data.narrative : null;
+                        if (narrativeText) {
+                          return narrativeText.split(/\n\n+/).filter(Boolean).map((p, i) => (
+                            <Text key={i} style={[overlayStyles.narrativePara, { fontSize: 16 * ddScale, lineHeight: 27 * ddScale }]}>
+                              {renderHighlighted(p, allTags(data))}
+                            </Text>
+                          ));
+                        }
+                        if (data.storySections && data.storySections.length > 0) {
+                          return data.storySections.flatMap((sec, si) =>
+                            sec.body.split(/\n\n+/).filter(Boolean).map((p, pi) => (
+                              <Text key={`${si}-${pi}`} style={[overlayStyles.narrativePara, { fontSize: 16 * ddScale, lineHeight: 27 * ddScale }]}>
                                 {renderHighlighted(p, allTags(data))}
                               </Text>
-                            ))}
-                          </View>
-                        ))
-                      ) : (
-                        data.narrative.split(/\n\n+/).map((p, i) => (
+                            ))
+                          );
+                        }
+                        return data.narrative.split(/\n\n+/).map((p, i) => (
                           <Text key={i} style={overlayStyles.narrativePara}>
                             {renderHighlighted(p, allTags(data))}
                           </Text>
-                        ))
-                      )}
+                        ));
+                      })()}
                     </View></Stagger>
                   )}
 
