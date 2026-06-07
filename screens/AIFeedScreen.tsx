@@ -750,8 +750,14 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: _h, to
 // ── Deep Dive Overlay ──────────────────────────────────────────────────────
 function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored?: boolean; onClose: () => void }) {
   const story = item.primary;
-  // Customize → Deep Dive section toggles + depth.
-  const { showDeepDiveEntities, showDeepDiveCurious, deepDiveDepth } = useSettings();
+  // Customize → Deep Dive section toggles + depth + global font size.
+  const { showDeepDiveEntities, showDeepDiveCurious, deepDiveDepth, fontSize: globalFontSize } = useSettings();
+  // Scale Deep Dive body text by the user's Article font size. Headers and
+  // labels stay branded sizes; only reading content scales.
+  const ddScale = globalFontSize === 'Small' ? 0.88
+    : globalFontSize === 'Large' ? 1.12
+    : globalFontSize === 'XLarge' ? 1.24
+    : 1; // Medium
   const dominant = useMemo(() => getArticleColor(story.id || story.headline), [story.id, story.headline]);
   const accent = useMemo(() => lighten(dominant, 0.55), [dominant]);
   const sourceName = item.sources[0]?.name ?? story.sources?.[0]?.name ?? 'Unknown';
@@ -909,7 +915,7 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
                             {section.bullets.map((b, i) => (
                               <View key={i} style={overlayStyles.bulletRow}>
                                 <View style={overlayStyles.bulletDot} />
-                                <Text style={overlayStyles.bulletText}>
+                                <Text style={[overlayStyles.bulletText, { fontSize: 15.5 * ddScale, lineHeight: 25 * ddScale }]}>
                                   {renderHighlighted(b, allTags(data))}
                                 </Text>
                               </View>
@@ -934,7 +940,7 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
                     <Stagger delay={80}><View style={overlayStyles.insightCard}>
                       <View style={overlayStyles.insightBar} />
                       <Text style={overlayStyles.insightLabel}>KEY INSIGHT</Text>
-                      <Text style={overlayStyles.insightText}>{data.insight}</Text>
+                      <Text style={[overlayStyles.insightText, { fontSize: 15.5 * ddScale, lineHeight: 24 * ddScale }]}>{data.insight}</Text>
                     </View></Stagger>
                   )}
 
@@ -950,7 +956,7 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
                           <View key={si} style={{ marginTop: si > 0 ? 20 : 0 }}>
                             <Text style={overlayStyles.storyHeading}>{sec.heading}</Text>
                             {sec.body.split(/\n\n+/).filter(Boolean).map((p, pi) => (
-                              <Text key={pi} style={overlayStyles.narrativePara}>
+                              <Text key={pi} style={[overlayStyles.narrativePara, { fontSize: 16 * ddScale, lineHeight: 27 * ddScale }]}>
                                 {renderHighlighted(p, allTags(data))}
                               </Text>
                             ))}
@@ -994,6 +1000,7 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
                           question={q}
                           story={story}
                           narrative={data.narrative}
+                          scale={ddScale}
                         />
                       ))}
                     </View></Stagger>
@@ -1058,8 +1065,8 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
 }
 
 // ── Q&A item with inline expand ─────────────────────────────────────────────
-function QuestionItem({ question, story, narrative }: {
-  question: string; story: Story; narrative?: string;
+function QuestionItem({ question, story, narrative, scale = 1 }: {
+  question: string; story: Story; narrative?: string; scale?: number;
 }) {
   const cacheKey = useMemo(() => {
     let h = 5381;
@@ -1124,7 +1131,7 @@ function QuestionItem({ question, story, narrative }: {
     <View style={overlayStyles.questionItem}>
       <Pressable onPress={toggle} style={overlayStyles.questionRow}>
         <Ionicons name="sparkles" size={12} color={VIOLET} />
-        <Text style={overlayStyles.questionText}>{question}</Text>
+        <Text style={[overlayStyles.questionText, { fontSize: 13 * scale, lineHeight: 18 * scale }]}>{question}</Text>
         <Text style={[overlayStyles.questionChevron, { color: VIOLET, transform: [{ rotate: open ? '90deg' : '0deg' }] }]}>›</Text>
       </Pressable>
       {open && (
@@ -1142,7 +1149,7 @@ function QuestionItem({ question, story, narrative }: {
               </Pressable>
             </View>
           ) : answer ? (
-            <Text style={overlayStyles.answerText}>{answer}</Text>
+            <Text style={[overlayStyles.answerText, { fontSize: 13.5 * scale, lineHeight: 21 * scale }]}>{answer}</Text>
           ) : null}
         </View>
       )}
