@@ -571,7 +571,8 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   );
   return (
     <div ref={containerRef} onScroll={handleScroll}
-      style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', background: '#000', WebkitOverflowScrolling: 'touch', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', background: '#000', WebkitOverflowScrolling: 'touch', paddingBottom: 0 }}>
+             
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px', paddingTop: 'calc(16px + env(safe-area-inset-top, 0px))' }}>
