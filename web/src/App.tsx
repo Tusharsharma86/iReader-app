@@ -127,7 +127,9 @@ function ThemeApplier({ children }: { children: React.ReactNode }) {
   const lightActive = themeMode === 'light' || (themeMode === 'auto' && systemLight);
   return (
     <div style={{
-      width: '100%', height: '100%',
+      width: '100%', //height: '100%',
+    height: '100vh',
+    minHeight: '100dvh',
       filter: lightActive ? 'invert(1) hue-rotate(180deg)' : 'none',
       transition: 'filter 0.25s ease',
     }}>
@@ -147,7 +149,9 @@ export default function App() {
               <ThemeApplier>
                 <div style={{
                   width: '100%',
-                  height: '100%',
+    height: '100vh',
+    minHeight: '100dvh',
+                  //height: '100%',
                   margin: '0 auto',
                   background: '#000',
                   overflow: 'hidden',
