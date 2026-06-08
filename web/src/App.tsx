@@ -158,7 +158,7 @@ export default function App() {
                   position: 'relative',
                 }}>
                   <ScreenRenderer />
-                  <TabBar />
+                  {/* <TabBar /> */}
                 </div>
               </ThemeApplier>
             </RouterProvider>
