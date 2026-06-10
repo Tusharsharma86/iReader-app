@@ -116,7 +116,7 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
         {/* Meta row ABOVE headline: TREND/BREAKING pill + clock + stories pill (right) */}
         {showMetaPill && (cluster.collection || isBreaking || canTimeline || cluster.stories.length > 1) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            {cluster.collection && (
+            {cluster.collection && cluster.stories.length >= 3 && (
               <span style={{
                 color: '#b994ff', fontSize: 9, fontWeight: 800, letterSpacing: 1,
                 padding: '2px 7px', borderRadius: 999,
@@ -407,12 +407,19 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   // Topic change: serve from cache instantly, fetch in background if stale
   useEffect(() => {
     setPendingFeed(null); setNewCount(0); setTechSourceFilter(new Set());
+    // Clear any prior error when switching topics so a stale "Failed to load"
+    // from a previous topic doesn't linger on a healthy one.
+    setError(null);
 
     let cancelled = false;
     const cached = feedCache.get(activeTopic);
     if (cached) {
       setAllFeed(cached.data);
       setLoading(false);
+      // Mark this as the last successful fetch so handleScroll's bg-refresh
+      // trigger doesn't fire immediately (lastFetchRef stays at 0 otherwise,
+      // making elapsed huge and forcing a refresh on every scroll-to-top).
+      lastFetchRef.current = cached.ts;
       const stale = Date.now() - cached.ts > BG_REFRESH_THRESHOLD_MS;
       if (stale) backgroundRefresh(activeTopic, cached.data);
     } else {
@@ -571,8 +578,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   );
   return (
     <div ref={containerRef} onScroll={handleScroll}
-      style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', background: '#000', WebkitOverflowScrolling: 'touch', paddingBottom: 0 }}>
-             
+      style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', background: '#000', WebkitOverflowScrolling: 'touch' }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px', paddingTop: 'calc(16px + env(safe-area-inset-top, 0px))' }}>
