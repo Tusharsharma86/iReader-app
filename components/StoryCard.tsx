@@ -206,7 +206,7 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight:
 
   return (
     <Pressable
-      android_ripple={undefined}
+      android_ripple={{ color: 'rgba(255,255,255,0.08)', borderless: false }}
       style={({ pressed }) => [
         styles.card,
         {
