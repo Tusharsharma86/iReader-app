@@ -57,6 +57,7 @@ interface DeepDiveData {
   storySections?: StorySection[];
   degraded?: boolean;
   insight: string;
+  keyMetrics?: string[];
   questions: string[];
   tags: string[];
   keyPeople?: string[];
@@ -64,23 +65,23 @@ interface DeepDiveData {
   topics?: string[];
 }
 
-const STOPWORDS = new Set([
-  'the','a','an','is','are','was','were','be','been','to','for','of','and','or',
-  'in','on','at','by','from','with','that','this','its','it','as','has','have','had',
-  'will','says','said','after','before','over','new',
-]);
-
-function headlineSig(h: string): Set<string> {
-  return new Set(
-    (h ?? '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)
-      .filter(w => w.length > 3 && !STOPWORDS.has(w)),
-  );
-}
-function jaccard(a: Set<string>, b: Set<string>): number {
-  if (a.size === 0 || b.size === 0) return 0;
-  let inter = 0;
-  for (const x of a) if (b.has(x)) inter++;
-  return inter / (a.size + b.size - inter || 1);
+const METRIC_RE = /(?:\$[\d,.]+[BMKTbmkt]?\b|\d[\d,.]*\s*(?:billion|million|trillion|percent|%|bps|basis points)\b|\d{1,2}(?:\/\d{1,2})?(?:\/\d{2,4})|\b(?:Q[1-4]|FY)\s*\d{2,4})/gi;
+function extractMetrics(text: string): string[] {
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const s of sentences) {
+    if (!METRIC_RE.test(s)) continue;
+    METRIC_RE.lastIndex = 0;
+    const clean = s.replace(/\*\*/g, '').trim();
+    if (clean.length > 120 || clean.length < 15) continue;
+    const key = clean.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(clean);
+    if (out.length >= 5) break;
+  }
+  return out;
 }
 
 function dedupeSources(arr: { name: string; url: string }[]): { name: string; url: string }[] {
@@ -95,58 +96,55 @@ function dedupeSources(arr: { name: string; url: string }[]): { name: string; ur
   return out;
 }
 
-// Drop Hindi/Devanagari headlines and mobile-phone discount/deal stories.
 const PHONE_RE = /\b(phone|smartphone|mobile|iphone|android|samsung|xiaomi|redmi|oneplus|oppo|vivo|realme|motorola|moto|nokia|pixel|infinix|tecno|poco|nothing phone)\b/i;
 const DEAL_RE = /\b(discount|deal|deals|offer|offers|sale|price drop|price cut|cashback|emi|exchange offer|bank offer|coupon|lowest price|best price|under ₹|under rs\.?|under inr|% off|percent off|flat \d+|flipkart|amazon (sale|prime day|great)|big billion)\b/i;
 function isExcluded(s?: { headline?: string; summary?: string; sources?: { name?: string }[] }): boolean {
   if (!s) return false;
   const text = `${s.headline || ''} ${s.summary || ''}`;
-  if (/[ऀ-ॿ]/.test(text)) return true; // Devanagari (Hindi)
+  if (/[ऀ-ॿ]/.test(text)) return true;
   if (PHONE_RE.test(text) && DEAL_RE.test(text)) return true;
-  // NYT recurring "Here's the Latest" live-briefing roundup — not a story.
   if (/nyt|new york times/i.test(s.sources?.[0]?.name ?? '') && /here.?s the latest|here are the latest/i.test(s.headline ?? '')) return true;
   return false;
 }
 
-function dedupeFeed(items: ApiItem[]): FeedItem[] {
-  const initial = items.map(it => {
+// Trust the server's clusters as-is — no client-side merging or headline-similarity
+// dedupe. Theme collections are filtered out at the load site.
+function parseServerFeed(items: ApiItem[]): FeedItem[] {
+  const out: FeedItem[] = [];
+  for (const it of items) {
     if (it.type === 'cluster' && Array.isArray(it.articles) && it.articles.length > 0) {
       const primary = it.articles[0];
       const sources = dedupeSources(it.articles.flatMap(a => a.sources ?? []));
-      return { primary, allStories: it.articles, sources };
-    }
-    const s = it as unknown as Story;
-    if (!s?.headline) return null;
-    return { primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []) };
-  }).filter((x): x is FeedItem => !!x);
-
-  return mergeSimilar(initial);
-}
-
-// Merge feed items whose primary headlines share ≥60% tokens — combines their
-// stories + sources. Promotes near-duplicate singletons the server cluster
-// missed into multi-source items. Used per-topic AND across topics.
-function mergeSimilar(initial: FeedItem[]): FeedItem[] {
-  const out: FeedItem[] = [];
-  for (const it of initial) {
-    const sig = headlineSig(it.primary.headline);
-    const merged = out.find(existing => jaccard(sig, headlineSig(existing.primary.headline)) >= 0.6);
-    if (merged) {
-      merged.allStories.push(...it.allStories.filter(s => !merged.allStories.some(e => e.id === s.id)));
-      merged.sources = dedupeSources([...merged.sources, ...it.sources]);
+      out.push({ primary, allStories: it.articles, sources });
     } else {
-      out.push(it);
+      const s = it as unknown as Story;
+      if (s?.headline) out.push({ primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []) });
     }
   }
   return out;
 }
 
-// Lead the feed with multi-source clusters (richest first), then single-source cards.
-function clusterForward(items: FeedItem[]): FeedItem[] {
-  const clusters = items.filter(it => it.allStories.length >= 2)
-    .sort((a, b) => b.sources.length - a.sources.length);
-  const singles = items.filter(it => it.allStories.length < 2);
-  return [...clusters, ...singles];
+// Freshness-aware ranking — clusters and singletons compete on equal footing.
+function rankFeedItems(items: FeedItem[]): FeedItem[] {
+  if (items.length === 0) return items;
+  return items
+    .map(it => {
+      const sourceCount = it.sources.length || 1;
+      const hoursOld = (Date.now() - new Date(it.primary.publishedAt ?? 0).getTime()) / 3_600_000;
+      const importanceScore = sourceCount * 3;
+      const breakingBonus = (it.primary as any).isBreaking ? 10 : 0;
+      const clusterBonus = it.allStories.length >= 3 ? 4 : it.allStories.length >= 2 ? 2 : 0;
+      const velocityScore = Math.min(sourceCount / Math.max(hoursOld, 0.5), 10) * 2;
+      const freshnessMult = hoursOld <= 24
+        ? Math.exp(-hoursOld * Math.LN2 / 12)
+        : Math.exp(-24 * Math.LN2 / 12) * Math.exp(-(hoursOld - 24) * Math.LN2 / 6);
+      const freshBonus = Math.max(0, (6 - hoursOld) / 6) * 6;
+      const score = (importanceScore + breakingBonus + clusterBonus) * freshnessMult
+        + velocityScore + freshBonus;
+      return { item: it, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .map(x => x.item);
 }
 
 function timeAgo(iso: string): string {
@@ -246,21 +244,16 @@ export default function AIFeedScreen() {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const raw = await r.json();
       const rawItems: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
-      const incoming = dedupeFeed(rawItems)
+      const incoming = parseServerFeed(rawItems)
         .filter(it => it.primary.headline && it.primary.publishedAt)
         .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded));
       const existingIds = new Set(itemsRef.current.map(it => it.primary.id));
-      const existingSigs = itemsRef.current.map(it => headlineSig(it.primary.headline));
-      const newOnes = incoming.filter(it => {
-        if (existingIds.has(it.primary.id)) return false;
-        const sig = headlineSig(it.primary.headline);
-        return !existingSigs.some(es => jaccard(sig, es) >= 0.6);
-      });
+      const newOnes = incoming.filter(it => !existingIds.has(it.primary.id));
       if (newOnes.length === 0 && !isInitial) {
         setExhausted(true);
         return;
       }
-      setItems(prev => isInitial ? newOnes : [...prev, ...newOnes]);
+      setItems(prev => isInitial ? rankFeedItems(newOnes) : [...prev, ...newOnes]);
       if (isInitial) setError(null);
     } catch (e) {
       if (isInitial) setError(String(e instanceof Error ? e.message : e));
@@ -280,53 +273,39 @@ export default function AIFeedScreen() {
       if (!r.ok) return;
       const raw = await r.json();
       const rawItems: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
-      const fresh = dedupeFeed(rawItems)
-        .filter(it => it.primary.headline && it.primary.publishedAt)
-        .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded));
+      const fresh = rankFeedItems(
+        parseServerFeed(rawItems)
+          .filter(it => it.primary.headline && it.primary.publishedAt)
+          .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded))
+      );
       if (fresh.length > 0) {
-        // Preserve the card the user is currently on if it still exists.
         setItems(fresh);
         setError(null);
       }
     } catch { /* keep showing cached items */ }
   }, []);
 
-  // Cluster-forward loader — gathers multi-source clusters from ALL topics and
-  // leads with them (richest first), then fills with breaking single-source
-  // cards. This is the default AI-feed experience so clustered stories surface
-  // first.  mode 'initial' → skeleton · 'refresh' → pull spinner · 'silent' → none
+  // Default loader — trusts server clusters, ranks by freshness + importance.
+  // Fetches the current topic (breaking by default) and applies rankFeedItems.
+  // mode 'initial' → skeleton · 'refresh' → pull spinner · 'silent' → none
   const loadClusterForward = useCallback(async (mode: 'initial' | 'refresh' | 'silent') => {
     if (mode === 'initial') setLoading(true);
     else if (mode === 'refresh') setRefreshing(true);
     try {
-      const fetchTopic = (t: string) =>
-        fetch(`${FEED_API_BASE}?topic=${t}`).then(r => (r.ok ? r.json() : null)).catch(() => null);
-      const raws = await Promise.all(TOPIC_QUEUE.map(fetchTopic));
-      const toItems = (raw: unknown): FeedItem[] => {
-        const arr = Array.isArray(raw) ? raw : Array.isArray((raw as { feed?: unknown[] })?.feed) ? (raw as { feed: unknown[] }).feed : [];
-        // Clusters always sit at the top of the server feed, so 300 keeps them
-        // all plus plenty of singles — and keeps the O(n²) merge cheap.
-        const ri = (arr as ApiItem[]).slice(0, 300);
-        return dedupeFeed(ri)
+      const r = await fetch(`${FEED_API_BASE}?topic=breaking`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const raw = await r.json();
+      const rawItems: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
+      const next = rankFeedItems(
+        parseServerFeed(rawItems)
           .filter(it => it.primary.headline && it.primary.publishedAt)
-          .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded));
-      };
-      const perTopic = raws.map(raw => (raw ? toItems(raw) : []));
-      const breakingItems = perTopic[0] ?? [];
-      const clusterPool: FeedItem[] = [];
-      for (const its of perTopic) for (const it of its) if (it.allStories.length >= 2) clusterPool.push(it);
-      const clusters = mergeSimilar(clusterPool).sort((a, b) => b.sources.length - a.sources.length);
-      const clusterSigs = clusters.map(c => headlineSig(c.primary.headline));
-      const singles = breakingItems
-        .filter(it => it.allStories.length < 2)
-        .filter(it => !clusterSigs.some(cs => jaccard(cs, headlineSig(it.primary.headline)) >= 0.6))
-        .slice(0, 150);
-      const next = [...clusters, ...singles];
+          .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded))
+      );
       if (next.length > 0) {
         setItems(next);
         setError(null);
       } else if (mode === 'initial') {
-        await loadTopic(0, true); // fall back to single-topic load if the gather came up empty
+        await loadTopic(0, true);
       }
     } catch (e) {
       if (mode === 'initial') setError(String(e instanceof Error ? e.message : e));
@@ -771,8 +750,17 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
   const [reloadKey, setReloadKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Retry a failed Deep Dive — bumping reloadKey re-runs the fetch effect and
-  // bypasses the disk cache (reloadKey > 0).
+  const metrics = useMemo(() => {
+    if (!data) return [];
+    if (data.keyMetrics && data.keyMetrics.length > 0) return data.keyMetrics.slice(0, 5);
+    const pool = [
+      ...(data.tldr ?? []),
+      ...(data.tldrSections?.flatMap(s => s.bullets) ?? []),
+      data.narrative ?? '',
+    ].join(' ');
+    return extractMetrics(pool);
+  }, [data]);
+
   const reload = useCallback(() => {
     setError(null);
     setShowColdHint(false);
@@ -944,11 +932,29 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
                     </View></Stagger>
                   )}
 
+                  {/* Key Metrics */}
+                  {metrics.length > 0 && (
+                    <Stagger delay={120}><View style={[overlayStyles.card, { borderTopColor: '#4A90D9', borderTopWidth: 2 }]}>
+                      <View style={overlayStyles.sectionLabelRow}>
+                        <Text style={[overlayStyles.sectionLabel, { color: '#4A90D9' }]}>KEY METRICS</Text>
+                        <View style={[overlayStyles.labelDivider, { backgroundColor: 'rgba(74,144,217,0.2)' }]} />
+                      </View>
+                      {metrics.map((m, i) => (
+                        <View key={i} style={[overlayStyles.bulletRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.05)' }]}>
+                          <View style={[overlayStyles.bulletDot, { backgroundColor: '#4A90D9' }]} />
+                          <Text style={[overlayStyles.bulletText, { fontSize: 14 * ddScale, lineHeight: 22 * ddScale }]}>
+                            {renderHighlighted(m, allTags(data))}
+                          </Text>
+                        </View>
+                      ))}
+                    </View></Stagger>
+                  )}
+
                   {/* Story */}
                   {(data.narrative || (data.storySections && data.storySections.length > 0)) && (
-                    <Stagger delay={160}><View style={{ marginTop: 4 }}>
+                    <Stagger delay={200}><View style={{ marginTop: 4 }}>
                       <View style={overlayStyles.sectionLabelRow}>
-                        <Text style={overlayStyles.sectionLabel}>CURIOUSCATS FULL STORY</Text>
+                        <Text style={overlayStyles.sectionLabel}>THE STORY</Text>
                         <View style={overlayStyles.labelDivider} />
                       </View>
                       {(() => {
@@ -980,7 +986,7 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
 
                   {/* Follow the Story — gated by Customize → showDeepDiveEntities. */}
                   {showDeepDiveEntities && (data.keyPeople?.length || data.keyCompanies?.length || data.topics?.length) ? (
-                    <Stagger delay={240}><View style={{ marginTop: 4 }}>
+                    <Stagger delay={280}><View style={{ marginTop: 4 }}>
                       <View style={overlayStyles.sectionLabelRow}>
                         <Ionicons name="sparkles" size={11} color={VIOLET} />
                         <Text style={[overlayStyles.sectionLabel, { marginLeft: 6 }]}>FOLLOW THE STORY</Text>
@@ -994,7 +1000,7 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
 
                   {/* Curious? Questions — gated by Customize → showDeepDiveCurious. */}
                   {showDeepDiveCurious && data.questions.length > 0 && (
-                    <Stagger delay={320}><View style={{ marginTop: 4 }}>
+                    <Stagger delay={360}><View style={{ marginTop: 4 }}>
                       <View style={overlayStyles.sectionLabelRow}>
                         <Ionicons name="sparkles" size={11} color={VIOLET} />
                         <Text style={[overlayStyles.sectionLabel, { marginLeft: 6 }]}>CURIOUS?</Text>
@@ -1014,7 +1020,7 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
 
                   {/* Sources */}
                   {item.sources.length > 0 && (
-                    <Stagger delay={400}><View style={{ marginTop: 4 }}>
+                    <Stagger delay={440}><View style={{ marginTop: 4 }}>
                       <View style={overlayStyles.sectionLabelRow}>
                         <Text style={overlayStyles.sectionLabel}>
                           COVERED BY <TickNumber to={item.sources.length} /> {item.sources.length === 1 ? 'SOURCE' : 'SOURCES'}

@@ -34,11 +34,31 @@ interface DeepDiveData {
   storySections?: StorySection[];
   degraded?: boolean;
   insight: string;
+  keyMetrics?: string[];
   questions: string[];
   tags: string[];
   keyPeople?: string[];
   keyCompanies?: string[];
   topics?: string[];
+}
+
+const METRIC_RE = /(?:\$[\d,.]+[BMKTbmkt]?\b|\d[\d,.]*\s*(?:billion|million|trillion|percent|%|bps|basis points)\b|\d{1,2}(?:\/\d{1,2})?(?:\/\d{2,4})|\b(?:Q[1-4]|FY)\s*\d{2,4})/gi;
+function extractMetrics(text: string): string[] {
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const s of sentences) {
+    if (!METRIC_RE.test(s)) continue;
+    METRIC_RE.lastIndex = 0;
+    const clean = s.replace(/\*\*/g, '').trim();
+    if (clean.length > 120 || clean.length < 15) continue;
+    const key = clean.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(clean);
+    if (out.length >= 5) break;
+  }
+  return out;
 }
 
 interface FeedItem {
@@ -120,6 +140,28 @@ function parseServerFeed(items: ApiItem[]): FeedItem[] {
   return out;
 }
 
+function rankFeedItems(items: FeedItem[]): FeedItem[] {
+  if (items.length === 0) return items;
+  return items
+    .map(it => {
+      const sourceCount = it.sources.length || 1;
+      const hoursOld = (Date.now() - new Date(it.primary.publishedAt ?? 0).getTime()) / 3_600_000;
+      const importanceScore = sourceCount * 3;
+      const breakingBonus = it.primary.isBreaking ? 10 : 0;
+      const clusterBonus = it.allStories.length >= 3 ? 4 : it.allStories.length >= 2 ? 2 : 0;
+      const velocityScore = Math.min(sourceCount / Math.max(hoursOld, 0.5), 10) * 2;
+      const freshnessMult = hoursOld <= 24
+        ? Math.exp(-hoursOld * Math.LN2 / 12)
+        : Math.exp(-24 * Math.LN2 / 12) * Math.exp(-(hoursOld - 24) * Math.LN2 / 6);
+      const freshBonus = Math.max(0, (6 - hoursOld) / 6) * 6;
+      const score = (importanceScore + breakingBonus + clusterBonus) * freshnessMult
+        + velocityScore + freshBonus;
+      return { item: it, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .map(x => x.item);
+}
+
 function dedupeSources(arr: { name: string; url: string }[]): { name: string; url: string }[] {
   const seen = new Set<string>();
   const out: { name: string; url: string }[] = [];
@@ -187,7 +229,7 @@ export default function AIFeedScreen() {
       if (newOnes.length === 0 && !isInitial) { setExhausted(true); return; }
 
       setItems(prev => {
-        const next = isInitial ? newOnes : [...prev, ...newOnes];
+        const next = isInitial ? rankFeedItems(newOnes) : [...prev, ...newOnes];
         if (isInitial) { try { localStorage.setItem(FEED_LIST_CACHE, JSON.stringify({ items: next, at: Date.now() })); } catch {} }
         return next;
       });
@@ -616,6 +658,16 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
     () => [...(data?.tags ?? []), ...(data?.keyPeople ?? []), ...(data?.keyCompanies ?? [])],
     [data],
   );
+  const metrics = useMemo(() => {
+    if (!data) return [];
+    if (data.keyMetrics && data.keyMetrics.length > 0) return data.keyMetrics.slice(0, 5);
+    const pool = [
+      ...(data.tldr ?? []),
+      ...(data.tldrSections?.flatMap(s => s.bullets) ?? []),
+      data.narrative ?? '',
+    ].join(' ');
+    return extractMetrics(pool);
+  }, [data]);
   const tldrBody = useMemo(() => {
     if (!data) return null;
     if (data.tldrSections && data.tldrSections.length > 0) {
@@ -973,13 +1025,38 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
               </div>
             )}
 
+            {metrics.length > 0 && (
+              <div style={{
+                background: 'rgba(15,15,22,0.5)',
+                border: '1px solid rgba(255,255,255,0.06)',
+                borderRadius: 14, padding: '18px 20px',
+                backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+              }}>
+                <div style={{
+                  color: '#4A90D9', fontSize: 9, fontWeight: 800, letterSpacing: 1.6,
+                  marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8,
+                }}>
+                  <span>KEY METRICS</span>
+                  <div style={{ flex: 1, height: 1, background: 'rgba(74,144,217,0.2)' }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  {metrics.map((m, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 10, padding: '8px 0', alignItems: 'flex-start', borderTop: i > 0 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
+                      <div style={{ width: 5, height: 5, borderRadius: 3, marginTop: 8, background: '#4A90D9', flexShrink: 0 }} />
+                      <div style={{ flex: 1, color: '#d4d4dc', fontSize: 14 * ddScale, lineHeight: 1.55 }}>{highlightEntities(m, tagList, accent)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {(data.narrative || (data.storySections && data.storySections.length > 0)) && (
               <div style={{ marginTop: 4 }}>
                 <div style={{
                   color: VIOLET, fontSize: 10, fontWeight: 800, letterSpacing: 2,
                   marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8,
                 }}>
-                  <span>CURIOUSCATS FULL STORY</span>
+                  <span>THE STORY</span>
                   <div style={{ flex: 1, height: 1, background: `${VIOLET}33` }} />
                 </div>
                 {narrativeBody}
