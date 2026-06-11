@@ -49,6 +49,15 @@
       if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) {
         try { screen.orientation?.lock?.('portrait').catch(() => {}); } catch {}
       }
+      // Purge any stale service workers and caches on every page load.
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+          regs.forEach(function(r) { r.unregister(); });
+        });
+        if (caches) caches.keys().then(function(names) {
+          names.forEach(function(n) { caches.delete(n); });
+        });
+      }
     </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>

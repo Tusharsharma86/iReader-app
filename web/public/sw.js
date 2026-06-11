@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v27';
+const CACHE_VERSION = 'v28';
 const STATIC_CACHE = `ireader-static-${CACHE_VERSION}`;
 const API_CACHE = `ireader-api-${CACHE_VERSION}`;
 const API_TTL_MS = 5 * 60 * 1000;
