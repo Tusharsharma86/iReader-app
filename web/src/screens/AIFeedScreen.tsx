@@ -1135,7 +1135,10 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
                   COVERED BY <TickNumber to={item.sources.length} /> {item.sources.length === 1 ? 'SOURCE' : 'SOURCES'}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {item.sources.slice(0, 8).map((s, i) => (
+                  {item.sources.slice(0, 8).map((s, i) => {
+                    const story = item.allStories.find(a => a.sources?.[0]?.name === s.name);
+                    const oneLiner = story?.headline ?? story?.summary ?? null;
+                    return (
                     <a key={i} href={s.url || '#'} target="_blank" rel="noopener noreferrer" style={{
                       display: 'flex', alignItems: 'center', gap: 10,
                       padding: '10px 14px', borderRadius: 12,
@@ -1144,10 +1147,14 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
                       color: '#e8e8e8', fontSize: 13, fontWeight: 600,
                       textDecoration: 'none',
                     }}>
-                      <span style={{ flex: 1 }}>{s.name}</span>
-                      <span style={{ color: VIOLET, fontSize: 11 }}>↗</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: '#e8e8e8', fontSize: 13, fontWeight: 600 }}>{s.name}</div>
+                        {oneLiner && <div style={{ color: '#777', fontSize: 11, fontWeight: 400, marginTop: 3, lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{oneLiner}</div>}
+                      </div>
+                      <span style={{ color: VIOLET, fontSize: 11, flexShrink: 0 }}>↗</span>
                     </a>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
