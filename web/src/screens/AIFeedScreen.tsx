@@ -74,6 +74,8 @@ interface DeepDiveData {
   keyPeople?: string[];
   keyCompanies?: string[];
   topics?: string[];
+  articlesRead?: number;
+  articlesAttempted?: number;
 }
 
 const METRIC_RE = /(?:\$[\d,.]+[BMKTbmkt]?\b|\d[\d,.]*\s*(?:billion|million|trillion|percent|%|bps|basis points)\b|\d{1,2}(?:\/\d{1,2})?(?:\/\d{2,4})|\b(?:Q[1-4]|FY)\s*\d{2,4})/gi;
@@ -1009,6 +1011,33 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
           <span style={{ color: 'rgba(255,255,255,0.3)' }}>·</span>
           <span>{timeAgo(story.publishedAt)}</span>
         </div>
+
+        {data && data.articlesAttempted != null && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+            {data.articlesRead === 0 ? (
+              <>
+                <span style={{ width: 6, height: 6, borderRadius: 3, background: '#f59e0b', flexShrink: 0, display: 'inline-block' }} />
+                <span style={{ color: '#f59e0b', fontSize: 10, fontWeight: 700, letterSpacing: 0.6 }}>
+                  SUMMARIES ONLY — FULL TEXT UNAVAILABLE
+                </span>
+              </>
+            ) : data.articlesRead! < data.articlesAttempted ? (
+              <>
+                <span style={{ width: 6, height: 6, borderRadius: 3, background: '#f59e0b', flexShrink: 0, display: 'inline-block' }} />
+                <span style={{ color: '#f59e0b', fontSize: 10, fontWeight: 700, letterSpacing: 0.6 }}>
+                  FULL TEXT READ FROM {data.articlesRead} OF {data.articlesAttempted} SOURCES
+                </span>
+              </>
+            ) : (
+              <>
+                <span style={{ width: 6, height: 6, borderRadius: 3, background: '#4ade80', flexShrink: 0, display: 'inline-block' }} />
+                <span style={{ color: '#4ade80', fontSize: 10, fontWeight: 700, letterSpacing: 0.6 }}>
+                  FULL TEXT READ FROM ALL {data.articlesRead} {data.articlesRead === 1 ? 'SOURCE' : 'SOURCES'}
+                </span>
+              </>
+            )}
+          </div>
+        )}
 
         {stage === 'generating' ? (
           <InlineLoader accent={accent} showColdHint={showColdHint} />

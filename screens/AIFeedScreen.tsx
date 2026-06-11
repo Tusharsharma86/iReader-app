@@ -63,6 +63,8 @@ interface DeepDiveData {
   keyPeople?: string[];
   keyCompanies?: string[];
   topics?: string[];
+  articlesRead?: number;
+  articlesAttempted?: number;
 }
 
 const METRIC_RE = /(?:\$[\d,.]+[BMKTbmkt]?\b|\d[\d,.]*\s*(?:billion|million|trillion|percent|%|bps|basis points)\b|\d{1,2}(?:\/\d{1,2})?(?:\/\d{2,4})|\b(?:Q[1-4]|FY)\s*\d{2,4})/gi;
@@ -880,6 +882,27 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
                 <Text style={[overlayStyles.metaText, { color: 'rgba(255,255,255,0.3)' }]}>·</Text>
                 <Text style={[overlayStyles.metaText, { color: accent }]}>{timeAgo(story.publishedAt)}</Text>
               </View>
+
+              {data && data.articlesAttempted != null && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  <View style={{
+                    width: 6, height: 6, borderRadius: 3,
+                    backgroundColor: data.articlesRead === 0 ? '#f59e0b'
+                      : data.articlesRead! < data.articlesAttempted ? '#f59e0b'
+                      : '#4ade80',
+                  }} />
+                  <Text style={{ color: data.articlesRead === 0 ? '#f59e0b'
+                      : data.articlesRead! < data.articlesAttempted! ? '#f59e0b'
+                      : '#4ade80',
+                    fontSize: 10, fontWeight: '700', letterSpacing: 0.6 }}>
+                    {data.articlesRead === 0
+                      ? 'SUMMARIES ONLY — FULL TEXT UNAVAILABLE'
+                      : data.articlesRead! < data.articlesAttempted!
+                        ? `FULL TEXT READ FROM ${data.articlesRead} OF ${data.articlesAttempted} SOURCES`
+                        : `FULL TEXT READ FROM ALL ${data.articlesRead} ${data.articlesRead === 1 ? 'SOURCE' : 'SOURCES'}`}
+                  </Text>
+                </View>
+              )}
 
               {stage === 'generating' ? (
                 <InlineLoader showColdHint={showColdHint} />
