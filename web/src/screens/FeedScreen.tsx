@@ -514,7 +514,12 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
 
   const filteredClusters = useMemo(() => {
     if (activeTopic !== 'technology' || techSourceFilter.size === 0) return storyClusters;
-    return storyClusters.filter(c => c.stories.some(s => techSourceFilter.has(s.sources?.[0]?.name ?? '')));
+    return storyClusters
+      .map(c => ({
+        ...c,
+        stories: c.stories.filter(s => techSourceFilter.has(s.sources?.[0]?.name ?? '')),
+      }))
+      .filter(c => c.stories.length > 0);
   }, [storyClusters, activeTopic, techSourceFilter]);
 
   const techSources = useMemo(() => {
