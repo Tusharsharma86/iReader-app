@@ -1012,32 +1012,27 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
           <span>{timeAgo(story.publishedAt)}</span>
         </div>
 
-        {data && data.articlesAttempted != null && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-            {data.articlesRead === 0 ? (
-              <>
-                <span style={{ width: 6, height: 6, borderRadius: 3, background: '#f59e0b', flexShrink: 0, display: 'inline-block' }} />
-                <span style={{ color: '#f59e0b', fontSize: 10, fontWeight: 700, letterSpacing: 0.6 }}>
-                  SUMMARIES ONLY — FULL TEXT UNAVAILABLE
-                </span>
-              </>
-            ) : data.articlesRead! < data.articlesAttempted ? (
-              <>
-                <span style={{ width: 6, height: 6, borderRadius: 3, background: '#f59e0b', flexShrink: 0, display: 'inline-block' }} />
-                <span style={{ color: '#f59e0b', fontSize: 10, fontWeight: 700, letterSpacing: 0.6 }}>
-                  FULL TEXT READ FROM {data.articlesRead} OF {data.articlesAttempted} SOURCES
-                </span>
-              </>
-            ) : (
-              <>
-                <span style={{ width: 6, height: 6, borderRadius: 3, background: '#4ade80', flexShrink: 0, display: 'inline-block' }} />
-                <span style={{ color: '#4ade80', fontSize: 10, fontWeight: 700, letterSpacing: 0.6 }}>
-                  FULL TEXT READ FROM ALL {data.articlesRead} {data.articlesRead === 1 ? 'SOURCE' : 'SOURCES'}
-                </span>
-              </>
-            )}
-          </div>
-        )}
+        {data && data.articlesAttempted != null && (() => {
+          const read = data.articlesRead ?? 0;
+          const total = data.articlesAttempted!;
+          const color = read === total && total > 0 ? '#4ade80' : '#f59e0b';
+          const label = read === 0
+            ? 'SUMMARIES ONLY'
+            : read < total
+              ? 'FULL TEXT READ'
+              : 'FULL TEXT READ';
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+              <span style={{ width: 6, height: 6, borderRadius: 3, background: color, flexShrink: 0, display: 'inline-block' }} />
+              <span style={{ color, fontSize: 11, fontWeight: 800, letterSpacing: 0 }}>
+                {read}/{total}
+              </span>
+              <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 10, fontWeight: 700, letterSpacing: 0.6 }}>
+                {label}
+              </span>
+            </div>
+          );
+        })()}
 
         {stage === 'generating' ? (
           <InlineLoader accent={accent} showColdHint={showColdHint} />
