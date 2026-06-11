@@ -881,21 +881,21 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
                 )}
                 <Text style={[overlayStyles.metaText, { color: 'rgba(255,255,255,0.3)' }]}>·</Text>
                 <Text style={[overlayStyles.metaText, { color: accent }]}>{timeAgo(story.publishedAt)}</Text>
+                {data && data.articlesAttempted != null && (() => {
+                  const read = data.articlesRead ?? 0;
+                  const total = data.articlesAttempted!;
+                  const color = read === total && total > 0 ? '#4ade80' : '#f59e0b';
+                  const label = read === 0 ? 'SUMMARIES ONLY' : 'FULL TEXT READ';
+                  return (
+                    <>
+                      <Text style={[overlayStyles.metaText, { color: 'rgba(255,255,255,0.3)' }]}>·</Text>
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
+                      <Text style={{ color, fontSize: 11, fontWeight: '800' }}>{read}/{total}</Text>
+                      <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 10, fontWeight: '700', letterSpacing: 0.6 }}>{label}</Text>
+                    </>
+                  );
+                })()}
               </View>
-
-              {data && data.articlesAttempted != null && (() => {
-                const read = data.articlesRead ?? 0;
-                const total = data.articlesAttempted!;
-                const color = read === total && total > 0 ? '#4ade80' : '#f59e0b';
-                const label = read === 0 ? 'SUMMARIES ONLY' : 'FULL TEXT READ';
-                return (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
-                    <Text style={{ color, fontSize: 11, fontWeight: '800' }}>{read}/{total}</Text>
-                    <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 10, fontWeight: '700', letterSpacing: 0.6 }}>{label}</Text>
-                  </View>
-                );
-              })()}
 
               {stage === 'generating' ? (
                 <InlineLoader showColdHint={showColdHint} />
