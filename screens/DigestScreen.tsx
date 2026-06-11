@@ -122,7 +122,17 @@ async function fetchTopicFeed(topic: string): Promise<Story[]> {
     if (!res.ok) return [];
     const raw = await res.json();
     const items: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
-    return flatten(items).slice(0, 12);
+    // Take one representative per cluster (API returns clusters in score order —
+    // highest importance first). Never explode a cluster into all its articles or
+    // the top N slots fill with variants of the same story.
+    return items
+      .map(it => {
+        const stories = it.type === 'cluster' ? (it.articles ?? []) : [it as unknown as Story];
+        // Pick the story with the most sources — most-covered = most newsworthy.
+        return stories.slice().sort((a, b) => (b.sources?.length ?? 0) - (a.sources?.length ?? 0))[0];
+      })
+      .filter((s): s is Story => Boolean(s))
+      .slice(0, 10);
   } catch { return []; }
 }
 
@@ -179,17 +189,17 @@ async function buildSnapshot(): Promise<Snapshot> {
     }
   }
 
-  // Build category sections — top 3 per topic + one-liner from first story
+  // Build category sections — top 5 per topic + one-liner from first story
   const sections: CategorySection[] = sectionsRaw
     .map(({ def, stories }) => {
-      const top3 = stories.slice(0, 3);
-      const oneLiner = top3[0]?.summary?.slice(0, 140) ?? '';
+      const top5 = stories.slice(0, 5);
+      const oneLiner = top5[0]?.summary?.slice(0, 140) ?? '';
       return {
         key: def.key,
         label: def.label,
         emoji: def.emoji,
         oneLiner,
-        stories: top3,
+        stories: top5,
       };
     })
     .filter(s => s.stories.length > 0);
