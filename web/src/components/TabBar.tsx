@@ -80,9 +80,6 @@ export function TabBar() {
   if (HIDDEN_ROUTES.has(currentScreen.name)) return null;
 
   return (
-    <>
-    {/* Solid fill covers the gap between the tab pill and the bottom of the viewport in Safari */}
-    <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, height: 'max(16px, env(safe-area-inset-bottom, 0px))', background: '#000', zIndex: 99, pointerEvents: 'none' }} />
     <div
       style={{
         position: 'fixed',
@@ -155,6 +152,5 @@ export function TabBar() {
         <style>{`@keyframes tabBounce { 0% { transform: scale(0.85); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }`}</style>
       </div>
     </div>
-    </>
   );
 }
