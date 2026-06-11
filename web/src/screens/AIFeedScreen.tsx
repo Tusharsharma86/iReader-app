@@ -1029,7 +1029,6 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
                   color: VIOLET, fontSize: 10, fontWeight: 800, letterSpacing: 2,
                   display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14,
                 }}>
-                  <span>TL;DR BY CURIOUSCATS.AI</span>
                   <div style={{ flex: 1, height: 1, background: `${VIOLET}33` }} />
                 </div>
                 {tldrBody}
