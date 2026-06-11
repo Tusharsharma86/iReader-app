@@ -27,8 +27,6 @@ const CATEGORIES = [
 
 const REAL_TOPICS: CategoryTopic[] = ['breaking', 'technology', 'india-politics', 'geopolitics', 'markets', 'business'];
 
-const PREFERRED_SOURCES = ['TechCrunch','The Verge','Ars Technica','Wired'];
-
 const SOURCE_DOMAINS: Record<string, string> = {
   'TechCrunch':'techcrunch.com','The Verge':'theverge.com','Ars Technica':'arstechnica.com','Wired':'wired.com','Hacker News':'news.ycombinator.com','9to5Mac':'9to5mac.com','9to5Google':'9to5google.com','MIT Tech Review':'technologyreview.com','Engadget':'engadget.com','VentureBeat':'venturebeat.com','The Next Web':'thenextweb.com','BBC World':'bbc.co.uk','NYT World':'nytimes.com','The Guardian':'theguardian.com','NPR World':'npr.org','Al Jazeera':'aljazeera.com','NDTV':'ndtv.com','India Today':'indiatoday.in','The Print':'theprint.in','The Quint':'thequint.com','CNBC TV18':'cnbctv18.com','Scroll.in':'scroll.in','Economic Times':'economictimes.indiatimes.com','Livemint':'livemint.com','Mint':'livemint.com','Inc42':'inc42.com','Indian Express':'indianexpress.com',
 };
@@ -281,8 +279,6 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   const [newCount, setNewCount] = useState(0);
   const [loading, setLoading] = useState(() => !feedCache.has(activeTopic));
   const [refreshing, setRefreshing] = useState(false);
-  // Multi-select tech source filter — empty set = all sources.
-  const [techSourceFilter, setTechSourceFilter] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
   const activeTopicRef = useRef(activeTopic);
@@ -406,7 +402,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
 
   // Topic change: serve from cache instantly, fetch in background if stale
   useEffect(() => {
-    setPendingFeed(null); setNewCount(0); setTechSourceFilter(new Set());
+    setPendingFeed(null); setNewCount(0);
     // Clear any prior error when switching topics so a stale "Failed to load"
     // from a previous topic doesn't linger on a healthy one.
     setError(null);
@@ -513,16 +509,10 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
     });
   }, [filteredFeed]);
 
-  const filteredClusters = useMemo(() => {
-    if (activeTopic !== 'technology' || techSourceFilter.size === 0) return storyClusters;
-    // Multi-select: keep clusters that include ANY of the selected sources.
-    return storyClusters.filter(c => c.stories.some(s => techSourceFilter.has(s.sources?.[0]?.name ?? '')));
-  }, [storyClusters, activeTopic, techSourceFilter]);
-
   // Re-rank clusters — personalized for "For You", standard scoring for topic tabs
   const rankedClusters = useMemo(() => {
-    if (filteredClusters.length === 0) return filteredClusters;
-    const proxies = filteredClusters.map((c, i) => ({
+    if (storyClusters.length === 0) return storyClusters;
+    const proxies = storyClusters.map((c, i) => ({
       id: c.id,
       headline: c.topicLabel,
       summary: c.subtitle,
@@ -552,21 +542,10 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (rankStoriesStandard(proxies as any) as any[]).map((p: any) => filteredClusters[p._i]);
-  }, [filteredClusters, activeTopic, topicInterests]);
+    return (rankStoriesStandard(proxies as any) as any[]).map((p: any) => storyClusters[p._i]);
+  }, [storyClusters, activeTopic, topicInterests]);
 
-  const techSources = useMemo(() => {
-    if (activeTopic !== 'technology') return [];
-    const seen = new Map<string, string>();
-    for (const s of visibleStories) {
-      const name = s.sources?.[0]?.name;
-      if (name && !seen.has(name)) { const fav = faviconUrl(name); if (fav) seen.set(name, fav); }
-    }
-    const result: { name: string; favicon: string }[] = [];
-    for (const pref of PREFERRED_SOURCES) { if (seen.has(pref)) result.push({ name: pref, favicon: seen.get(pref)! }); }
-    for (const [name, favicon] of seen) { if (!PREFERRED_SOURCES.includes(name)) result.push({ name, favicon }); }
-    return result;
-  }, [visibleStories, activeTopic]);
+
 
   const visibleCategories = useMemo(
     // Customize → hiddenTopics overlays the existing activeTopics gate.
@@ -618,30 +597,6 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
         })}
       </div>
 
-      {/* Tech source filter bar */}
-      {activeTopic === 'technology' && techSources.length > 0 && (
-        <div style={{ display: 'flex', overflowX: 'auto', padding: '0 16px 10px', gap: 10, scrollbarWidth: 'none', alignItems: 'center' }}>
-          <button onClick={() => setTechSourceFilter(new Set())}
-            style={{ flexShrink: 0, padding: '6px 12px', borderRadius: 99, background: techSourceFilter.size === 0 ? '#fff' : 'rgba(255,255,255,0.1)', border: 'none', cursor: 'pointer', color: techSourceFilter.size === 0 ? '#000' : '#888', fontSize: 12, fontWeight: 700 }}>
-            All
-          </button>
-          {techSources.map(src => {
-            const active = techSourceFilter.has(src.name);
-            return (
-              <button key={src.name} onClick={() => setTechSourceFilter(prev => {
-                const next = new Set(prev);
-                if (next.has(src.name)) next.delete(src.name); else next.add(src.name);
-                return next;
-              })}
-                style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 99, background: active ? '#fff' : 'rgba(255,255,255,0.1)', border: active ? 'none' : '1px solid transparent', cursor: 'pointer' }}>
-                <img src={src.favicon} alt="" style={{ width: 16, height: 16, borderRadius: 4 }} />
-                <span style={{ color: active ? '#000' : '#aaa', fontSize: 12, fontWeight: 600 }}>{src.name}</span>
-                {active && <span style={{ color: '#000', fontSize: 11, fontWeight: 800, marginLeft: 1 }}>✕</span>}
-              </button>
-            );
-          })}
-        </div>
-      )}
 
       {/* New stories banner */}
       {newCount > 0 && (
