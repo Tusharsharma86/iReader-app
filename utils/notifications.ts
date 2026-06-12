@@ -28,6 +28,7 @@ const CHANNEL_BREAKING = 'breaking-news';
 const CHANNEL_SOURCES  = 'fav-sources';
 const CHANNEL_STREAK   = 'streak-reminders';
 const SEEN_KEY = '@notif_seen_v1';
+const RECENT_HEADLINES_KEY = '@notif_recent_headlines_v1';
 const STREAK_NUDGE_ID_KEY = '@streak_nudge_notif_id';
 
 export async function setupNotificationChannels(): Promise<void> {
@@ -105,6 +106,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
 // ── Expo push token registration ───────────────────────────────────────────
 const PUSH_API = 'https://ireader.onrender.com/api/push';
 const TOKEN_CACHE_KEY = '@expo_push_token_v1';
+const TOKEN_CONFIRMED_KEY = '@expo_push_token_confirmed_v1';
 
 export async function registerForPush(): Promise<string | null> {
   if (!N) return null;
@@ -112,7 +114,6 @@ export async function registerForPush(): Promise<string | null> {
     const granted = await requestNotificationPermission();
     if (!granted) return null;
 
-    // Expo SDK 49+ wants the projectId explicitly.
     const projectId =
       Constants.expoConfig?.extra?.eas?.projectId ??
       Constants.easConfig?.projectId;
@@ -122,16 +123,21 @@ export async function registerForPush(): Promise<string | null> {
     const token: string | undefined = tokenRes?.data;
     if (!token) return null;
 
-    // Cache locally to avoid hitting the backend on every cold launch.
-    const cached = await AsyncStorage.getItem(TOKEN_CACHE_KEY);
-    if (cached === token) return token;
-
-    await fetch(`${PUSH_API}/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, platform: Platform.OS }),
-    }).catch(() => {});
     await AsyncStorage.setItem(TOKEN_CACHE_KEY, token);
+
+    const confirmed = await AsyncStorage.getItem(TOKEN_CONFIRMED_KEY);
+    if (confirmed === token) return token;
+
+    try {
+      const res = await fetch(`${PUSH_API}/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, platform: Platform.OS }),
+      });
+      if (res.ok) {
+        await AsyncStorage.setItem(TOKEN_CONFIRMED_KEY, token);
+      }
+    } catch {}
     return token;
   } catch {
     return null;
@@ -248,13 +254,80 @@ function detectBreakingTheme(headline: string, summary: string): string | null {
   return null;
 }
 
+// ── Headline similarity / follow-up detection ─────────────────────────────
+const STOPWORDS = new Set([
+  'the','a','an','is','are','was','were','be','been','has','have','had','do',
+  'does','did','will','would','could','should','may','might','can','shall',
+  'to','of','in','for','on','with','at','by','from','as','into','about',
+  'its','it','this','that','these','those','and','but','or','not','no',
+  'up','out','if','then','so','than','too','very','just','also','now',
+  'new','says','said','after','over','more','us','s','t','re','ve',
+]);
+
+function sigWords(text: string): Set<string> {
+  return new Set(
+    text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)
+      .filter(w => w.length > 2 && !STOPWORDS.has(w))
+  );
+}
+
+function jaccardSim(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 && b.size === 0) return 1;
+  let inter = 0;
+  for (const w of a) if (b.has(w)) inter++;
+  return inter / (a.size + b.size - inter);
+}
+
+interface RecentHeadline { headline: string; ts: number; }
+
+async function getRecentHeadlines(): Promise<RecentHeadline[]> {
+  try {
+    const raw = await AsyncStorage.getItem(RECENT_HEADLINES_KEY);
+    if (!raw) return [];
+    const list = JSON.parse(raw) as RecentHeadline[];
+    const cutoff = Date.now() - 12 * 3_600_000;
+    return list.filter(h => h.ts > cutoff);
+  } catch { return []; }
+}
+
+async function pushRecentHeadline(headline: string): Promise<void> {
+  try {
+    const list = await getRecentHeadlines();
+    list.push({ headline, ts: Date.now() });
+    const trimmed = list.slice(-200);
+    await AsyncStorage.setItem(RECENT_HEADLINES_KEY, JSON.stringify(trimmed));
+  } catch {}
+}
+
+export type BreakingNotifKind = 'new' | 'follow-up' | 'duplicate';
+
+export async function classifyBreakingHeadline(headline: string): Promise<BreakingNotifKind> {
+  const recent = await getRecentHeadlines();
+  if (recent.length === 0) return 'new';
+  const words = sigWords(headline);
+  let maxSim = 0;
+  for (const r of recent) {
+    const sim = jaccardSim(words, sigWords(r.headline));
+    if (sim > maxSim) maxSim = sim;
+  }
+  if (maxSim >= 0.7) return 'duplicate';
+  if (maxSim >= 0.3) return 'follow-up';
+  return 'new';
+}
+
 export async function fireBreakingNotif(id: string, headline: string, summary?: string, imageUrl?: string): Promise<void> {
   const seen = await getSeenIds();
   if (seen.has(id)) return;
+  const kind = await classifyBreakingHeadline(headline);
+  if (kind === 'duplicate') { await markSeen(id); return; }
   const theme = detectBreakingTheme(headline, summary ?? '');
-  const title = theme ? `Breaking · ${theme}` : 'Breaking News';
+  const parts = ['Breaking'];
+  if (kind === 'follow-up') parts.push('Follow Up');
+  if (theme) parts.push(theme);
+  const title = parts.join(' · ');
   try { await send(CHANNEL_BREAKING, title, headline, { type: 'breaking', id }, imageUrl); } catch {}
   await markSeen(id);
+  await pushRecentHeadline(headline);
 }
 
 export async function fireFavSourceNotif(id: string, source: string, headline: string): Promise<void> {

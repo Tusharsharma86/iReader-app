@@ -10,7 +10,7 @@ import {
   TouchableOpacity, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useSettings } from '../contexts/SettingsContext';
+import { useSettings, BreakingSensitivity } from '../contexts/SettingsContext';
 import {
   getCachedPushToken,
   registerForPush, requestNotificationPermission, updatePushPreferences,
@@ -28,6 +28,7 @@ export default function NotificationSettingsScreen() {
   const {
     notifBreaking, setNotifBreaking,
     notifAiFeed, setNotifAiFeed,
+    breakingSensitivity, setBreakingSensitivity,
     notifTech, setNotifTech,
     notifDigest, setNotifDigest,
     favSources,
@@ -158,6 +159,32 @@ export default function NotificationSettingsScreen() {
               onValueChange={v => handleNotifToggle(v, setNotifAiFeed, 'aiFeed')}
               trackColor={{ false: '#1A1A1A', true: '#3a2270' }}
               thumbColor={notifAiFeed ? VIOLET : '#444'} />
+          </View>
+          {/* Sensitivity picker */}
+          <View style={[styles.row, styles.rowBorder, { flexDirection: 'column', alignItems: 'flex-start', gap: 8 }]}>
+            <Text style={[styles.rowLabel, { fontSize: 13 }]}>Sensitivity</Text>
+            <View style={{ flexDirection: 'row', gap: 6, width: '100%' }}>
+              {([
+                { key: 'all' as BreakingSensitivity, label: 'All', desc: 'Every breaking story' },
+                { key: 'important' as BreakingSensitivity, label: 'Important', desc: '2+ sources confirming' },
+                { key: 'critical' as BreakingSensitivity, label: 'Critical', desc: '3+ sources confirming' },
+              ]).map(opt => {
+                const active = breakingSensitivity === opt.key;
+                return (
+                  <Pressable
+                    key={opt.key}
+                    onPress={() => setBreakingSensitivity(opt.key)}
+                    style={{
+                      flex: 1, paddingVertical: 8, borderRadius: 8,
+                      backgroundColor: active ? '#1C3A6A' : '#1A1A1A',
+                      alignItems: 'center',
+                    }}>
+                    <Text style={{ color: active ? '#FFF' : '#888', fontSize: 12, fontWeight: '700' }}>{opt.label}</Text>
+                    <Text style={{ color: active ? '#AAC' : '#555', fontSize: 9, marginTop: 2 }}>{opt.desc}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
           {/* Theme mutes — apply to BOTH Main + AI Feed breaking. */}
           <TouchableOpacity
