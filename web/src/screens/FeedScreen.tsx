@@ -224,7 +224,7 @@ function parseServerFeed(raw: unknown[]): ServerFeedItem[] {
 }
 
 function storyIsBreaking(s: Story): boolean {
-  return s.isBreaking || (Date.now() - new Date(s.publishedAt).getTime()) < 60 * 60 * 1000;
+  return s.isBreaking ?? false;
 }
 
 function serverItemToCluster(item: ServerFeedItem): StoryCluster | null {

@@ -185,7 +185,7 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight:
   const sourceCount = story.sources?.length ?? 1;
   const ageMs = Date.now() - new Date(story.publishedAt).getTime();
   const isTrending = story.isTrending ?? sourceCount >= 3;
-  const isBreakingBadge = story.isBreaking || ageMs < 60 * 60 * 1000;
+  const isBreakingBadge = story.isBreaking ?? false;
   const isOngoing = story.isDeveloping ?? (sourceCount >= 4 && ageMs < 6 * 60 * 60 * 1000);
   const handlePress = useCallback(() => {
     trackArticleOpen(story);
