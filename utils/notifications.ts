@@ -106,6 +106,9 @@ export async function requestNotificationPermission(): Promise<boolean> {
 // ── Expo push token registration ───────────────────────────────────────────
 const PUSH_API = 'https://ireader.onrender.com/api/push';
 const TOKEN_CACHE_KEY = '@expo_push_token_v1';
+// Separate key set ONLY after backend confirms receipt. If this doesn't match
+// the current token, we re-register regardless of what TOKEN_CACHE_KEY holds.
+const TOKEN_CONFIRMED_KEY = '@expo_push_token_confirmed_v1';
 
 export async function registerForPush(): Promise<string | null> {
   if (!N) return null;
@@ -123,16 +126,28 @@ export async function registerForPush(): Promise<string | null> {
     const token: string | undefined = tokenRes?.data;
     if (!token) return null;
 
-    // Cache locally to avoid hitting the backend on every cold launch.
-    const cached = await AsyncStorage.getItem(TOKEN_CACHE_KEY);
-    if (cached === token) return token;
-
-    await fetch(`${PUSH_API}/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, platform: Platform.OS }),
-    }).catch(() => {});
+    // Always cache the raw token so updatePushPreferences / syncMuted can use it.
     await AsyncStorage.setItem(TOKEN_CACHE_KEY, token);
+
+    // Skip backend registration only if backend already confirmed this exact token.
+    // If the previous registration failed (network error, backend outage) the
+    // confirmed key won't match and we retry — the backend is idempotent.
+    const confirmed = await AsyncStorage.getItem(TOKEN_CONFIRMED_KEY);
+    if (confirmed === token) return token;
+
+    try {
+      const res = await fetch(`${PUSH_API}/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, platform: Platform.OS }),
+      });
+      if (res.ok) {
+        // Mark confirmed so we don't re-register on every cold launch.
+        await AsyncStorage.setItem(TOKEN_CONFIRMED_KEY, token);
+      }
+    } catch {
+      // Network error — confirmed key stays unset, will retry next launch.
+    }
     return token;
   } catch {
     return null;
