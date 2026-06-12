@@ -361,7 +361,7 @@ function feedToClusterGroups(feed: ApiFeedItem[]): Cluster[] {
         imageUrl: rep.imageUrl ?? '',
         publishedAt: rep.publishedAt,
         stories: item.articles,
-        isBreaking: !item.collection && (item._category === 'breaking' || item.articles.some(s => s.isBreaking)),
+        isBreaking: !item.collection && item.articles.some(s => s.isBreaking || (Date.now() - new Date(s.publishedAt).getTime()) < 60 * 60 * 1000),
         collection: item.collection,
         _category: item._category,
         biasBreakdown: item.collection ? undefined : (rep as any).biasBreakdown,
@@ -375,7 +375,7 @@ function feedToClusterGroups(feed: ApiFeedItem[]): Cluster[] {
       imageUrl: item.imageUrl ?? '',
       publishedAt: item.publishedAt,
       stories: [item as Story],
-      isBreaking: item._category === 'breaking' || ((item as Story).isBreaking ?? false),
+      isBreaking: (item as Story).isBreaking || (Date.now() - new Date(item.publishedAt).getTime()) < 60 * 60 * 1000,
       _category: item._category,
     }];
   });
@@ -421,7 +421,7 @@ function FeedSkeleton() {
 
 export default function FeedScreen() {
   const { activeSources } = useSource();
-  const { notifBreaking, breakingSensitivity, notifSources, favSources, favTopics, showSports, showEntertainment, activeSubTopics, topicInterests } = useSettings();
+  const { notifBreaking, notifSources, favSources, favTopics, showSports, showEntertainment, activeSubTopics, topicInterests } = useSettings();
   const layout = useLayout();
   const insets = useSafeAreaInsets();
   const rootNav = useNavigation<NativeStackNavigationProp<FeedStackParamList>>();
@@ -610,44 +610,11 @@ export default function FeedScreen() {
     const res = await fetch(`${API_BASE}?topic=${topic}${forceParam}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json() as { feed?: unknown[] };
-    return normalizeFeedItems(data.feed ?? []).map(item => ({ ...item, _category: topic }));
+    return normalizeFeedItems(data.feed ?? []);
   }
 
   function feedItemId(item: ApiFeedItem): string {
     return item.type === 'cluster' ? (item.articles[0]?.id ?? '') : item.id;
-  }
-
-  function fireNotificationsForItems(items: ApiFeedItem[], topic: CategoryTopic) {
-    const sensMin = breakingSensitivity === 'critical' ? 3 : breakingSensitivity === 'important' ? 2 : 1;
-    for (const item of items) {
-      const articles = item.type === 'cluster' ? item.articles : [item as Story];
-      const rep = articles[0];
-      if (!rep) continue;
-      const clusterHeadline = item.type === 'cluster' ? (item.topicTitle || rep.headline) : rep.headline;
-      const sourceName = rep.sources?.[0]?.name ?? '';
-      const sourceCount = item.type === 'cluster' ? articles.length : 1;
-      const isBreakingItem = item._category === 'breaking' || articles.some(a => a.isBreaking);
-      const isFavSource = favSources.includes(sourceName);
-      const isFavTopic = favTopics.includes(topic);
-      const historyBase = {
-        id: rep.id,
-        headline: clusterHeadline,
-        summary: rep.summary ?? '',
-        imageUrl: rep.imageUrl ?? '',
-        url: rep.sources?.[0]?.url ?? '',
-        source: sourceName,
-        publishedAt: rep.publishedAt,
-        dominantColor: getArticleColor(rep.id || clusterHeadline),
-        firedAt: Date.now(),
-      };
-      if (notifBreaking && isBreakingItem && sourceCount >= sensMin && !matchesMutedBreakingTheme(clusterHeadline, rep.summary ?? '')) {
-        fireBreakingNotif(rep.id, clusterHeadline, rep.summary ?? '', rep.imageUrl ?? '').catch(() => {});
-        pushNotifHistory({ ...historyBase, kind: 'breaking' }).catch(() => {});
-      } else if (notifSources && (isFavSource || isFavTopic)) {
-        fireFavSourceNotif(rep.id, sourceName || 'iReader', clusterHeadline).catch(() => {});
-        pushNotifHistory({ ...historyBase, kind: isFavSource ? 'source' : 'topic' }).catch(() => {});
-      }
-    }
   }
 
   async function backgroundRefresh(topic: CategoryTopic, current: ApiFeedItem[]) {
@@ -658,19 +625,37 @@ export default function FeedScreen() {
       const currentIds = new Set(current.map(feedItemId));
       const brandNew = fresh.filter(item => !currentIds.has(feedItemId(item)));
 
-      fireNotificationsForItems(brandNew, topic);
-
-      // Also check breaking feed if user is on a different topic
-      if (topic !== 'breaking' && notifBreaking) {
-        try {
-          const breakingFresh = await fetchFeed('breaking');
-          const recentCutoff = Date.now() - 30 * 60 * 1000;
-          const recentBreaking = breakingFresh.filter(item => {
-            const rep = item.type === 'cluster' ? item.articles[0] : item;
-            return rep && new Date(rep.publishedAt).getTime() > recentCutoff;
-          });
-          fireNotificationsForItems(recentBreaking, 'breaking');
-        } catch {}
+      // Fire local notifications for new breaking news and fav source articles.
+      const newArticles = brandNew.flatMap(item =>
+        item.type === 'cluster' ? item.articles : [item as Story],
+      );
+      for (const a of newArticles) {
+        const sourceName = a.sources?.[0]?.name ?? '';
+        const isBreakingArticle = a.isBreaking ?? false;
+        const isFavSource = favSources.includes(sourceName);
+        const isFavTopic = favTopics.includes(topic);
+        // Build the history snapshot once so both branches share it. Stored
+        // even if the notif itself is suppressed (e.g. seen-dedup) — useful so
+        // the user can browse "what would have been pushed" later. We only
+        // skip writing it when there's no notif intent at all.
+        const historyBase = {
+          id: a.id,
+          headline: a.headline,
+          summary: a.summary ?? '',
+          imageUrl: a.imageUrl ?? '',
+          url: a.sources?.[0]?.url ?? '',
+          source: sourceName,
+          publishedAt: a.publishedAt,
+          dominantColor: getArticleColor(a.id || a.headline),
+          firedAt: Date.now(),
+        };
+        if (notifBreaking && isBreakingArticle && !matchesMutedBreakingTheme(a.headline, a.summary ?? '')) {
+          fireBreakingNotif(a.id, a.headline, a.summary ?? '', a.imageUrl ?? '').catch(() => {});
+          pushNotifHistory({ ...historyBase, kind: 'breaking' }).catch(() => {});
+        } else if (notifSources && (isFavSource || isFavTopic)) {
+          fireFavSourceNotif(a.id, sourceName || 'iReader', a.headline).catch(() => {});
+          pushNotifHistory({ ...historyBase, kind: isFavSource ? 'source' : 'topic' }).catch(() => {});
+        }
       }
 
       if (brandNew.length > 0) {

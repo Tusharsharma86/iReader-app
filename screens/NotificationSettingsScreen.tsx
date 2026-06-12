@@ -10,7 +10,7 @@ import {
   TouchableOpacity, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useSettings, type BreakingSensitivity } from '../contexts/SettingsContext';
+import { useSettings } from '../contexts/SettingsContext';
 import {
   getCachedPushToken,
   registerForPush, requestNotificationPermission, updatePushPreferences,
@@ -27,7 +27,6 @@ export default function NotificationSettingsScreen() {
   const navigation = useNavigation();
   const {
     notifBreaking, setNotifBreaking,
-    breakingSensitivity, setBreakingSensitivity,
     notifAiFeed, setNotifAiFeed,
     notifTech, setNotifTech,
     notifDigest, setNotifDigest,
@@ -159,34 +158,6 @@ export default function NotificationSettingsScreen() {
               onValueChange={v => handleNotifToggle(v, setNotifAiFeed, 'aiFeed')}
               trackColor={{ false: '#1A1A1A', true: '#3a2270' }}
               thumbColor={notifAiFeed ? VIOLET : '#444'} />
-          </View>
-          {/* Sensitivity picker */}
-          <View style={[styles.row, styles.rowBorder, styles.nestedRow, { flexDirection: 'column', alignItems: 'flex-start', gap: 8 }]}>
-            <View>
-              <Text style={styles.nestedLabel}>Sensitivity</Text>
-              <Text style={styles.rowSub}>
-                {breakingSensitivity === 'all' ? 'Every breaking story' : breakingSensitivity === 'important' ? '2+ sources confirming' : '3+ sources confirming'}
-              </Text>
-            </View>
-            <View style={{ flexDirection: 'row', gap: 6 }}>
-              {([['all', 'All'], ['important', 'Important'], ['critical', 'Critical']] as [BreakingSensitivity, string][]).map(([key, label]) => (
-                <Pressable
-                  key={key}
-                  onPress={() => setBreakingSensitivity(key)}
-                  style={{
-                    paddingHorizontal: 12, paddingVertical: 6,
-                    borderRadius: 8,
-                    backgroundColor: breakingSensitivity === key ? '#1C3A6A' : '#1A1A1A',
-                    borderWidth: 1,
-                    borderColor: breakingSensitivity === key ? BLUE : '#333',
-                  }}>
-                  <Text style={{
-                    color: breakingSensitivity === key ? '#FFF' : '#888',
-                    fontSize: 12, fontWeight: '600',
-                  }}>{label}</Text>
-                </Pressable>
-              ))}
-            </View>
           </View>
           {/* Theme mutes — apply to BOTH Main + AI Feed breaking. */}
           <TouchableOpacity

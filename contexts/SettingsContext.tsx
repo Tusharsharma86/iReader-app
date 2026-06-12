@@ -12,7 +12,6 @@ export type SummaryLength = 'short' | 'medium' | 'long';
 export type KeyPointsCount = 3 | 5 | 7;
 export type Eli5Tone = 'kid' | 'casual' | 'plain';
 export type DeepDiveDepth = 'quick' | 'standard' | 'deep';
-export type BreakingSensitivity = 'all' | 'important' | 'critical';
 
 export const ALL_TOPICS = ['breaking', 'technology', 'india-politics', 'geopolitics', 'markets', 'business'] as const;
 export type TopicKey = typeof ALL_TOPICS[number];
@@ -31,8 +30,6 @@ interface SettingsContextType {
   setFontSize: (fs: FontSize) => void;
   notifBreaking: boolean;
   setNotifBreaking: (v: boolean) => void;
-  breakingSensitivity: BreakingSensitivity;
-  setBreakingSensitivity: (v: BreakingSensitivity) => void;
   notifTech: boolean;
   setNotifTech: (v: boolean) => void;
   notifDigest: boolean;
@@ -89,7 +86,6 @@ const STORAGE_KEY = '@ireader_settings';
 const DEFAULTS = {
   fontSize: 'Medium' as FontSize,
   notifBreaking: true,
-  breakingSensitivity: 'important' as BreakingSensitivity,
   notifTech: true,
   notifDigest: false,
   notifAiFeed: false,
@@ -127,8 +123,6 @@ const SettingsContext = createContext<SettingsContextType>({
   topicInterests: {},
   setFontSize: () => {},
   setNotifBreaking: () => {},
-  breakingSensitivity: 'important' as BreakingSensitivity,
-  setBreakingSensitivity: () => {},
   notifAiFeed: false,
   setNotifAiFeed: () => {},
   setNotifTech: () => {},
@@ -157,7 +151,6 @@ const SettingsContext = createContext<SettingsContextType>({
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [fontSize, setFontSizeState] = useState<FontSize>(DEFAULTS.fontSize);
   const [notifBreaking, setNotifBreakingState] = useState(DEFAULTS.notifBreaking);
-  const [breakingSensitivity, setBreakingSensitivityState] = useState<BreakingSensitivity>(DEFAULTS.breakingSensitivity);
   const [notifTech, setNotifTechState] = useState(DEFAULTS.notifTech);
   const [notifDigest, setNotifDigestState] = useState(DEFAULTS.notifDigest);
   const [notifAiFeed, setNotifAiFeedState] = useState(DEFAULTS.notifAiFeed);
@@ -200,7 +193,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           const saved = JSON.parse(raw);
           if (saved.fontSize) setFontSizeState(saved.fontSize);
           if (typeof saved.notifBreaking === 'boolean') setNotifBreakingState(saved.notifBreaking);
-          if (['all','important','critical'].includes(saved.breakingSensitivity)) setBreakingSensitivityState(saved.breakingSensitivity);
           if (typeof saved.notifTech === 'boolean') setNotifTechState(saved.notifTech);
           if (typeof saved.notifDigest === 'boolean') setNotifDigestState(saved.notifDigest);
           if (typeof saved.notifAiFeed === 'boolean') setNotifAiFeedState(saved.notifAiFeed);
@@ -244,7 +236,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!loaded) return;
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({
-      fontSize, notifBreaking, breakingSensitivity, notifTech, notifDigest, notifAiFeed, notifSources,
+      fontSize, notifBreaking, notifTech, notifDigest, notifAiFeed, notifSources,
       activeTopics, activeSubTopics, favSources, favTopics, topicInterests,
       showSports, showEntertainment,
       // Customize
@@ -254,7 +246,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       summaryLength, keyPointsCount, showKeyPoints,
       eli5Tone, deepDiveDepth, showDeepDiveEntities, showDeepDiveCurious,
     })).catch(() => {});
-  }, [loaded, fontSize, notifBreaking, breakingSensitivity, notifTech, notifDigest, notifAiFeed, notifSources, activeTopics, activeSubTopics, favSources, favTopics, topicInterests, showSports, showEntertainment, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showVerifyDedup, showReferencedSources, showEntityHighlights, showReadingDifficulty, summaryLength, keyPointsCount, showKeyPoints, eli5Tone, deepDiveDepth, showDeepDiveEntities, showDeepDiveCurious]);
+  }, [loaded, fontSize, notifBreaking, notifTech, notifDigest, notifAiFeed, notifSources, activeTopics, activeSubTopics, favSources, favTopics, topicInterests, showSports, showEntertainment, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showVerifyDedup, showReferencedSources, showEntityHighlights, showReadingDifficulty, summaryLength, keyPointsCount, showKeyPoints, eli5Tone, deepDiveDepth, showDeepDiveEntities, showDeepDiveCurious]);
 
   // Reconcile backend notification prefs with the toggles shown locally —
   // ONCE per launch, after settings load. Fixes the fresh-install / new-token
@@ -300,7 +292,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const setFontSize = useCallback((fs: FontSize) => setFontSizeState(fs), []);
 
   const setNotifBreaking = useCallback((v: boolean) => setNotifBreakingState(v), []);
-  const setBreakingSensitivity = useCallback((v: BreakingSensitivity) => setBreakingSensitivityState(v), []);
   const setNotifAiFeed = useCallback((v: boolean) => setNotifAiFeedState(v), []);
   const setNotifTech = useCallback((v: boolean) => setNotifTechState(v), []);
   const setNotifDigest = useCallback((v: boolean) => setNotifDigestState(v), []);
@@ -333,7 +324,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const resetSettings = useCallback(() => {
     setFontSizeState(DEFAULTS.fontSize);
     setNotifBreakingState(DEFAULTS.notifBreaking);
-    setBreakingSensitivityState(DEFAULTS.breakingSensitivity);
     setNotifTechState(DEFAULTS.notifTech);
     setNotifDigestState(DEFAULTS.notifDigest);
     setNotifSourcesState(DEFAULTS.notifSources);
@@ -373,7 +363,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo(() => ({
     fontSize, setFontSize,
     notifBreaking, setNotifBreaking,
-    breakingSensitivity, setBreakingSensitivity,
     notifTech, setNotifTech,
     notifDigest, setNotifDigest,
     notifAiFeed, setNotifAiFeed,
@@ -406,7 +395,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     showDeepDiveEntities, setShowDeepDiveEntities,
     showDeepDiveCurious, setShowDeepDiveCurious,
     resetCustomize,
-  }), [fontSize, notifBreaking, breakingSensitivity, notifTech, notifDigest, notifAiFeed, notifSources, showSports, showEntertainment, favSources, favTopics, topicInterests, activeTopics, activeSubTopics, setFontSize, setNotifBreaking, setBreakingSensitivity, setNotifTech, setNotifDigest, setNotifAiFeed, setNotifSources, setShowSports, setShowEntertainment, toggleFavSource, toggleFavTopic, toggleTopic, toggleSubTopic, setTopicInterest, resetSettings, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showVerifyDedup, showReferencedSources, showEntityHighlights, showReadingDifficulty, summaryLength, keyPointsCount, showKeyPoints, eli5Tone, deepDiveDepth, showDeepDiveEntities, showDeepDiveCurious, resetCustomize]);
+  }), [fontSize, notifBreaking, notifTech, notifDigest, notifAiFeed, notifSources, showSports, showEntertainment, favSources, favTopics, topicInterests, activeTopics, activeSubTopics, setFontSize, setNotifBreaking, setNotifTech, setNotifDigest, setNotifAiFeed, setNotifSources, setShowSports, setShowEntertainment, toggleFavSource, toggleFavTopic, toggleTopic, toggleSubTopic, setTopicInterest, resetSettings, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showVerifyDedup, showReferencedSources, showEntityHighlights, showReadingDifficulty, summaryLength, keyPointsCount, showKeyPoints, eli5Tone, deepDiveDepth, showDeepDiveEntities, showDeepDiveCurious, resetCustomize]);
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }
