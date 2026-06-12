@@ -170,7 +170,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
   // Sources that block full-text fetch (paywall / scrape protection) — hide the
   // Long Form tab entirely and default to the AI Summary. Matches all variants:
   // "NYT", "NYT World", "New York Times", "NDTV", "NDTV Profit", "Ars Technica", etc.
-  const blockLongform = /\bnyt|new york times|\bndtv|ars\s?technica/i.test(params.source ?? '');
+  const blockLongform = false;
   // Respect the user's Customize → Default tab preference unless the source
   // blocks Long Form (then we force-fall to Summary).
   const userDefaultTab = defaultArticleTab as Tab;
