@@ -69,13 +69,48 @@ function extractEntities(headlines: string[]): string[] {
 // ── Topic Universes config ───────────────────────────────────────────────────
 
 const TOPICS = [
-  { label: 'Breaking', emoji: '🔴', color: '#FF3B30', tag: 'breaking' },
-  { label: 'Tech',     emoji: '💻', color: '#0A84FF', tag: 'technology' },
-  { label: 'India',    emoji: '🇮🇳', color: '#FF9F0A', tag: 'india-politics' },
-  { label: 'World',    emoji: '🌍', color: '#30D158', tag: 'geopolitics' },
-  { label: 'Markets',  emoji: '📈', color: '#64D2FF', tag: 'markets' },
-  { label: 'Business', emoji: '💼', color: '#BF5AF2', tag: 'business' },
+  { label: 'Breaking',  color: '#FF453A', bg: 'rgba(255,69,58,0.15)',   tag: 'breaking',       icon: 'breaking'  },
+  { label: 'Tech',      color: '#0A84FF', bg: 'rgba(10,132,255,0.15)',  tag: 'technology',     icon: 'tech'      },
+  { label: 'India',     color: '#FF9F0A', bg: 'rgba(255,159,10,0.15)',  tag: 'india-politics', icon: 'india'     },
+  { label: 'World',     color: '#30D158', bg: 'rgba(48,209,88,0.15)',   tag: 'geopolitics',    icon: 'world'     },
+  { label: 'Markets',   color: '#64D2FF', bg: 'rgba(100,210,255,0.15)', tag: 'markets',        icon: 'markets'   },
+  { label: 'Business',  color: '#BF5AF2', bg: 'rgba(191,90,242,0.15)', tag: 'business',       icon: 'business'  },
 ];
+
+function TopicIcon({ icon, color, size = 18 }: { icon: string; color: string; size?: number }) {
+  const s = { fill: 'none' as const, stroke: color, strokeWidth: 1.9, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  if (icon === 'breaking') return (
+    <svg width={size} height={size} viewBox="0 0 512 512" fill={color} stroke="none">
+      <path d="M315.27 33L96 304h128l-31.51 173.23a2.81 2.81 0 005 2.17L416 208H288l31.61-173.25a2.81 2.81 0 00-4.34-2.92z" />
+    </svg>
+  );
+  if (icon === 'tech') return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...s}>
+      <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+    </svg>
+  );
+  if (icon === 'india') return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...s}>
+      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>
+    </svg>
+  );
+  if (icon === 'world') return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...s}>
+      <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+    </svg>
+  );
+  if (icon === 'markets') return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...s}>
+      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
+    </svg>
+  );
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...s}>
+      <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+    </svg>
+  );
+}
 
 // ── SVG icons ────────────────────────────────────────────────────────────────
 
@@ -644,44 +679,7 @@ export default function ExploreScreen() {
           <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: '#fff', letterSpacing: -0.5 }}>
             Explore
           </h1>
-          <IconSearch size={20} color="#555" />
         </div>
-
-        {/* Search bar */}
-        <form onSubmit={handleSearch} style={{ marginBottom: 24 }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            background: '#111', border: '1px solid #1E1E1E',
-            borderRadius: 10, padding: '10px 14px',
-          }}>
-            <IconSearch size={15} color="#444" />
-            <input
-              type="text"
-              placeholder="Search topics, people, events…"
-              value={searchText}
-              onChange={e => setSearchText(e.target.value)}
-              autoCorrect="off"
-              autoCapitalize="none"
-              spellCheck={false}
-              autoComplete="off"
-              style={{
-                flex: 1, background: 'none', border: 'none', outline: 'none',
-                fontSize: 14, color: '#ccc', caretColor: '#4A90D9',
-              }}
-            />
-            {searchText.length > 0 && (
-              <button
-                type="button"
-                onClick={() => { setSearchText(''); setSearchQuery(''); setSearchResults([]); }}
-                style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  color: '#555', fontSize: 16, lineHeight: 1, padding: '0 2px',
-                  WebkitTapHighlightColor: 'transparent',
-                }}
-              >×</button>
-            )}
-          </div>
-        </form>
 
         {/* ⓪ Search Results ──────────────────────────────────── */}
         {searchQuery !== '' && (
@@ -827,8 +825,8 @@ export default function ExploreScreen() {
         )}
 
         {/* ⑤ Topic Universes ────────────────────────────────── */}
-        <div style={{ marginBottom: 32 }}>
-          <SectionLabel text="Topic Universes" />
+        <div style={{ marginBottom: 16 }}>
+          <SectionLabel text="Browse Topics" />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             {TOPICS.map((t) => (
               <button
@@ -836,26 +834,81 @@ export default function ExploreScreen() {
                 onClick={() => openTopic(t.tag)}
                 style={{
                   background: '#0E0E0E',
-                  border: `1px solid ${t.color}30`,
-                  borderLeft: `4px solid ${t.color}`,
-                  borderRadius: 10,
-                  height: 72,
-                  display: 'flex', alignItems: 'center', gap: 10,
+                  border: '1px solid #1A1A1A',
+                  borderRadius: 14,
+                  height: 64,
+                  display: 'flex', alignItems: 'center', gap: 12,
                   padding: '0 14px',
                   cursor: 'pointer',
                   WebkitTapHighlightColor: 'transparent',
                   textAlign: 'left',
                 }}
               >
-                <span style={{ fontSize: 20 }}>{t.emoji}</span>
-                <span style={{ fontSize: 13.5, fontWeight: 800, color: '#eee' }}>{t.label}</span>
+                <div style={{
+                  width: 36, height: 36, borderRadius: 10,
+                  background: t.bg,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  <TopicIcon icon={t.icon} color={t.color} size={18} />
+                </div>
+                <span style={{ fontSize: 13.5, fontWeight: 700, color: '#eee' }}>{t.label}</span>
               </button>
             ))}
           </div>
         </div>
 
-        {/* Footer space for tab bar */}
-        <div style={{ height: 100 }} />
+        {/* Footer space for tab bar + bottom search bar */}
+        <div style={{ height: 160 }} />
+      </div>
+
+      {/* Fixed bottom search bar — above tab bar */}
+      <div style={{
+        position: 'fixed',
+        bottom: 'calc(max(16px, env(safe-area-inset-bottom, 0px)) + 62px)',
+        left: 'max(20px, env(safe-area-inset-left, 20px))',
+        right: 'max(20px, env(safe-area-inset-right, 20px))',
+        zIndex: 20,
+      }}>
+        <form onSubmit={handleSearch}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: 'rgba(16,16,16,0.94)',
+            backdropFilter: 'blur(28px)',
+            WebkitBackdropFilter: 'blur(28px)',
+            border: '1px solid rgba(255,255,255,0.07)',
+            borderRadius: 99,
+            padding: '11px 16px',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+          }}>
+            <IconSearch size={16} color="#444" />
+            <input
+              type="text"
+              placeholder="Search topics, people, events…"
+              value={searchText}
+              onChange={e => setSearchText(e.target.value)}
+              autoCorrect="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              autoComplete="off"
+              style={{
+                flex: 1, background: 'none', border: 'none', outline: 'none',
+                fontSize: 14, color: '#ccc', caretColor: '#4A90D9',
+              }}
+            />
+            {searchText.length > 0 && (
+              <button
+                type="button"
+                onClick={() => { setSearchText(''); setSearchQuery(''); setSearchResults([]); }}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: '#555', fontSize: 18, lineHeight: 1,
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+              >×</button>
+            )}
+          </div>
+        </form>
       </div>
     </div>
   );
