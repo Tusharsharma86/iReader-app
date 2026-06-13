@@ -648,10 +648,19 @@ export default function FeedScreen() {
             firedAt: Date.now(),
           };
           if (notifBreaking && isBreakingArticle && sourceCount >= sensMin && !matchesMutedBreakingTheme(a.headline, a.summary ?? '')) {
-            fireBreakingNotif(a.id, a.headline, a.summary ?? '', a.imageUrl ?? '').catch(() => {});
+            fireBreakingNotif(a.id, a.headline, a.summary ?? '', a.imageUrl ?? '', {
+              url: a.sources?.[0]?.url ?? '',
+              source: sourceName,
+              publishedAt: a.publishedAt,
+            }).catch(() => {});
             pushNotifHistory({ ...historyBase, kind: 'breaking' }).catch(() => {});
           } else if (notifSources && (isFavSource || isFavTopic)) {
-            fireFavSourceNotif(a.id, sourceName || 'iReader', a.headline).catch(() => {});
+            fireFavSourceNotif(a.id, sourceName || 'iReader', a.headline, {
+              url: a.sources?.[0]?.url ?? '',
+              summary: a.summary ?? '',
+              imageUrl: a.imageUrl ?? '',
+              publishedAt: a.publishedAt,
+            }).catch(() => {});
             pushNotifHistory({ ...historyBase, kind: isFavSource ? 'source' : 'topic' }).catch(() => {});
           }
         }
