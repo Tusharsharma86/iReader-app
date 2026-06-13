@@ -657,48 +657,34 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
       onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
       style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', background: '#000', WebkitOverflowScrolling: 'touch' }}>
 
-      {/* Pull-to-refresh / refreshing indicator */}
-      {(refreshing || pullProgress > 0.1) && (
-        <div style={{
-          position: 'fixed',
-          top: 'calc(env(safe-area-inset-top, 0px) + 10px)',
-          left: 0, right: 0,
-          display: 'flex', justifyContent: 'center',
-          pointerEvents: 'none',
-          zIndex: 50,
-          opacity: refreshing ? 1 : pullProgress,
-          transition: refreshing ? 'opacity 0.2s' : 'none',
-        }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            background: 'rgba(18,18,18,0.72)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            border: '1px solid rgba(255,255,255,0.07)',
-            borderRadius: 99,
-            padding: '5px 12px',
-          }}>
-            <div style={{
-              width: 11, height: 11, borderRadius: '50%',
-              border: '1.5px solid rgba(255,255,255,0.15)',
-              borderTop: '1.5px solid #ccc',
-              animation: refreshing ? 'spin 0.7s linear infinite' : 'none',
-              transform: refreshing ? undefined : `rotate(${pullProgress * 360}deg)`,
-            }} />
-            <span style={{ fontSize: 11, color: '#777', fontWeight: 600 }}>
-              {refreshing ? 'Refreshing…' : pullProgress >= 1 ? 'Release' : 'Pull to refresh'}
-            </span>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px', paddingTop: 'calc(16px + env(safe-area-inset-top, 0px))' }}>
         <img src="/icons/header-logo.png" alt="iReader" style={{ width: 82, height: 82, objectFit: 'contain', background: 'transparent', margin: '-12px -8px -12px -8px' }} />
         <div>
           <div style={{ color: '#fff', fontSize: 26, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.2 }}>{greeting()}</div>
+          <div style={{ color: '#444', fontSize: 12, fontWeight: 500, marginTop: 3 }}>
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          </div>
         </div>
       </div>
+
+      {/* Pull-to-refresh / refreshing indicator — inline, no text, no overlap */}
+      {(refreshing || pullProgress > 0.1) && (
+        <div style={{
+          display: 'flex', justifyContent: 'center', alignItems: 'center',
+          height: 28,
+          opacity: refreshing ? 1 : pullProgress,
+          transition: refreshing ? 'opacity 0.15s' : 'none',
+        }}>
+          <div style={{
+            width: 16, height: 16, borderRadius: '50%',
+            border: '2px solid rgba(255,255,255,0.08)',
+            borderTop: `2px solid ${pullProgress >= 1 && !refreshing ? '#fff' : 'rgba(255,255,255,0.45)'}`,
+            animation: refreshing ? 'spin 0.7s linear infinite' : 'none',
+            transform: refreshing ? undefined : `rotate(${pullProgress * 360}deg)`,
+          }} />
+        </div>
+      )}
 
       {/* Category tabs */}
       <div style={{ display: 'flex', overflowX: 'auto', padding: '0 16px', gap: 7, marginBottom: 8, scrollbarWidth: 'none', height: 44, alignItems: 'center' }}>
