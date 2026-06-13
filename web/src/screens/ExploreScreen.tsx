@@ -450,6 +450,9 @@ export default function ExploreScreen() {
   const [qAnswerLoading, setQAnswerLoading] = useState<Record<number, boolean>>({});
 
   const [searchText, setSearchText] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<FeedItem[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -561,13 +564,46 @@ export default function ExploreScreen() {
     navigate({ name: 'TopicFeed', params: { tag } });
   }, [navigate]);
 
-  // Search submit
-  const handleSearch = useCallback((e: React.FormEvent) => {
+  // Search submit — fetch across all topics, filter client-side by keyword
+  const handleSearch = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchText.trim()) {
-      navigate({ name: 'TopicFeed', params: { tag: searchText.trim() } });
+    const q = searchText.trim();
+    if (!q) { setSearchQuery(''); setSearchResults([]); return; }
+    setSearchQuery(q);
+    setSearchLoading(true);
+    setSearchResults([]);
+    const kw = q.toLowerCase();
+    try {
+      const SEARCH_TOPICS = ['breaking', 'india-politics', 'technology', 'geopolitics', 'markets', 'business'];
+      const results = await Promise.allSettled(
+        SEARCH_TOPICS.map(t => fetch(`${API_BASE}/feed?topic=${t}`).then(r => r.json()))
+      );
+      const all: FeedItem[] = [];
+      for (const r of results) {
+        if (r.status !== 'fulfilled') continue;
+        const items: FeedItem[] = r.value?.feed ?? [];
+        for (const item of items) {
+          const text = [
+            item.clusterLabel, item.headline, item.summary,
+            ...(item.articles ?? []).map(a => a.headline),
+          ].join(' ').toLowerCase();
+          if (text.includes(kw)) all.push(item);
+        }
+      }
+      // Deduplicate by headline
+      const seen = new Set<string>();
+      const deduped = all.filter(it => {
+        const key = (it.clusterLabel || it.headline || '').slice(0, 40);
+        if (seen.has(key)) return false;
+        seen.add(key); return true;
+      });
+      setSearchResults(deduped.slice(0, 20));
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
     }
-  }, [searchText, navigate]);
+  }, [searchText]);
 
   return (
     <div
@@ -577,13 +613,22 @@ export default function ExploreScreen() {
         WebkitOverflowScrolling: 'touch',
       }}
     >
-      <div style={{ padding: '0 16px', maxWidth: 480, margin: '0 auto' }}>
+      <div style={{
+        paddingTop: 0,
+        paddingBottom: 100,
+        paddingLeft: 'max(16px, env(safe-area-inset-left, 16px))',
+        paddingRight: 'max(16px, env(safe-area-inset-right, 16px))',
+        maxWidth: 480,
+        margin: '0 auto',
+        boxSizing: 'border-box',
+      }}>
 
         {/* ── Header ────────────────────────────────────────────── */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          paddingTop: 'max(52px, env(safe-area-inset-top, 0px))',
+          paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)',
           paddingBottom: 12,
+          minHeight: 72,
         }}>
           <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: '#fff', letterSpacing: -0.5 }}>
             Explore
@@ -592,7 +637,7 @@ export default function ExploreScreen() {
         </div>
 
         {/* Search bar */}
-        <form onSubmit={handleSearch} style={{ marginBottom: 28 }}>
+        <form onSubmit={handleSearch} style={{ marginBottom: 24 }}>
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
             background: '#111', border: '1px solid #1E1E1E',
@@ -604,13 +649,60 @@ export default function ExploreScreen() {
               placeholder="Search topics, people, events…"
               value={searchText}
               onChange={e => setSearchText(e.target.value)}
+              autoCorrect="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              autoComplete="off"
               style={{
                 flex: 1, background: 'none', border: 'none', outline: 'none',
                 fontSize: 14, color: '#ccc', caretColor: '#4A90D9',
               }}
             />
+            {searchText.length > 0 && (
+              <button
+                type="button"
+                onClick={() => { setSearchText(''); setSearchQuery(''); setSearchResults([]); }}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: '#555', fontSize: 16, lineHeight: 1, padding: '0 2px',
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+              >×</button>
+            )}
           </div>
         </form>
+
+        {/* ⓪ Search Results ──────────────────────────────────── */}
+        {searchQuery !== '' && (
+          <div style={{ marginBottom: 32 }}>
+            <SectionLabel text={`Results for "${searchQuery}"`} />
+            {searchLoading ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {[0, 1, 2, 3].map(i => (
+                  <div key={i} style={{ height: 180, borderRadius: 12, background: '#141414', overflow: 'hidden', position: 'relative' }}>
+                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 50%, transparent 100%)', animation: 'shimmer 1.4s infinite' }} />
+                  </div>
+                ))}
+              </div>
+            ) : searchResults.length === 0 ? (
+              <p style={{ color: '#444', fontSize: 13, textAlign: 'center', padding: '24px 0' }}>
+                No results for "{searchQuery}"
+              </p>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {searchResults.map((item, i) => (
+                  <StoryMotionCard
+                    key={i}
+                    item={item}
+                    onOpenArticle={openArticle}
+                    onOpenTimeline={openTimeline}
+                    onOpenDeepDive={openDeepDive}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ① Questions in the Air ───────────────────────────── */}
         {(qLoading || questions.length > 0) && (
