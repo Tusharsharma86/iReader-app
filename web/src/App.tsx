@@ -7,6 +7,7 @@ import { TabBarProvider } from './contexts/TabBarContext';
 import { TabBar } from './components/TabBar';
 
 const FeedScreen       = lazy(() => import('./screens/FeedScreen'));
+const ExploreScreen    = lazy(() => import('./screens/ExploreScreen'));
 const ArticleScreen    = lazy(() => import('./screens/ArticleScreen'));
 const AIFeedScreen     = lazy(() => import('./screens/AIFeedScreen'));
 const DigestScreen     = lazy(() => import('./screens/DigestScreen'));
@@ -55,6 +56,7 @@ function ScreenRenderer() {
         <div style={{ position: 'absolute', inset: 0, zIndex: 1 }}>
           <Suspense fallback={spinner}>
             {currentScreen.name === 'Article'    && <ArticleScreen params={currentScreen.params} />}
+            {currentScreen.name === 'Explore'    && <ExploreScreen />}
             {currentScreen.name === 'AIFeed'     && <AIFeedScreen />}
             {currentScreen.name === 'Digest'     && <DigestScreen />}
             {currentScreen.name === 'Saved'      && <SavedScreen />}

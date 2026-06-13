@@ -66,6 +66,7 @@ export interface ArticleParams {
 
 export type NavScreen =
   | { name: 'Feed' }
+  | { name: 'Explore' }
   | { name: 'Digest' }
   | { name: 'AIFeed' }
   | { name: 'Article'; params: ArticleParams }
@@ -83,4 +84,4 @@ export type NavScreen =
   | { name: 'NotifHistory' }
   | { name: 'Customize' };
 
-export type TabName = 'feed' | 'digest' | 'aifeed' | 'saved' | 'settings';
+export type TabName = 'feed' | 'explore' | 'digest' | 'aifeed' | 'saved' | 'settings';
