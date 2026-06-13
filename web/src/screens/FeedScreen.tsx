@@ -16,14 +16,64 @@ const CARD_GAP = 12;
 const BG_REFRESH_THRESHOLD_MS = 10 * 60 * 1000;
 
 const CATEGORIES = [
-  { topic: 'myspace' as CategoryTopic,       label: 'For You',  icon: '✨' },
-  { topic: 'breaking' as CategoryTopic,      label: 'Breaking', icon: '🔴' },
-  { topic: 'technology' as CategoryTopic,    label: 'Tech',     icon: '💻' },
-  { topic: 'india-politics' as CategoryTopic,label: 'India',    icon: '🇮🇳' },
-  { topic: 'geopolitics' as CategoryTopic,   label: 'World',    icon: '🌍' },
-  { topic: 'markets' as CategoryTopic,       label: 'Markets',  icon: '📈' },
-  { topic: 'business' as CategoryTopic,      label: 'Business', icon: '💼' },
+  { topic: 'myspace' as CategoryTopic,        label: 'For You',  icon: 'for-you'  },
+  { topic: 'breaking' as CategoryTopic,       label: 'Breaking', icon: 'breaking' },
+  { topic: 'technology' as CategoryTopic,     label: 'Tech',     icon: 'tech'     },
+  { topic: 'india-politics' as CategoryTopic, label: 'India',    icon: 'india'    },
+  { topic: 'geopolitics' as CategoryTopic,    label: 'World',    icon: 'world'    },
+  { topic: 'markets' as CategoryTopic,        label: 'Markets',  icon: 'markets'  },
+  { topic: 'business' as CategoryTopic,       label: 'Business', icon: 'business' },
 ] as const;
+
+type CategoryIconName = typeof CATEGORIES[number]['icon'];
+
+function CategoryIcon({ name, active }: { name: CategoryIconName; active: boolean }) {
+  const c = active ? '#000' : '#888';
+  const s = 13;
+  if (name === 'for-you') return (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill={c}>
+      <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" />
+    </svg>
+  );
+  if (name === 'breaking') return (
+    <svg width={s} height={s} viewBox="0 0 512 512" fill={c}>
+      <path d="M315.27 33L96 304h128l-31.51 173.23a2.81 2.81 0 005 2.17L416 208H288l31.61-173.25a2.81 2.81 0 00-4.34-2.92z" />
+    </svg>
+  );
+  if (name === 'tech') return (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="3" width="20" height="14" rx="2" />
+      <line x1="8" y1="21" x2="16" y2="21" />
+      <line x1="12" y1="17" x2="12" y2="21" />
+    </svg>
+  );
+  if (name === 'india') return (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+      <line x1="4" y1="22" x2="4" y2="15" />
+    </svg>
+  );
+  if (name === 'world') return (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  );
+  if (name === 'markets') return (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+      <polyline points="17 6 23 6 23 12" />
+    </svg>
+  );
+  // business
+  return (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="7" width="20" height="14" rx="2" />
+      <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+    </svg>
+  );
+}
 
 const REAL_TOPICS: CategoryTopic[] = ['breaking', 'technology', 'india-politics', 'geopolitics', 'markets', 'business'];
 
@@ -611,13 +661,28 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
       </div>
 
       {/* Category tabs */}
-      <div style={{ display: 'flex', overflowX: 'auto', padding: '0 16px', gap: 8, marginBottom: 8, scrollbarWidth: 'none', height: 48, alignItems: 'center' }}>
+      <div style={{ display: 'flex', overflowX: 'auto', padding: '0 16px', gap: 7, marginBottom: 8, scrollbarWidth: 'none', height: 44, alignItems: 'center' }}>
         {visibleCategories.map(cat => {
           const active = cat.topic === activeTopic;
           return (
-            <button key={cat.topic} onClick={() => { if (cat.topic === activeTopic) { onRefresh(); containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } else { containerRef.current?.scrollTo({ top: 0, behavior: 'auto' }); setActiveTopic(cat.topic); } }}
-              style={{ flexShrink: 0, padding: '7px 16px', borderRadius: 999, background: active ? '#fff' : 'rgba(255,255,255,0.1)', border: 'none', cursor: 'pointer' }}>
-              <span style={{ color: active ? '#000' : '#aaa', fontSize: 13, fontWeight: 700, letterSpacing: 0.2 }}>{cat.label}</span>
+            <button
+              key={cat.topic}
+              onClick={() => { if (cat.topic === activeTopic) { onRefresh(); containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } else { containerRef.current?.scrollTo({ top: 0, behavior: 'auto' }); setActiveTopic(cat.topic); } }}
+              style={{
+                flexShrink: 0,
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '6px 12px',
+                borderRadius: 999,
+                background: active ? '#fff' : 'rgba(255,255,255,0.06)',
+                border: active ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                backdropFilter: active ? 'none' : 'blur(12px)',
+                WebkitBackdropFilter: active ? 'none' : 'blur(12px)',
+                cursor: 'pointer',
+                transition: 'background 0.2s',
+              }}
+            >
+              <CategoryIcon name={cat.icon as CategoryIconName} active={active} />
+              <span style={{ color: active ? '#000' : '#aaa', fontSize: 12.5, fontWeight: 700, letterSpacing: 0.1 }}>{cat.label}</span>
             </button>
           );
         })}
