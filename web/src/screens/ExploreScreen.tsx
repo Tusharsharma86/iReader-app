@@ -564,11 +564,8 @@ export default function ExploreScreen() {
     navigate({ name: 'TopicFeed', params: { tag } });
   }, [navigate]);
 
-  // Search submit — fetch across all topics, filter client-side by keyword
-  const handleSearch = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    const q = searchText.trim();
-    if (!q) { setSearchQuery(''); setSearchResults([]); return; }
+  // Shared search logic — fetch all 6 topic feeds, filter by keyword
+  const doSearch = useCallback(async (q: string) => {
     setSearchQuery(q);
     setSearchLoading(true);
     setSearchResults([]);
@@ -590,7 +587,6 @@ export default function ExploreScreen() {
           if (text.includes(kw)) all.push(item);
         }
       }
-      // Deduplicate by headline
       const seen = new Set<string>();
       const deduped = all.filter(it => {
         const key = (it.clusterLabel || it.headline || '').slice(0, 40);
@@ -603,7 +599,22 @@ export default function ExploreScreen() {
     } finally {
       setSearchLoading(false);
     }
-  }, [searchText]);
+  }, []);
+
+  // Search form submit
+  const handleSearch = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = searchText.trim();
+    if (!q) { setSearchQuery(''); setSearchResults([]); return; }
+    await doSearch(q);
+  }, [searchText, doSearch]);
+
+  // Entity/place tap — trigger inline search and scroll to results
+  const triggerEntitySearch = useCallback(async (entity: string) => {
+    setSearchText(entity);
+    scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    await doSearch(entity);
+  }, [doSearch]);
 
   return (
     <div
@@ -786,28 +797,29 @@ export default function ExploreScreen() {
         {entities.length > 0 && (
           <div style={{ marginBottom: 32 }}>
             <SectionLabel text="People & Places" />
-            <div style={{
-              display: 'flex', gap: 8, overflowX: 'auto',
-              paddingBottom: 4,
-              msOverflowStyle: 'none', scrollbarWidth: 'none',
-            }}>
-              {entities.map((entity, i) => (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {entities.slice(0, 8).map((entity, i) => (
                 <button
                   key={i}
-                  onClick={() => openTopic(entity)}
+                  onClick={() => triggerEntitySearch(entity)}
                   style={{
-                    flexShrink: 0,
-                    background: 'rgba(255,255,255,0.07)',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    borderRadius: 99,
-                    padding: '6px 12px',
-                    fontSize: 12.5, color: '#999', fontWeight: 600,
+                    background: '#0E0E0E',
+                    border: '1px solid #1E1E1E',
+                    borderRadius: 10,
+                    height: 64,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0 14px',
                     cursor: 'pointer',
                     WebkitTapHighlightColor: 'transparent',
-                    whiteSpace: 'nowrap',
+                    textAlign: 'left',
                   }}
                 >
-                  {entity}
+                  <span style={{ fontSize: 13.5, fontWeight: 700, color: '#eee' }}>{entity}</span>
+                  <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
                 </button>
               ))}
             </div>
