@@ -248,7 +248,7 @@ export default function DigestScreen() {
     <div
       onScroll={(e) => reportScroll((e.target as HTMLDivElement).scrollTop)}
       style={{
-        height: '100%', background: '#080808', overflowY: 'auto',
+        height: '100%', background: '#080808', overflowY: 'auto', overflowX: 'hidden',
         WebkitOverflowScrolling: 'touch', color: '#fff',
       }}
     >

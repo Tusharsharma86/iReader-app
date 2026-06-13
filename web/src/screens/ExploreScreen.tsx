@@ -604,6 +604,7 @@ export default function ExploreScreen() {
     setSearchQuery(q);
     setSearchLoading(true);
     setSearchResults([]);
+    scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     const kw = q.toLowerCase();
     try {
       const SEARCH_TOPICS = ['breaking', 'india-politics', 'technology', 'geopolitics', 'markets', 'business'];
@@ -671,14 +672,47 @@ export default function ExploreScreen() {
 
         {/* ── Header ────────────────────────────────────────────── */}
         <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)',
           paddingBottom: 12,
-          minHeight: 72,
         }}>
-          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: '#fff', letterSpacing: -0.5 }}>
+          <h1 style={{ margin: '0 0 14px', fontSize: 28, fontWeight: 800, color: '#fff', letterSpacing: -0.5 }}>
             Explore
           </h1>
+          {/* Search bar — inline at top */}
+          <form onSubmit={handleSearch}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: '#111', border: '1px solid #1E1E1E',
+              borderRadius: 12, padding: '10px 14px',
+            }}>
+              <IconSearch size={15} color="#444" />
+              <input
+                type="text"
+                placeholder="Search topics, people, events…"
+                value={searchText}
+                onChange={e => setSearchText(e.target.value)}
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                autoComplete="off"
+                style={{
+                  flex: 1, background: 'none', border: 'none', outline: 'none',
+                  fontSize: 14, color: '#ccc', caretColor: '#4A90D9',
+                }}
+              />
+              {searchText.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { setSearchText(''); setSearchQuery(''); setSearchResults([]); }}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: '#555', fontSize: 18, lineHeight: 1,
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                >×</button>
+              )}
+            </div>
+          </form>
         </div>
 
         {/* ⓪ Search Results ──────────────────────────────────── */}
@@ -858,57 +892,8 @@ export default function ExploreScreen() {
           </div>
         </div>
 
-        {/* Footer space for tab bar + bottom search bar */}
-        <div style={{ height: 160 }} />
-      </div>
-
-      {/* Fixed bottom search bar — above tab bar */}
-      <div style={{
-        position: 'fixed',
-        bottom: 'calc(max(16px, env(safe-area-inset-bottom, 0px)) + 62px)',
-        left: 'max(20px, env(safe-area-inset-left, 20px))',
-        right: 'max(20px, env(safe-area-inset-right, 20px))',
-        zIndex: 20,
-      }}>
-        <form onSubmit={handleSearch}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            background: 'rgba(16,16,16,0.94)',
-            backdropFilter: 'blur(28px)',
-            WebkitBackdropFilter: 'blur(28px)',
-            border: '1px solid rgba(255,255,255,0.07)',
-            borderRadius: 99,
-            padding: '11px 16px',
-            boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
-          }}>
-            <IconSearch size={16} color="#444" />
-            <input
-              type="text"
-              placeholder="Search topics, people, events…"
-              value={searchText}
-              onChange={e => setSearchText(e.target.value)}
-              autoCorrect="off"
-              autoCapitalize="none"
-              spellCheck={false}
-              autoComplete="off"
-              style={{
-                flex: 1, background: 'none', border: 'none', outline: 'none',
-                fontSize: 14, color: '#ccc', caretColor: '#4A90D9',
-              }}
-            />
-            {searchText.length > 0 && (
-              <button
-                type="button"
-                onClick={() => { setSearchText(''); setSearchQuery(''); setSearchResults([]); }}
-                style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  color: '#555', fontSize: 18, lineHeight: 1,
-                  WebkitTapHighlightColor: 'transparent',
-                }}
-              >×</button>
-            )}
-          </div>
-        </form>
+        {/* Footer space for tab bar */}
+        <div style={{ height: 110 }} />
       </div>
     </div>
   );
