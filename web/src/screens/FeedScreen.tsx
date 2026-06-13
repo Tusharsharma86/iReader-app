@@ -7,7 +7,7 @@ import { useRouter } from '../contexts/RouterContext';
 import { useTabBar } from '../contexts/TabBarContext';
 import { loadProfile, rankStories, rankStoriesStandard } from '../utils/personalization';
 import { scoreClusterInterest } from '../utils/interestTopics';
-import { getUsageStats, trackVisit } from '../utils/usageTracker';
+import { trackVisit } from '../utils/usageTracker';
 import { annotateUpdates, unfollow, markSeen } from '../utils/followStore';
 import { TOPIC_SUBTOPICS, storyMatchesSubTopic } from '../utils/topics';
 
@@ -310,8 +310,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   const { reportScroll } = useTabBar();
   const isVisibleRef = useRef(isVisible);
   useEffect(() => { isVisibleRef.current = isVisible; }, [isVisible]);
-  const [streak, setStreak] = useState(0);
-  useEffect(() => { try { trackVisit(); setStreak(getUsageStats().streakDays); } catch {} }, []);
+  useEffect(() => { try { trackVisit(); } catch {} }, []);
   const [followV, setFollowV] = useState(0);
 
   const [cardWidth, setCardWidth] = useState(() => Math.min(window.innerWidth - 28, 452));
@@ -539,6 +538,28 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTopic]);
 
+  // Pull-to-refresh
+  const [pullProgress, setPullProgress] = useState(0);
+  const touchStartYRef = useRef(0);
+  const PULL_THRESHOLD = 80;
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    if (!pullToRefresh || refreshing) return;
+    if ((containerRef.current?.scrollTop ?? 1) > 0) return;
+    touchStartYRef.current = e.touches[0].clientY;
+  }, [pullToRefresh, refreshing]);
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!pullToRefresh || refreshing || touchStartYRef.current === 0) return;
+    const dy = e.touches[0].clientY - touchStartYRef.current;
+    setPullProgress(dy <= 0 ? 0 : Math.min(1, dy / PULL_THRESHOLD));
+  }, [pullToRefresh, refreshing]);
+  const onTouchEnd = useCallback(() => {
+    if (!pullToRefresh) return;
+    const prog = pullProgress;
+    touchStartYRef.current = 0;
+    setPullProgress(0);
+    if (prog >= 1) onRefresh();
+  }, [pullToRefresh, pullProgress, onRefresh]);
+
   const applyPending = useCallback(() => {
     if (!pendingFeed) return;
     setAllFeed(pendingFeed);
@@ -633,30 +654,49 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   );
   return (
     <div ref={containerRef} onScroll={handleScroll}
+      onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
       style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', background: '#000', WebkitOverflowScrolling: 'touch' }}>
+
+      {/* Pull-to-refresh / refreshing indicator */}
+      {(refreshing || pullProgress > 0.1) && (
+        <div style={{
+          position: 'fixed',
+          top: 'calc(env(safe-area-inset-top, 0px) + 10px)',
+          left: 0, right: 0,
+          display: 'flex', justifyContent: 'center',
+          pointerEvents: 'none',
+          zIndex: 50,
+          opacity: refreshing ? 1 : pullProgress,
+          transition: refreshing ? 'opacity 0.2s' : 'none',
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: 'rgba(18,18,18,0.72)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255,255,255,0.07)',
+            borderRadius: 99,
+            padding: '5px 12px',
+          }}>
+            <div style={{
+              width: 11, height: 11, borderRadius: '50%',
+              border: '1.5px solid rgba(255,255,255,0.15)',
+              borderTop: '1.5px solid #ccc',
+              animation: refreshing ? 'spin 0.7s linear infinite' : 'none',
+              transform: refreshing ? undefined : `rotate(${pullProgress * 360}deg)`,
+            }} />
+            <span style={{ fontSize: 11, color: '#777', fontWeight: 600 }}>
+              {refreshing ? 'Refreshing…' : pullProgress >= 1 ? 'Release' : 'Pull to refresh'}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px', paddingTop: 'calc(16px + env(safe-area-inset-top, 0px))' }}>
         <img src="/icons/header-logo.png" alt="iReader" style={{ width: 82, height: 82, objectFit: 'contain', background: 'transparent', margin: '-12px -8px -12px -8px' }} />
         <div>
           <div style={{ color: '#fff', fontSize: 26, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.2 }}>{greeting()}</div>
-        </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
-          {streak > 0 && (
-            <button onClick={() => navigate({ name: 'Usage' })} title={`${streak}-day reading streak`}
-              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 10px', borderRadius: 20, background: 'rgba(255,149,0,0.14)', border: '1px solid rgba(255,149,0,0.3)', cursor: 'pointer' }}>
-              <span style={{ fontSize: 13 }}>🔥</span>
-              <span style={{ color: '#FF9F0A', fontSize: 13, fontWeight: 800 }}>{streak}</span>
-            </button>
-          )}
-          <button onClick={onRefresh} disabled={refreshing}
-            style={{ background: 'none', border: 'none', width: 38, height: 38, borderRadius: '50%', cursor: refreshing ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: refreshing ? 0.3 : 1, transition: 'opacity 0.2s' }}>
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-              style={{ animation: refreshing ? 'spin 0.9s linear infinite' : 'none' }}>
-              <polyline points="1 4 1 10 7 10"/>
-              <path d="M3.51 15a9 9 0 1 0 .49-4.95"/>
-            </svg>
-          </button>
         </div>
       </div>
 
