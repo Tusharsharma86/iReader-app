@@ -466,7 +466,7 @@ export default function ExploreScreen() {
       .then((d: any) => {
         if (cancelled) return;
         const items: FeedItem[] = [];
-        const raw = d?.clusters ?? d?.stories ?? d?.items ?? [];
+        const raw = d?.feed ?? d?.stories?.map((s: unknown) => ({ ...(s as object), type: 'article' })) ?? d?.clusters ?? d?.items ?? [];
         // Flatten — API may return story clusters or stories directly
         for (const item of raw) {
           if (item.articles?.length || item.headline || item.clusterLabel) {
