@@ -163,8 +163,8 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
         onClick={canTimeline ? openTimeline : undefined}
         style={{ paddingLeft: sideMargin, paddingRight: sideMargin, marginBottom: 12, cursor: canTimeline ? 'pointer' : 'default', WebkitTapHighlightColor: 'transparent' }}
       >
-        {/* Meta row ABOVE headline: TREND/BREAKING pill + clock + stories pill (right) */}
-        {showMetaPill && (cluster.collection || isBreaking || canTimeline || cluster.stories.length > 1) && (
+        {/* TREND / BREAKING pills — own row above headline */}
+        {showMetaPill && (cluster.collection || isBreaking) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             {cluster.collection && cluster.stories.length >= 3 && (
               <span style={{
@@ -180,13 +180,26 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
                 background: 'rgba(255,59,48,0.12)', border: '1px solid rgba(255,59,48,0.3)',
               }}>BREAKING</span>
             )}
+          </div>
+        )}
+        {/* Headline row: clock prefix + text + stories pill inline */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, flex: 1, minWidth: 0 }}>
             {canTimeline && (
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#5A5A5A" strokeWidth="2" style={{ flexShrink: 0 }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#5A5A5A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 4 }}>
                 <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
               </svg>
             )}
+            <div style={{
+              color: '#fff', fontSize: 18, fontWeight: 800, letterSpacing: -0.3, lineHeight: 1.25,
+              display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+            }}>
+              {cluster.topicLabel}
+            </div>
+          </div>
+          {showMetaPill && cluster.stories.length > 1 && (
             <span style={{
-              marginLeft: 'auto', flexShrink: 0,
+              flexShrink: 0, marginTop: 2,
               color: '#888', fontSize: 10, fontWeight: 700, letterSpacing: 0.6,
               padding: '3px 9px', borderRadius: 999,
               background: 'rgba(255,255,255,0.05)',
@@ -195,13 +208,7 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
             }}>
               {cluster.stories.length} stories
             </span>
-          </div>
-        )}
-        <div style={{
-          color: '#fff', fontSize: 18, fontWeight: 800, letterSpacing: -0.3, lineHeight: 1.25,
-          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-        }}>
-          {cluster.topicLabel}
+          )}
         </div>
         {/* Cluster subtitle removed — headline alone reads cleaner; stories speak for themselves. */}
         {(() => {
