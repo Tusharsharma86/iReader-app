@@ -35,7 +35,28 @@ const ENTITY_SKIP = new Set([
   'They','You','I','My','His','Her','Their','Our','Your','New','Now','No','Not',
   'All','Some','Just','More','Most','After','Before','Over','Under','Since','When',
   'Where','How','Why','What','Who','Which','Here','There','Then','Than','If','So',
-  'Says','Said','Report','Reports','Sources','Source','India','Indian',
+  // news section labels (Indian media style)
+  'Explained','Analysis','Opinion','Watch','Read','Know','Top','Must','Also',
+  'See','Get','Full','List','Check','View','Meet','Live','Update','Updates',
+  'Key','Big','Major','High','Low','Here','Look','Back','Find','Breaking',
+  // common verbs appearing capitalized mid-headline
+  'Says','Said','Gets','Joins','Makes','Takes','Gives','Shows','Comes','Goes',
+  'Warns','Claims','Asks','Calls','Wants','Plans','Moves','Rises','Falls',
+  'Report','Reports','Sources','Source','Latest','Will','May','Can','Has','Had',
+  'Set','Hits','Wins','Loses','Leads','Signs','Holds','Faces','Sees','Puts',
+  // too-generic nouns
+  'Govt','Gov','Bank','Law','Act','Deal','Talk','Plan','Move','Rise','Fall',
+  'Drop','Aid','War','Tax','Fund','Bill','Vote','Poll','Case','Rule','Court',
+  'Party','State','Centre','Center','Union','Group','Team','Board','Council',
+  // months
+  'January','February','March','April','May','June','July','August','September',
+  'October','November','December','Jan','Feb','Mar','Apr','Jun','Jul','Aug','Sep',
+  'Oct','Nov','Dec',
+  // days
+  'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday',
+  // too-generic demonyms / countries
+  'India','Indian','Pakistan','Pakistani','China','Chinese','Russia','Russian',
+  'American','British','European','Asian','Global','International','National',
 ]);
 
 function extractEntities(headlines: string[]): string[] {
@@ -52,7 +73,7 @@ function extractEntities(headlines: string[]): string[] {
     }
   }
   return [...counts.entries()]
-    .filter(([, c]) => c >= 1)
+    .filter(([, c]) => c >= 2)
     .sort((a, b) => b[1] - a[1])
     .map(([e]) => e)
     .slice(0, 30);
@@ -66,6 +87,16 @@ const TOPIC_LABELS: Record<string, string> = {
   'markets': 'Markets',
   'business': 'Business',
 };
+
+const TILE_ACCENTS = [
+  { color: '#FF453A', bg: 'rgba(255,69,58,0.10)'   },
+  { color: '#0A84FF', bg: 'rgba(10,132,255,0.10)'  },
+  { color: '#FF9F0A', bg: 'rgba(255,159,10,0.10)'  },
+  { color: '#30D158', bg: 'rgba(48,209,88,0.10)'   },
+  { color: '#64D2FF', bg: 'rgba(100,210,255,0.10)' },
+  { color: '#BF5AF2', bg: 'rgba(191,90,242,0.10)'  },
+  { color: '#FF6B9D', bg: 'rgba(255,107,157,0.10)' },
+];
 
 // ── Topic config ─────────────────────────────────────────────────────────────
 
@@ -132,42 +163,124 @@ function IconSearch({ size = 16, color = '#444' }: { size?: number; color?: stri
   );
 }
 
-// ── Search Result Card ────────────────────────────────────────────────────────
+// ── Bleed Card — full-width tall card mimicking main feed ─────────────────────
 
-function ResultCard({ item, onOpen }: { item: FeedItem; onOpen: (item: FeedItem) => void }) {
+function BleedCard({ item, onOpen }: { item: FeedItem; onOpen: (item: FeedItem) => void }) {
   const label = item.clusterLabel || item.headline || item.articles?.[0]?.headline || '';
-  const primaryArticle = item.articles?.[0];
-  const imgUrl = item.imageUrl || primaryArticle?.imageUrl;
-  const sourceName = item.sources?.[0]?.name || primaryArticle?.sources?.[0]?.name || '';
-  const sourceCount = item.sourceCount ?? item.sources?.length ?? item.articles?.length ?? 0;
+  const primary = item.articles?.[0];
+  const imgUrl = item.imageUrl || primary?.imageUrl;
+  const sourceName = item.sources?.[0]?.name || primary?.sources?.[0]?.name || '';
+  const sourceCount = item.sourceCount ?? (item.sources?.length ?? 0) > 0
+    ? item.sources?.length
+    : item.articles?.length ?? 0;
+  const summary = item.summary || primary?.summary || '';
   const accentColor = getArticleColor(label);
 
   return (
     <div
       onClick={() => onOpen(item)}
       style={{
-        background: '#0E0E0E', border: '1px solid #1A1A1A', borderRadius: 12,
-        overflow: 'hidden', cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
-        display: 'flex', flexDirection: 'column',
+        position: 'relative',
+        width: '100%',
+        height: '62vh',
+        borderRadius: 18,
+        overflow: 'hidden',
+        cursor: 'pointer',
+        WebkitTapHighlightColor: 'transparent',
+        background: accentColor,
+        marginBottom: 10,
+        flexShrink: 0,
       }}
     >
-      <div style={{ width: '100%', height: 80, background: imgUrl ? undefined : accentColor, position: 'relative', flexShrink: 0 }}>
-        {imgUrl && (
-          <img src={imgUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-            onError={e => { const el = e.currentTarget as HTMLImageElement; el.style.display = 'none'; if (el.parentElement) el.parentElement.style.background = accentColor; }} />
-        )}
-        {sourceCount > 1 && (
-          <div style={{ position: 'absolute', top: 5, right: 5, background: 'rgba(0,0,0,0.75)', borderRadius: 99, padding: '2px 6px', fontSize: 9, fontWeight: 700, color: '#fff' }}>
-            {sourceCount} sources
+      {/* Full-bleed image */}
+      {imgUrl && (
+        <img
+          src={imgUrl}
+          alt=""
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+          onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+        />
+      )}
+
+      {/* Gradient overlay — heavier at bottom */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, transparent 28%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.96) 100%)',
+      }} />
+
+      {/* Source count badge top-right */}
+      {(sourceCount ?? 0) > 1 && (
+        <div style={{
+          position: 'absolute', top: 14, right: 14,
+          background: 'rgba(0,0,0,0.55)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+          borderRadius: 20,
+          padding: '4px 10px',
+          fontSize: 10, fontWeight: 700, color: '#fff',
+          border: '1px solid rgba(255,255,255,0.10)',
+        }}>
+          +{(sourceCount ?? 2) - 1} sources
+        </div>
+      )}
+
+      {/* Text block pinned to bottom */}
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '0 18px 22px' }}>
+        {sourceName && (
+          <div style={{
+            fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.50)',
+            textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8,
+          }}>
+            {sourceName}
           </div>
         )}
-      </div>
-      <div style={{ padding: '7px 10px 9px' }}>
-        <div style={{ fontSize: 9.5, color: '#555', fontWeight: 600, marginBottom: 4 }}>{sourceName}</div>
-        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#eee', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+        <h3 style={{
+          margin: '0 0 8px',
+          fontSize: 21,
+          fontWeight: 800,
+          color: '#fff',
+          lineHeight: 1.22,
+          letterSpacing: -0.4,
+          display: '-webkit-box',
+          WebkitLineClamp: 3,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+        }}>
           {label}
-        </p>
+        </h3>
+        {summary && (
+          <p style={{
+            margin: 0,
+            fontSize: 13,
+            color: 'rgba(255,255,255,0.58)',
+            lineHeight: 1.45,
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+          }}>
+            {summary}
+          </p>
+        )}
       </div>
+    </div>
+  );
+}
+
+// ── Bleed Card shimmer placeholder ────────────────────────────────────────────
+
+function BleedCardSkeleton() {
+  return (
+    <div style={{
+      width: '100%', height: '62vh', borderRadius: 18,
+      background: '#141414', overflow: 'hidden', position: 'relative', marginBottom: 10,
+    }}>
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 50%, transparent 100%)',
+        animation: 'shimmer 1.4s infinite',
+      }} />
+      <style>{`@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`}</style>
     </div>
   );
 }
@@ -178,13 +291,13 @@ export default function ExploreScreen() {
   const { navigate, setTab } = useRouter();
   const { show: showTabBar } = useTabBar();
 
-  // Cross-topic trending entities
   const [crossEntities, setCrossEntities] = useState<CrossEntity[]>([]);
-  // People & Places entities from breaking feed
   const [entities, setEntities] = useState<string[]>([]);
+  const [localNews, setLocalNews] = useState<FeedItem[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
 
-  // Search
+  const LOCAL_KW = /\b(pune|maharashtra|mumbai|nagpur|nashik|thane|aurangabad|solapur|kolhapur|pimpri|pcmc|shiv sena|ncp|maha vikas|eknath shinde|devendra fadnavis|uddhav)\b/i;
+
   const [searchText, setSearchText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<FeedItem[]>([]);
@@ -194,7 +307,6 @@ export default function ExploreScreen() {
 
   useEffect(() => { showTabBar(); }, [showTabBar]);
 
-  // Load cross-topic entities — the core differentiator
   useEffect(() => {
     let cancelled = false;
     const CROSS_TOPICS = ['breaking', 'india-politics', 'technology', 'geopolitics', 'markets', 'business'];
@@ -208,7 +320,6 @@ export default function ExploreScreen() {
     ).then(results => {
       if (cancelled) return;
 
-      // Extract entities per topic
       const entityTopics = new Map<string, Set<string>>();
       const allHeadlines: string[] = [];
 
@@ -226,25 +337,40 @@ export default function ExploreScreen() {
         }
       }
 
-      // Entities in 2+ topics = genuinely cross-cutting
       const cross: CrossEntity[] = [...entityTopics.entries()]
         .filter(([, topics]) => topics.size >= 2)
         .sort((a, b) => b[1].size - a[1].size)
         .slice(0, 14)
         .map(([entity, topics]) => ({ entity, topics: [...topics], count: topics.size }));
 
-      // People & Places from all headlines (single-topic entities)
       const allEntities = extractEntities(allHeadlines).slice(0, 12);
+
+      const allItems: FeedItem[] = results.flatMap(r =>
+        r.status === 'fulfilled' ? r.value.items : []
+      );
+      const local = allItems.filter(it => {
+        const text = [
+          it.clusterLabel, it.headline, it.summary,
+          ...(it.articles ?? []).map(a => a.headline),
+        ].join(' ');
+        return LOCAL_KW.test(text);
+      });
+      const seenLocal = new Set<string>();
+      const localDeduped = local.filter(it => {
+        const key = (it.clusterLabel || it.headline || '').slice(0, 40);
+        if (seenLocal.has(key)) return false;
+        seenLocal.add(key); return true;
+      }).slice(0, 8);
 
       setCrossEntities(cross);
       setEntities(allEntities);
+      setLocalNews(localDeduped);
       setDataLoading(false);
     }).catch(() => { if (!cancelled) setDataLoading(false); });
 
     return () => { cancelled = true; };
   }, []);
 
-  // Shared search logic
   const doSearch = useCallback(async (q: string) => {
     setSearchQuery(q);
     setSearchLoading(true);
@@ -293,7 +419,6 @@ export default function ExploreScreen() {
     await doSearch(term);
   }, [doSearch]);
 
-  // Navigation
   const openArticle = useCallback((item: FeedItem) => {
     const primary = item.articles?.[0] ?? (item as unknown as Story);
     if (!primary || !primary.id) return;
@@ -358,67 +483,71 @@ export default function ExploreScreen() {
           </form>
         </div>
 
-        {/* Search Results */}
+        {/* Search Results — big bleeding cards */}
         {searchQuery !== '' && (
           <div style={{ marginBottom: 32 }}>
             <SectionLabel text={`Results for "${searchQuery}"`} />
             {searchLoading ? (
+              <>
+                <BleedCardSkeleton />
+                <BleedCardSkeleton />
+              </>
+            ) : searchResults.length === 0 ? (
+              <p style={{ color: '#444', fontSize: 13, textAlign: 'center', padding: '24px 0' }}>No results for "{searchQuery}"</p>
+            ) : (
+              <>
+                {searchResults.map((item, i) => (
+                  <BleedCard key={i} item={item} onOpen={openArticle} />
+                ))}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ① Trending Across Topics — 2-col colored tiles */}
+        {(dataLoading || crossEntities.length > 0) && searchQuery === '' && (
+          <div style={{ marginBottom: 28 }}>
+            <SectionLabel text="Trending Across Topics" />
+            {dataLoading ? (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 {[0,1,2,3].map(i => (
-                  <div key={i} style={{ height: 160, borderRadius: 12, background: '#141414', overflow: 'hidden', position: 'relative' }}>
+                  <div key={i} style={{ height: 80, borderRadius: 14, background: '#141414', overflow: 'hidden', position: 'relative' }}>
                     <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 50%, transparent 100%)', animation: 'shimmer 1.4s infinite' }} />
                     <style>{`@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`}</style>
                   </div>
                 ))}
               </div>
-            ) : searchResults.length === 0 ? (
-              <p style={{ color: '#444', fontSize: 13, textAlign: 'center', padding: '24px 0' }}>No results for "{searchQuery}"</p>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                {searchResults.map((item, i) => (
-                  <ResultCard key={i} item={item} onOpen={openArticle} />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ① Trending Across Topics — entities appearing in 2+ topic feeds */}
-        {(dataLoading || crossEntities.length > 0) && searchQuery === '' && (
-          <div style={{ marginBottom: 28 }}>
-            <SectionLabel text="Trending Across Topics" />
-            {dataLoading ? (
-              <div style={{ display: 'flex', gap: 8 }}>
-                {[120,90,110,80,100].map((w, i) => (
-                  <div key={i} style={{ width: w, height: 62, borderRadius: 12, background: '#141414', flexShrink: 0, overflow: 'hidden', position: 'relative' }}>
-                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 50%, transparent 100%)', animation: 'shimmer 1.4s infinite' }} />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
-                {crossEntities.map((ce, i) => (
-                  <button
-                    key={i}
-                    onClick={() => triggerSearch(ce.entity)}
-                    style={{
-                      flexShrink: 0,
-                      background: '#0E0E0E', border: '1px solid #1E1E1E',
-                      borderRadius: 12, padding: '8px 12px',
-                      cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
-                      textAlign: 'left',
-                    }}
-                  >
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#eee', marginBottom: 5, whiteSpace: 'nowrap' }}>{ce.entity}</div>
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {ce.topics.slice(0, 3).map(t => (
-                        <span key={t} style={{ fontSize: 9, fontWeight: 700, color: '#555', background: '#181818', borderRadius: 4, padding: '2px 5px', whiteSpace: 'nowrap' }}>
-                          {TOPIC_LABELS[t] ?? t}
-                        </span>
-                      ))}
-                    </div>
-                  </button>
-                ))}
+                {crossEntities.map((ce, i) => {
+                  const accent = TILE_ACCENTS[i % TILE_ACCENTS.length];
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => triggerSearch(ce.entity)}
+                      style={{
+                        background: accent.bg,
+                        border: `1px solid ${accent.color}22`,
+                        borderRadius: 14, padding: '12px 14px',
+                        cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+                        textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 8,
+                      }}
+                    >
+                      <div style={{ fontSize: 14, fontWeight: 800, color: '#eee', lineHeight: 1.2 }}>{ce.entity}</div>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        {ce.topics.slice(0, 3).map(t => (
+                          <span key={t} style={{
+                            fontSize: 9, fontWeight: 700, color: accent.color,
+                            background: `${accent.color}18`, borderRadius: 4,
+                            padding: '2px 6px', whiteSpace: 'nowrap',
+                          }}>
+                            {TOPIC_LABELS[t] ?? t}
+                          </span>
+                        ))}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -451,7 +580,26 @@ export default function ExploreScreen() {
           </div>
         )}
 
-        {/* ③ People & Places */}
+        {/* ③ Local News — big bleeding cards with natural peek */}
+        {(dataLoading || localNews.length > 0) && searchQuery === '' && (
+          <div style={{ marginBottom: 28 }}>
+            <SectionLabel text="Local · Pune & Maharashtra" />
+            {dataLoading ? (
+              <>
+                <BleedCardSkeleton />
+                <BleedCardSkeleton />
+              </>
+            ) : (
+              <>
+                {localNews.map((item, i) => (
+                  <BleedCard key={i} item={item} onOpen={openArticle} />
+                ))}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ④ People & Places */}
         {entities.length > 0 && searchQuery === '' && (
           <div style={{ marginBottom: 28 }}>
             <SectionLabel text="People & Places" />
