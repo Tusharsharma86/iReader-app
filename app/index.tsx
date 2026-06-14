@@ -353,10 +353,14 @@ function feedToClusterGroups(feed: ApiFeedItem[]): Cluster[] {
     if (item.type === 'cluster') {
       const rep = item.articles[0];
       if (!rep) return [];
+      // AI label if complete (≥30 chars), else best article headline
+      const label = item.topicTitle && item.topicTitle.length >= 30
+        ? item.topicTitle
+        : (rep.headline ?? item.topicTitle);
       return [{
         id: `cluster-${rep.id}`,
-        headline: item.topicTitle,
-        topicLabel: item.topicTitle,
+        headline: label,
+        topicLabel: label,
         summary: item.topicSummary || rep.summary,
         imageUrl: rep.imageUrl ?? '',
         publishedAt: rep.publishedAt,
@@ -370,7 +374,7 @@ function feedToClusterGroups(feed: ApiFeedItem[]): Cluster[] {
     return [{
       id: item.id,
       headline: item.headline,
-      topicLabel: generateTopicLabel(item.headline),
+      topicLabel: item.headline,   // full headline, not 3-word fragment
       summary: item.summary,
       imageUrl: item.imageUrl ?? '',
       publishedAt: item.publishedAt,

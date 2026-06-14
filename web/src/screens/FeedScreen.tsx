@@ -287,9 +287,14 @@ function storyIsBreaking(s: Story): boolean {
 function serverItemToCluster(item: ServerFeedItem): StoryCluster | null {
   if (item.type === 'cluster') {
     if (item.articles.length === 0) return null;
+    // Use AI topicTitle if it looks complete (≥30 chars); otherwise fall back to
+    // the best article headline so the label is never a 3-word fragment.
+    const label = item.topicTitle && item.topicTitle.length >= 30
+      ? item.topicTitle
+      : (item.articles[0].headline ?? item.topicTitle);
     return {
       id: `cluster-${item.articles[0].id}`,
-      topicLabel: item.topicTitle,
+      topicLabel: label,
       subtitle: item.topicSummary || (item.articles[0].summary ?? ''),
       stories: item.articles,
       isBreaking: !item.collection && item.articles.some(storyIsBreaking),
@@ -299,7 +304,7 @@ function serverItemToCluster(item: ServerFeedItem): StoryCluster | null {
   }
   return {
     id: item.id,
-    topicLabel: generateTopicLabel(item.headline),
+    topicLabel: item.headline,   // full headline — never a 3-word fragment
     subtitle: item.summary ?? '',
     stories: [item],
     isBreaking: storyIsBreaking(item),
