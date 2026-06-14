@@ -492,7 +492,7 @@ export default function AIFeedScreen() {
         .aif-text-bounce { animation: aifTextBounce 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
         /* Tap feedback — dim + tiny scale on press. CSS-only so no React rerenders.
            Skip off-screen card paint with content-visibility. */
-        .aif-card { transition: filter 0.18s ease, transform 0.18s cubic-bezier(0.4, 0, 0.2, 1); content-visibility: auto; contain-intrinsic-size: 100vh; }
+        .aif-card { transition: filter 0.18s ease, transform 0.18s cubic-bezier(0.4, 0, 0.2, 1); content-visibility: auto; contain-intrinsic-size: calc(100vh - 80px); }
         .aif-card:active { filter: brightness(0.88); transform: scale(0.992); }
         @keyframes aifCelebrate { 0% { transform: scale(0.5) rotate(-20deg); opacity: 0; } 60% { transform: scale(1.25) rotate(8deg); opacity: 1; } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }
         .aif-celebrate { animation: aifCelebrate 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
@@ -546,7 +546,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
       onTouchMove={handleTouchMove}
       className="aif-card"
       style={{
-        height: 'calc(100% - 80px)', minHeight: 'calc(100% - 80px)',
+        height: 'calc(100vh - 80px)', minHeight: 'calc(100vh - 80px)',
         scrollSnapAlign: 'start', scrollSnapStop: 'always',
         position: 'relative',
         overflow: 'hidden',
