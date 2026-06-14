@@ -284,14 +284,14 @@ function storyIsBreaking(s: Story): boolean {
   return s.isBreaking ?? false;
 }
 
-const QUESTION_START = /^(how|what|will|can|should|is|are|did|why|who|when|could|would|does|has)\b/i;
-
 function serverItemToCluster(item: ServerFeedItem): StoryCluster | null {
   if (item.type === 'cluster') {
     if (item.articles.length === 0) return null;
-    const aiLabel = item.topicTitle && item.topicTitle.length >= 20 && !QUESTION_START.test(item.topicTitle)
-      ? item.topicTitle : null;
-    const label = aiLabel ?? (item.articles[0].headline ?? item.topicTitle);
+    // Prefer AI-generated topicTitle — it describes the story the cluster covers.
+    // Only fall back to article headline if AI returned nothing useful.
+    const label = (item.topicTitle && item.topicTitle.trim().length > 8)
+      ? item.topicTitle
+      : (item.articles[0].headline ?? item.topicTitle);
     return {
       id: `cluster-${item.articles[0].id}`,
       topicLabel: label,

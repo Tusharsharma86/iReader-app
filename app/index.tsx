@@ -353,10 +353,10 @@ function feedToClusterGroups(feed: ApiFeedItem[]): Cluster[] {
     if (item.type === 'cluster') {
       const rep = item.articles[0];
       if (!rep) return [];
-      const QUESTION_RE = /^(how|what|will|can|should|is|are|did|why|who|when|could|would|does|has)\b/i;
-      const aiLabel = item.topicTitle && item.topicTitle.length >= 20 && !QUESTION_RE.test(item.topicTitle)
-        ? item.topicTitle : null;
-      const label = aiLabel ?? (rep.headline ?? item.topicTitle);
+      // Prefer AI-generated topicTitle — it describes the story the cluster covers.
+      const label = (item.topicTitle && item.topicTitle.trim().length > 8)
+        ? item.topicTitle
+        : (rep.headline ?? item.topicTitle);
       return [{
         id: `cluster-${rep.id}`,
         headline: label,
