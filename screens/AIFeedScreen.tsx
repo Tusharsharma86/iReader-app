@@ -175,6 +175,7 @@ async function writeDeepDiveCache(id: string, data: DeepDiveData, depth = 'stand
 // ── Main Screen ─────────────────────────────────────────────────────────────
 export default function AIFeedScreen() {
   const { width: screenW, height: screenH } = useWindowDimensions();
+  const CARD_H = screenH - 80; // 80px peek of next card
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -493,11 +494,11 @@ export default function AIFeedScreen() {
       index={index}
       total={items.length}
       width={screenW}
-      height={screenH}
+      height={CARD_H}
       topInset={insets.top}
       onOpen={() => setOpenedItem(item)}
     />
-  ), [items.length, screenW, screenH, insets.top, setOpenedItem]);
+  ), [items.length, screenW, CARD_H, insets.top, setOpenedItem]);
 
   if (loading && items.length === 0) {
     return (
@@ -546,9 +547,8 @@ export default function AIFeedScreen() {
         keyExtractor={it => it.primary.id}
         renderItem={renderCard}
         extraData={`${screenW}x${screenH}`}
-        pagingEnabled
-        snapToInterval={screenH}
-        getItemLayout={(_d, i) => ({ length: screenH, offset: screenH * i, index: i })}
+        snapToInterval={CARD_H}
+        getItemLayout={(_d, i) => ({ length: CARD_H, offset: CARD_H * i, index: i })}
         snapToAlignment="start"
         decelerationRate="fast"
         showsVerticalScrollIndicator={false}
@@ -677,7 +677,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: _h, to
   return (
     <Pressable
       onPress={onOpen}
-      style={({ pressed }) => ({ width, height, backgroundColor: dominant, overflow: 'hidden', transform: [{ scale: pressed ? 0.985 : 1 }] })}
+      style={({ pressed }) => ({ width, height, backgroundColor: dominant, overflow: 'hidden', borderRadius: 16, transform: [{ scale: pressed ? 0.985 : 1 }] })}
     >
       {story.imageUrl ? (
         <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: heroScale }] }]}>
