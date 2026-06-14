@@ -168,8 +168,6 @@ function dedup(items: FeedItem[], limit: number): FeedItem[] {
   return out;
 }
 
-const LOCAL_KW = /\b(pune|maharashtra|mumbai|nagpur|nashik|thane|aurangabad|pimpri|pcmc|shiv sena|ncp|eknath shinde|devendra fadnavis|uddhav)\b/i;
-
 // ── Topic config ──────────────────────────────────────────────────────────────
 
 const TOPICS = [
@@ -180,6 +178,12 @@ const TOPICS = [
   { label: 'Markets',   color: '#64D2FF', bg: 'rgba(100,210,255,0.15)', tag: 'markets',        icon: 'markets'   },
   { label: 'Business',  color: '#BF5AF2', bg: 'rgba(191,90,242,0.15)', tag: 'business',       icon: 'business'  },
 ];
+
+// Tile background palettes per category
+const COMPANY_BGS = ['#0F2D52','#1A1052','#0F3860','#1A1548'];
+const PEOPLE_BGS  = ['#4A2000','#5A1500','#3A2800','#4A1A10'];
+const PLACE_BGS   = ['#004A20','#003A30','#0A3A10','#004030'];
+const EMERGE_BGS  = ['#003A50','#004060','#002A50','#003848'];
 
 function TopicIcon({ icon, color, size = 18 }: { icon: string; color: string; size?: number }) {
   const s = { fill: 'none' as const, stroke: color, strokeWidth: 1.9, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
@@ -223,9 +227,9 @@ function IconSearch({ size = 16, color = '#444' }: { size?: number; color?: stri
   );
 }
 
-// ── Story carousel card ───────────────────────────────────────────────────────
+// ── Vertical story card (full-width) ──────────────────────────────────────────
 
-function StoryCard({ item, onOpen, badge }: { item: FeedItem; onOpen: (item: FeedItem) => void; badge?: { text: string; color: string } }) {
+function VerticalStoryCard({ item, onOpen, badge }: { item: FeedItem; onOpen: (item: FeedItem) => void; badge?: { text: string; color: string } }) {
   const label = item.clusterLabel || item.headline || item.articles?.[0]?.headline || '';
   const imgUrl = item.imageUrl || item.articles?.[0]?.imageUrl;
   const srcName = item.sources?.[0]?.name || item.articles?.[0]?.sources?.[0]?.name || '';
@@ -237,10 +241,10 @@ function StoryCard({ item, onOpen, badge }: { item: FeedItem; onOpen: (item: Fee
     <div
       onClick={() => onOpen(item)}
       style={{
-        flexShrink: 0, width: 'clamp(240px, 72vw, 300px)', height: 220,
+        width: '100%', height: 200,
         borderRadius: 16, overflow: 'hidden', cursor: 'pointer',
-        background: accent, position: 'relative',
-        scrollSnapAlign: 'start', WebkitTapHighlightColor: 'transparent',
+        background: accent, position: 'relative', marginBottom: 10,
+        WebkitTapHighlightColor: 'transparent',
       }}
     >
       {imgUrl && <img src={imgUrl} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />}
@@ -265,7 +269,7 @@ function StoryCard({ item, onOpen, badge }: { item: FeedItem; onOpen: (item: Fee
             {ts && <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>· {ts}</span>}
           </div>
         )}
-        <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#fff', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', letterSpacing: -0.2 }}>
+        <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', letterSpacing: -0.2 }}>
           {label}
         </p>
       </div>
@@ -273,27 +277,32 @@ function StoryCard({ item, onOpen, badge }: { item: FeedItem; onOpen: (item: Fee
   );
 }
 
-// ── Entity chip ───────────────────────────────────────────────────────────────
+// ── Vibrant entity tile (2-col grid) ─────────────────────────────────────────
 
-function EntityChip({ entity, accent, onTap }: { entity: EntityCard; accent: string; onTap: (name: string) => void }) {
+function EntityTile({ entity, accent, bgColor, onTap }: { entity: EntityCard; accent: string; bgColor: string; onTap: (name: string) => void }) {
   return (
     <button
       onClick={() => onTap(entity.name)}
       style={{
-        flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7,
-        background: '#111', border: '1px solid #1E1E1E',
-        borderRadius: 10, padding: '8px 12px',
-        cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
-        scrollSnapAlign: 'start',
+        display: 'block', width: '100%', height: 96,
+        borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
+        background: bgColor, position: 'relative', border: 'none',
+        padding: 0, WebkitTapHighlightColor: 'transparent',
       }}
     >
-      <span style={{ fontSize: 13, fontWeight: 700, color: '#ddd', whiteSpace: 'nowrap' }}>{entity.name}</span>
-      <span style={{ fontSize: 9, fontWeight: 700, color: accent, background: `${accent}18`, borderRadius: 4, padding: '2px 5px' }}>{entity.count}</span>
+      {entity.imageUrl && (
+        <img src={entity.imageUrl} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+      )}
+      <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${bgColor}CC 0%, rgba(0,0,0,0.7) 100%)` }} />
+      <div style={{ position: 'absolute', inset: 0, padding: '10px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+        <div style={{ fontSize: 8.5, fontWeight: 700, color: accent, marginBottom: 4, letterSpacing: 0.5 }}>{entity.count} {entity.count === 1 ? 'story' : 'stories'}</div>
+        <div style={{ fontSize: 14, fontWeight: 800, color: '#fff', lineHeight: 1.2, textAlign: 'left', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{entity.name}</div>
+      </div>
     </button>
   );
 }
 
-// ── Source chip ───────────────────────────────────────────────────────────────
+// ── Source chip (for grid) ────────────────────────────────────────────────────
 
 function SourceChip({ src, onTap }: { src: SourceCard; onTap: (name: string) => void }) {
   const faviconUrl = src.domain ? `https://www.google.com/s2/favicons?domain=${src.domain}&sz=32` : '';
@@ -301,46 +310,20 @@ function SourceChip({ src, onTap }: { src: SourceCard; onTap: (name: string) => 
     <button
       onClick={() => onTap(src.name)}
       style={{
-        flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-        width: 76, background: '#0E0E0E', border: '1px solid #1A1A1A',
-        borderRadius: 12, padding: '10px 8px 9px',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+        background: '#0E0E0E', border: '1px solid #1A1A1A',
+        borderRadius: 12, padding: '12px 8px 10px', width: '100%',
         cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
-        scrollSnapAlign: 'start',
       }}
     >
       {faviconUrl ? (
-        <img src={faviconUrl} alt="" width={22} height={22} style={{ borderRadius: 5 }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+        <img src={faviconUrl} alt="" width={24} height={24} style={{ borderRadius: 6 }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
       ) : (
-        <div style={{ width: 22, height: 22, borderRadius: 5, background: '#222' }} />
+        <div style={{ width: 24, height: 24, borderRadius: 6, background: '#222' }} />
       )}
       <span style={{ fontSize: 9.5, fontWeight: 700, color: '#999', textAlign: 'center', lineHeight: 1.2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{src.name}</span>
-      <span style={{ fontSize: 8.5, color: '#444', fontWeight: 600 }}>{src.count} stories</span>
+      <span style={{ fontSize: 8.5, color: '#444', fontWeight: 600 }}>{src.count}</span>
     </button>
-  );
-}
-
-// ── Full-bleed vertical card (local news) ─────────────────────────────────────
-
-function BleedCard({ item, onOpen }: { item: FeedItem; onOpen: (item: FeedItem) => void }) {
-  const label = item.clusterLabel || item.headline || item.articles?.[0]?.headline || '';
-  const imgUrl = item.imageUrl || item.articles?.[0]?.imageUrl;
-  const srcName = item.sources?.[0]?.name || item.articles?.[0]?.sources?.[0]?.name || '';
-  const summary = item.summary || item.articles?.[0]?.summary || '';
-  const accent = getArticleColor(label);
-
-  return (
-    <div
-      onClick={() => onOpen(item)}
-      style={{ position: 'relative', width: '100%', height: '58vh', borderRadius: 18, overflow: 'hidden', cursor: 'pointer', background: accent, marginBottom: 10, WebkitTapHighlightColor: 'transparent' }}
-    >
-      {imgUrl && <img src={imgUrl} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />}
-      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.06) 0%, transparent 28%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.96) 100%)' }} />
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '0 18px 22px' }}>
-        {srcName && <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>{srcName}</div>}
-        <h3 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#fff', lineHeight: 1.22, letterSpacing: -0.4, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{label}</h3>
-        {summary && <p style={{ margin: 0, fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{summary}</p>}
-      </div>
-    </div>
   );
 }
 
@@ -349,11 +332,11 @@ function BleedCard({ item, onOpen }: { item: FeedItem; onOpen: (item: FeedItem) 
 const SHIMMER = 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 50%, transparent 100%)';
 const SHIMMER_CSS = `@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`;
 
-function CarouselSkeleton() {
+function VerticalCardSkeleton() {
   return (
-    <div style={{ display: 'flex', gap: 10 }}>
+    <div>
       {[0,1,2].map(i => (
-        <div key={i} style={{ flexShrink: 0, width: 240, height: 220, borderRadius: 16, background: '#141414', overflow: 'hidden', position: 'relative' }}>
+        <div key={i} style={{ width: '100%', height: 200, borderRadius: 16, background: '#141414', overflow: 'hidden', position: 'relative', marginBottom: 10 }}>
           <div style={{ position: 'absolute', inset: 0, background: SHIMMER, animation: 'shimmer 1.4s infinite' }} />
         </div>
       ))}
@@ -361,11 +344,23 @@ function CarouselSkeleton() {
   );
 }
 
-function ChipSkeleton() {
+function TileSkeleton() {
   return (
-    <div style={{ display: 'flex', gap: 8 }}>
-      {[90,110,80,120,95].map((w, i) => (
-        <div key={i} style={{ flexShrink: 0, width: w, height: 37, borderRadius: 10, background: '#141414', overflow: 'hidden', position: 'relative' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+      {[0,1,2,3,4,5].map(i => (
+        <div key={i} style={{ height: 96, borderRadius: 14, background: '#141414', overflow: 'hidden', position: 'relative' }}>
+          <div style={{ position: 'absolute', inset: 0, background: SHIMMER, animation: 'shimmer 1.4s infinite' }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SourceGridSkeleton() {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+      {[0,1,2,3,4,5].map(i => (
+        <div key={i} style={{ height: 88, borderRadius: 12, background: '#141414', overflow: 'hidden', position: 'relative' }}>
           <div style={{ position: 'absolute', inset: 0, background: SHIMMER, animation: 'shimmer 1.4s infinite' }} />
         </div>
       ))}
@@ -408,7 +403,6 @@ export default function ExploreScreen() {
   const [places, setPlaces] = useState<EntityCard[]>([]);
   const [emergingTopics, setEmergingTopics] = useState<EntityCard[]>([]);
   const [sources, setSources] = useState<SourceCard[]>([]);
-  const [localNews, setLocalNews] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [searchText, setSearchText] = useState('');
@@ -480,7 +474,6 @@ export default function ExploreScreen() {
       const compList: EntityCard[] = [];
       const personList: EntityCard[] = [];
       const placeList: EntityCard[] = [];
-      const topicList: EntityCard[] = [];
 
       for (const [name, count] of entityCounts.entries()) {
         if (count < 2) continue;
@@ -489,14 +482,12 @@ export default function ExploreScreen() {
         if (type === 'company') compList.push(ec);
         else if (type === 'person') personList.push(ec);
         else if (type === 'place') placeList.push(ec);
-        else topicList.push(ec);
       }
       compList.sort((a, b) => b.count - a.count);
       personList.sort((a, b) => b.count - a.count);
       placeList.sort((a, b) => b.count - a.count);
-      topicList.sort((a, b) => b.count - a.count);
 
-      // Emerging = entities in 3+ topic feeds
+      // Emerging = entities in 2+ topic feeds
       const emerging: EntityCard[] = [...entityTopicSets.entries()]
         .filter(([, s]) => s.size >= 2)
         .sort((a, b) => b[1].size - a[1].size)
@@ -519,17 +510,8 @@ export default function ExploreScreen() {
       }
       const srcList: SourceCard[] = [...srcMap.entries()]
         .sort((a, b) => b[1].count - a[1].count)
-        .slice(0, 16)
+        .slice(0, 18)
         .map(([name, { domain, count }]) => ({ name, domain, count }));
-
-      // ⑤ Local news
-      const localList = dedup(
-        allItems.filter(it => {
-          const text = [it.clusterLabel, it.headline, it.summary, ...(it.articles ?? []).map(a => a.headline)].join(' ');
-          return LOCAL_KW.test(text);
-        }),
-        8
-      );
 
       setTrendingStories(trending);
       setDeepDives(ddItems);
@@ -538,7 +520,6 @@ export default function ExploreScreen() {
       setPlaces(placeList.slice(0, 20));
       setEmergingTopics(emerging);
       setSources(srcList);
-      setLocalNews(localList);
       setLoading(false);
     }).catch(() => { if (!cancelled) setLoading(false); });
 
@@ -580,21 +561,26 @@ export default function ExploreScreen() {
   }, [doSearch]);
 
   const openArticle = useCallback((item: FeedItem) => {
-    const primary = item.articles?.[0] ?? (item as unknown as Story);
-    if (!primary || !primary.id) return;
-    trackArticleOpen(primary);
+    const articleWithId = item.articles?.find(a => a.id);
+    const firstArticle = item.articles?.[0];
+    const primary = articleWithId ?? firstArticle ?? (item as unknown as Story);
+    const headline = primary.headline ?? item.headline ?? item.clusterLabel ?? '';
+    const allSources = (primary.sources?.length ? primary.sources : item.sources) ?? [];
+    const url = allSources[0]?.url ?? '';
+    if (!headline) return;
+    trackArticleOpen({ ...primary, headline } as Story);
     navigate({
       name: 'Article',
       params: {
-        id: primary.id,
-        url: primary.sources?.[0]?.url ?? '',
-        image: primary.imageUrl ?? '',
-        headline: primary.headline,
-        summary: primary.summary ?? '',
-        source: primary.sources?.[0]?.name ?? '',
-        publishedAt: primary.publishedAt,
-        dominantColor: getArticleColor(primary.headline),
-        sources: JSON.stringify(primary.sources ?? []),
+        id: (primary as Story).id ?? '',
+        url,
+        image: primary.imageUrl ?? item.imageUrl ?? '',
+        headline,
+        summary: primary.summary ?? item.summary ?? '',
+        source: allSources[0]?.name ?? '',
+        publishedAt: primary.publishedAt ?? item.publishedAt,
+        dominantColor: getArticleColor(headline),
+        sources: JSON.stringify(allSources),
         allStories: JSON.stringify(item.articles ?? [primary]),
       },
     });
@@ -661,7 +647,13 @@ export default function ExploreScreen() {
                   <div style={{ marginBottom: 24 }}>
                     <SectionLabel text="Companies" />
                     <HScroll>
-                      {searchResults.companies.map((c, i) => <EntityChip key={i} entity={c} accent="#0A84FF" onTap={triggerSearch} />)}
+                      {searchResults.companies.map((c, i) => (
+                        <button key={i} onClick={() => triggerSearch(c.name)}
+                          style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, background: '#111', border: '1px solid #1E1E1E', borderRadius: 10, padding: '8px 12px', cursor: 'pointer', WebkitTapHighlightColor: 'transparent', scrollSnapAlign: 'start' }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: '#ddd', whiteSpace: 'nowrap' }}>{c.name}</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, color: '#0A84FF', background: '#0A84FF18', borderRadius: 4, padding: '2px 5px' }}>{c.count}</span>
+                        </button>
+                      ))}
                     </HScroll>
                   </div>
                 )}
@@ -669,7 +661,13 @@ export default function ExploreScreen() {
                   <div style={{ marginBottom: 24 }}>
                     <SectionLabel text="People" />
                     <HScroll>
-                      {searchResults.people.map((p, i) => <EntityChip key={i} entity={p} accent="#FF9F0A" onTap={triggerSearch} />)}
+                      {searchResults.people.map((p, i) => (
+                        <button key={i} onClick={() => triggerSearch(p.name)}
+                          style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, background: '#111', border: '1px solid #1E1E1E', borderRadius: 10, padding: '8px 12px', cursor: 'pointer', WebkitTapHighlightColor: 'transparent', scrollSnapAlign: 'start' }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: '#ddd', whiteSpace: 'nowrap' }}>{p.name}</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, color: '#FF9F0A', background: '#FF9F0A18', borderRadius: 4, padding: '2px 5px' }}>{p.count}</span>
+                        </button>
+                      ))}
                     </HScroll>
                   </div>
                 )}
@@ -677,7 +675,13 @@ export default function ExploreScreen() {
                   <div style={{ marginBottom: 24 }}>
                     <SectionLabel text="Places" />
                     <HScroll>
-                      {searchResults.places.map((p, i) => <EntityChip key={i} entity={p} accent="#30D158" onTap={triggerSearch} />)}
+                      {searchResults.places.map((p, i) => (
+                        <button key={i} onClick={() => triggerSearch(p.name)}
+                          style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, background: '#111', border: '1px solid #1E1E1E', borderRadius: 10, padding: '8px 12px', cursor: 'pointer', WebkitTapHighlightColor: 'transparent', scrollSnapAlign: 'start' }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: '#ddd', whiteSpace: 'nowrap' }}>{p.name}</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, color: '#30D158', background: '#30D15818', borderRadius: 4, padding: '2px 5px' }}>{p.count}</span>
+                        </button>
+                      ))}
                     </HScroll>
                   </div>
                 )}
@@ -693,12 +697,12 @@ export default function ExploreScreen() {
             {/* 1. Trending Stories */}
             <div style={{ marginBottom: 28 }}>
               <SectionLabel text="Trending Stories" />
-              {loading ? <CarouselSkeleton /> : (
-                <HScroll>
-                  {trendingStories.map((item, i) => (
-                    <StoryCard key={i} item={item} onOpen={openArticle} />
+              {loading ? <VerticalCardSkeleton /> : (
+                <div>
+                  {trendingStories.slice(0, 8).map((item, i) => (
+                    <VerticalStoryCard key={i} item={item} onOpen={openArticle} />
                   ))}
-                </HScroll>
+                </div>
               )}
             </div>
 
@@ -706,12 +710,12 @@ export default function ExploreScreen() {
             {(loading || deepDives.length > 0) && (
               <div style={{ marginBottom: 28 }}>
                 <SectionLabel text="AI Deep Dives" />
-                {loading ? <CarouselSkeleton /> : (
-                  <HScroll>
-                    {deepDives.map((item, i) => (
-                      <StoryCard key={i} item={item} onOpen={openArticle} badge={{ text: '✦ DEEP DIVE', color: '#7C3AED' }} />
+                {loading ? <VerticalCardSkeleton /> : (
+                  <div>
+                    {deepDives.slice(0, 5).map((item, i) => (
+                      <VerticalStoryCard key={i} item={item} onOpen={openArticle} badge={{ text: '✦ DEEP DIVE', color: '#7C3AED' }} />
                     ))}
-                  </HScroll>
+                  </div>
                 )}
               </div>
             )}
@@ -720,10 +724,12 @@ export default function ExploreScreen() {
             {(loading || companies.length > 0) && (
               <div style={{ marginBottom: 28 }}>
                 <SectionLabel text="Companies" />
-                {loading ? <ChipSkeleton /> : (
-                  <HScroll>
-                    {companies.map((c, i) => <EntityChip key={i} entity={c} accent="#0A84FF" onTap={triggerSearch} />)}
-                  </HScroll>
+                {loading ? <TileSkeleton /> : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    {companies.slice(0, 10).map((c, i) => (
+                      <EntityTile key={i} entity={c} accent="#0A84FF" bgColor={COMPANY_BGS[i % 4]} onTap={triggerSearch} />
+                    ))}
+                  </div>
                 )}
               </div>
             )}
@@ -732,10 +738,12 @@ export default function ExploreScreen() {
             {(loading || people.length > 0) && (
               <div style={{ marginBottom: 28 }}>
                 <SectionLabel text="People" />
-                {loading ? <ChipSkeleton /> : (
-                  <HScroll>
-                    {people.map((p, i) => <EntityChip key={i} entity={p} accent="#FF9F0A" onTap={triggerSearch} />)}
-                  </HScroll>
+                {loading ? <TileSkeleton /> : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    {people.slice(0, 10).map((p, i) => (
+                      <EntityTile key={i} entity={p} accent="#FF9F0A" bgColor={PEOPLE_BGS[i % 4]} onTap={triggerSearch} />
+                    ))}
+                  </div>
                 )}
               </div>
             )}
@@ -744,10 +752,12 @@ export default function ExploreScreen() {
             {(loading || places.length > 0) && (
               <div style={{ marginBottom: 28 }}>
                 <SectionLabel text="Places" />
-                {loading ? <ChipSkeleton /> : (
-                  <HScroll>
-                    {places.map((p, i) => <EntityChip key={i} entity={p} accent="#30D158" onTap={triggerSearch} />)}
-                  </HScroll>
+                {loading ? <TileSkeleton /> : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    {places.slice(0, 10).map((p, i) => (
+                      <EntityTile key={i} entity={p} accent="#30D158" bgColor={PLACE_BGS[i % 4]} onTap={triggerSearch} />
+                    ))}
+                  </div>
                 )}
               </div>
             )}
@@ -768,51 +778,28 @@ export default function ExploreScreen() {
               </div>
             </div>
 
-            {/* 7. Local News */}
-            {(loading || localNews.length > 0) && (
-              <div style={{ marginBottom: 28 }}>
-                <SectionLabel text="Local · Pune & Maharashtra" />
-                {loading ? (
-                  <div style={{ height: '58vh', borderRadius: 18, background: '#141414', overflow: 'hidden', position: 'relative' }}>
-                    <div style={{ position: 'absolute', inset: 0, background: SHIMMER, animation: 'shimmer 1.4s infinite' }} />
-                  </div>
-                ) : localNews.map((item, i) => (
-                  <BleedCard key={i} item={item} onOpen={openArticle} />
-                ))}
-              </div>
-            )}
-
-            {/* 8. Source Explorer */}
+            {/* 7. Source Explorer */}
             {(loading || sources.length > 0) && (
               <div style={{ marginBottom: 28 }}>
                 <SectionLabel text="Source Explorer" />
-                {loading ? <ChipSkeleton /> : (
-                  <HScroll>
-                    {sources.map((src, i) => <SourceChip key={i} src={src} onTap={triggerSearch} />)}
-                  </HScroll>
+                {loading ? <SourceGridSkeleton /> : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                    {sources.slice(0, 12).map((src, i) => <SourceChip key={i} src={src} onTap={triggerSearch} />)}
+                  </div>
                 )}
               </div>
             )}
 
-            {/* 9. Emerging Topics */}
+            {/* 8. Emerging Topics */}
             {(loading || emergingTopics.length > 0) && (
               <div style={{ marginBottom: 28 }}>
                 <SectionLabel text="Emerging Topics" />
-                {loading ? <ChipSkeleton /> : (
-                  <HScroll>
-                    {emergingTopics.map((t, i) => (
-                      <button key={i} onClick={() => triggerSearch(t.name)}
-                        style={{
-                          flexShrink: 0, background: '#0E0E0E', border: '1px solid #1E1E1E',
-                          borderRadius: 10, padding: '8px 13px',
-                          cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
-                          scrollSnapAlign: 'start', display: 'flex', alignItems: 'center', gap: 6,
-                        }}>
-                        <span style={{ fontSize: 11, color: '#64D2FF', fontWeight: 700 }}>↑</span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: '#ddd', whiteSpace: 'nowrap' }}>{t.name}</span>
-                      </button>
+                {loading ? <TileSkeleton /> : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    {emergingTopics.slice(0, 10).map((t, i) => (
+                      <EntityTile key={i} entity={t} accent="#64D2FF" bgColor={EMERGE_BGS[i % 4]} onTap={triggerSearch} />
                     ))}
-                  </HScroll>
+                  </div>
                 )}
               </div>
             )}
