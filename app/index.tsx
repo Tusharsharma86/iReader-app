@@ -353,10 +353,10 @@ function feedToClusterGroups(feed: ApiFeedItem[]): Cluster[] {
     if (item.type === 'cluster') {
       const rep = item.articles[0];
       if (!rep) return [];
-      // AI label if complete (≥30 chars), else best article headline
-      const label = item.topicTitle && item.topicTitle.length >= 20
-        ? item.topicTitle
-        : (rep.headline ?? item.topicTitle);
+      const QUESTION_RE = /^(how|what|will|can|should|is|are|did|why|who|when|could|would|does|has)\b/i;
+      const aiLabel = item.topicTitle && item.topicTitle.length >= 20 && !QUESTION_RE.test(item.topicTitle)
+        ? item.topicTitle : null;
+      const label = aiLabel ?? (rep.headline ?? item.topicTitle);
       return [{
         id: `cluster-${rep.id}`,
         headline: label,
