@@ -431,6 +431,7 @@ export default function AIFeedScreen() {
             height: '100%', overflowY: 'auto',
             scrollSnapType: 'y mandatory',
             WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none',
+            background: '#080808',
             // Block Chrome's native pull-to-refresh from intercepting our gesture
             overscrollBehaviorY: 'contain',
             transform: `translateY(${pull}px)`,
@@ -545,10 +546,11 @@ function FullPreviewCard({ item, index, total, onOpen }: {
       onTouchMove={handleTouchMove}
       className="aif-card"
       style={{
-        height: '100%', minHeight: '100%',
+        height: 'calc(100% - 80px)', minHeight: 'calc(100% - 80px)',
         scrollSnapAlign: 'start', scrollSnapStop: 'always',
         position: 'relative',
         overflow: 'hidden',
+        borderRadius: 16,
         background: dominant,
         cursor: 'pointer',
         userSelect: 'none',
