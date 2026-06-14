@@ -30,12 +30,23 @@ interface CrossEntity {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const ENTITY_SKIP = new Set([
+  // articles / prepositions / conjunctions
   'The','This','That','In','On','At','To','For','Of','And','Or','But','As','Is','Are',
   'Was','Were','Be','Been','By','From','With','It','Its','A','An','He','She','We',
   'They','You','I','My','His','Her','Their','Our','Your','New','Now','No','Not',
   'All','Some','Just','More','Most','After','Before','Over','Under','Since','When',
   'Where','How','Why','What','Who','Which','Here','There','Then','Than','If','So',
-  'Says','Said','Report','Reports','Sources','Source','India','Indian',
+  // news meta
+  'Says','Said','Report','Reports','Sources','Source','Live','Latest','Breaking',
+  // months (common false-positive entities)
+  'January','February','March','April','May','June','July','August','September',
+  'October','November','December','Jan','Feb','Mar','Apr','Jun','Jul','Aug','Sep',
+  'Oct','Nov','Dec',
+  // days
+  'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday',
+  // too-generic country/demonym
+  'India','Indian','Pakistan','Pakistani','China','Chinese','Russia','Russian',
+  'American','British','European','Asian',
 ]);
 
 function extractEntities(headlines: string[]): string[] {
@@ -66,6 +77,17 @@ const TOPIC_LABELS: Record<string, string> = {
   'markets': 'Markets',
   'business': 'Business',
 };
+
+// Subtle tile accent colors — cycled by entity index
+const TILE_ACCENTS = [
+  { color: '#FF453A', bg: 'rgba(255,69,58,0.10)'   },
+  { color: '#0A84FF', bg: 'rgba(10,132,255,0.10)'  },
+  { color: '#FF9F0A', bg: 'rgba(255,159,10,0.10)'  },
+  { color: '#30D158', bg: 'rgba(48,209,88,0.10)'   },
+  { color: '#64D2FF', bg: 'rgba(100,210,255,0.10)' },
+  { color: '#BF5AF2', bg: 'rgba(191,90,242,0.10)'  },
+  { color: '#FF6B9D', bg: 'rgba(255,107,157,0.10)' },
+];
 
 // ── Topic config ─────────────────────────────────────────────────────────────
 
@@ -383,42 +405,50 @@ export default function ExploreScreen() {
           </div>
         )}
 
-        {/* ① Trending Across Topics — entities appearing in 2+ topic feeds */}
+        {/* ① Trending Across Topics — 2-col colored tiles */}
         {(dataLoading || crossEntities.length > 0) && searchQuery === '' && (
           <div style={{ marginBottom: 28 }}>
             <SectionLabel text="Trending Across Topics" />
             {dataLoading ? (
-              <div style={{ display: 'flex', gap: 8 }}>
-                {[120,90,110,80,100].map((w, i) => (
-                  <div key={i} style={{ width: w, height: 62, borderRadius: 12, background: '#141414', flexShrink: 0, overflow: 'hidden', position: 'relative' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {[0,1,2,3].map(i => (
+                  <div key={i} style={{ height: 80, borderRadius: 14, background: '#141414', overflow: 'hidden', position: 'relative' }}>
                     <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 50%, transparent 100%)', animation: 'shimmer 1.4s infinite' }} />
+                    <style>{`@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`}</style>
                   </div>
                 ))}
               </div>
             ) : (
-              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
-                {crossEntities.map((ce, i) => (
-                  <button
-                    key={i}
-                    onClick={() => triggerSearch(ce.entity)}
-                    style={{
-                      flexShrink: 0,
-                      background: '#0E0E0E', border: '1px solid #1E1E1E',
-                      borderRadius: 12, padding: '8px 12px',
-                      cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
-                      textAlign: 'left',
-                    }}
-                  >
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#eee', marginBottom: 5, whiteSpace: 'nowrap' }}>{ce.entity}</div>
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {ce.topics.slice(0, 3).map(t => (
-                        <span key={t} style={{ fontSize: 9, fontWeight: 700, color: '#555', background: '#181818', borderRadius: 4, padding: '2px 5px', whiteSpace: 'nowrap' }}>
-                          {TOPIC_LABELS[t] ?? t}
-                        </span>
-                      ))}
-                    </div>
-                  </button>
-                ))}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {crossEntities.map((ce, i) => {
+                  const accent = TILE_ACCENTS[i % TILE_ACCENTS.length];
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => triggerSearch(ce.entity)}
+                      style={{
+                        background: accent.bg,
+                        border: `1px solid ${accent.color}22`,
+                        borderRadius: 14, padding: '12px 14px',
+                        cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+                        textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 8,
+                      }}
+                    >
+                      <div style={{ fontSize: 14, fontWeight: 800, color: '#eee', lineHeight: 1.2 }}>{ce.entity}</div>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        {ce.topics.slice(0, 3).map(t => (
+                          <span key={t} style={{
+                            fontSize: 9, fontWeight: 700, color: accent.color,
+                            background: `${accent.color}18`, borderRadius: 4,
+                            padding: '2px 6px', whiteSpace: 'nowrap',
+                          }}>
+                            {TOPIC_LABELS[t] ?? t}
+                          </span>
+                        ))}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
