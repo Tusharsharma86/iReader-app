@@ -72,13 +72,13 @@ const API_BASE = 'https://ireader.onrender.com/api/news/feed';
 // AI calls — matches web and protects the daily Groq token budget.
 
 const CATEGORIES = [
-  { topic: 'myspace',        label: 'MySpace',  icon: '✨', color: '#FF6B9D' },
-  { topic: 'breaking',       label: 'Breaking', icon: '🔴', color: '#FF5555' },
-  { topic: 'technology',     label: 'Tech',     icon: '💻', color: '#4A90D9' },
-  { topic: 'india-politics', label: 'India',    icon: '🇮🇳', color: '#FF9500' },
-  { topic: 'geopolitics',    label: 'World',    icon: '🌍', color: '#4ECDC4' },
-  { topic: 'markets',        label: 'Markets',  icon: '📈', color: '#22C55E' },
-  { topic: 'business',       label: 'Business', icon: '💼', color: '#A29BFE' },
+  { topic: 'myspace',        label: 'MySpace',  icon: 'sparkles-outline' as const,    color: '#FF6B9D' },
+  { topic: 'breaking',       label: 'Breaking', icon: 'flash-outline' as const,        color: '#FF5555' },
+  { topic: 'technology',     label: 'Tech',     icon: 'laptop-outline' as const,       color: '#4A90D9' },
+  { topic: 'india-politics', label: 'India',    icon: 'flag-outline' as const,         color: '#FF9500' },
+  { topic: 'geopolitics',    label: 'World',    icon: 'globe-outline' as const,        color: '#4ECDC4' },
+  { topic: 'markets',        label: 'Markets',  icon: 'trending-up-outline' as const,  color: '#22C55E' },
+  { topic: 'business',       label: 'Business', icon: 'briefcase-outline' as const,    color: '#A29BFE' },
 ] as const;
 
 const REAL_TOPICS = CATEGORIES.filter(c => c.topic !== 'myspace').map(c => c.topic);
@@ -945,12 +945,6 @@ export default function FeedScreen() {
             <Text style={styles.greeting}>{greeting()}</Text>
             <Text style={styles.date}>{formattedDate()}</Text>
           </View>
-          {streak > 0 && (
-            <View style={styles.streakChip}>
-              <Text style={{ fontSize: 13 }}>🔥</Text>
-              <Text style={styles.streakChipText}>{streak}</Text>
-            </View>
-          )}
         </View>
       </View>
 
@@ -975,13 +969,19 @@ export default function FeedScreen() {
                 key={cat.topic}
                 onPress={() => handleCategoryPress(cat.topic)}
                 style={{
-                  paddingHorizontal: 16,
-                  paddingVertical: 8,
-                  borderRadius: 20,
-                  backgroundColor: active ? '#FFFFFF' : 'rgba(255,255,255,0.1)',
+                  flexDirection: 'row', alignItems: 'center', gap: 5,
+                  paddingHorizontal: 13, paddingVertical: 7, borderRadius: 20,
+                  backgroundColor: active ? '#FFFFFF' : 'rgba(255,255,255,0.06)',
+                  borderWidth: 1,
+                  borderColor: active ? 'transparent' : 'rgba(255,255,255,0.12)',
                 }}
               >
-                <Text style={{ color: active ? '#000000' : '#888888', fontSize: 13, fontWeight: '700', letterSpacing: 0.2 }}>
+                <Ionicons
+                  name={cat.icon}
+                  size={13}
+                  color={active ? '#000000' : 'rgba(255,255,255,0.45)'}
+                />
+                <Text style={{ color: active ? '#000000' : 'rgba(255,255,255,0.55)', fontSize: 13, fontWeight: '700', letterSpacing: 0.2 }}>
                   {cat.label}
                 </Text>
               </Pressable>
@@ -1319,28 +1319,32 @@ const TopicSection = React.memo(function TopicSection({
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
         <View style={{ flex: 1 }}>
-          {/* Headline row — clock icon + headline left, story count pill right */}
+          {/* Meta row — TREND/BREAKING pills only */}
+          {showMetaPill && (cluster.collection || isBreaking) && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              {cluster.collection && (
+                <Text style={{ color: '#b994ff', fontSize: 9, fontWeight: '800', letterSpacing: 1, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, overflow: 'hidden', backgroundColor: 'rgba(185,148,255,0.12)' }}>TREND</Text>
+              )}
+              {isBreaking && <Text style={styles.breakingText}>BREAKING</Text>}
+            </View>
+          )}
+          {/* Headline row — clock prefix + headline + stories pill inline */}
           <TouchableOpacity
             activeOpacity={count >= 3 ? 0.65 : 1}
             disabled={count < 3}
             onPress={count >= 3 ? () => navigation.navigate('StoryTimeline', { clusterId: cluster.id, headline, stories: JSON.stringify(cluster.stories) }) : undefined}
           >
-            {/* Meta row ABOVE headline: TREND/BREAKING pill + clock + stories pill */}
-            {showMetaPill && (cluster.collection || isBreaking || count >= 3 || count > 1) && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                {cluster.collection && (
-                  <Text style={{ color: '#b994ff', fontSize: 9, fontWeight: '800', letterSpacing: 1, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, overflow: 'hidden', backgroundColor: 'rgba(185,148,255,0.12)' }}>TREND</Text>
-                )}
-                {isBreaking && <Text style={styles.breakingText}>BREAKING</Text>}
-                {count >= 3 && (
-                  <Ionicons name="time-outline" size={13} color="#5A5A5A" />
-                )}
-                <View style={[styles.clusterCountPill, { marginLeft: 'auto' }]}>
-                  <Text style={styles.clusterCountPillText}>{count} stories</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
+              {count > 1 && (
+                <Ionicons name="time-outline" size={14} color="#5A5A5A" style={{ marginTop: 4 }} />
+              )}
+              <Text style={[styles.clusterHeadline, { flex: 1 }]} numberOfLines={2}>{headline}</Text>
+              {showMetaPill && count > 1 && (
+                <View style={[styles.clusterCountPill, { marginTop: 2 }]}>
+                  <Text style={styles.clusterCountPillText}>{count}</Text>
                 </View>
-              </View>
-            )}
-            <Text style={styles.clusterHeadline} numberOfLines={2}>{headline}</Text>
+              )}
+            </View>
           </TouchableOpacity>
 
           {/* AI summary of all clustered stories — ~20 words */}
