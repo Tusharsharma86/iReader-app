@@ -36,17 +36,28 @@ const ENTITY_SKIP = new Set([
   'They','You','I','My','His','Her','Their','Our','Your','New','Now','No','Not',
   'All','Some','Just','More','Most','After','Before','Over','Under','Since','When',
   'Where','How','Why','What','Who','Which','Here','There','Then','Than','If','So',
-  // news meta
-  'Says','Said','Report','Reports','Sources','Source','Live','Latest','Breaking',
-  // months (common false-positive entities)
+  // news section labels (Indian media style)
+  'Explained','Analysis','Opinion','Watch','Read','Know','Top','Must','Also',
+  'See','Get','Full','List','Check','View','Meet','Live','Update','Updates',
+  'Key','Big','Major','High','Low','Here','Look','Back','Find','Breaking',
+  // common verbs appearing capitalized mid-headline
+  'Says','Said','Gets','Joins','Makes','Takes','Gives','Shows','Comes','Goes',
+  'Warns','Claims','Asks','Calls','Wants','Plans','Moves','Rises','Falls',
+  'Report','Reports','Sources','Source','Latest','Will','May','Can','Has','Had',
+  'Set','Hits','Wins','Loses','Leads','Signs','Holds','Faces','Sees','Puts',
+  // too-generic nouns
+  'Govt','Gov','Bank','Law','Act','Deal','Talk','Plan','Move','Rise','Fall',
+  'Drop','Aid','War','Tax','Fund','Bill','Vote','Poll','Case','Rule','Court',
+  'Party','State','Centre','Center','Union','Group','Team','Board','Council',
+  // months
   'January','February','March','April','May','June','July','August','September',
   'October','November','December','Jan','Feb','Mar','Apr','Jun','Jul','Aug','Sep',
   'Oct','Nov','Dec',
   // days
   'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday',
-  // too-generic country/demonym
+  // too-generic demonyms / countries
   'India','Indian','Pakistan','Pakistani','China','Chinese','Russia','Russian',
-  'American','British','European','Asian',
+  'American','British','European','Asian','Global','International','National',
 ]);
 
 function extractEntities(headlines: string[]): string[] {
@@ -63,7 +74,7 @@ function extractEntities(headlines: string[]): string[] {
     }
   }
   return [...counts.entries()]
-    .filter(([, c]) => c >= 1)
+    .filter(([, c]) => c >= 2)
     .sort((a, b) => b[1] - a[1])
     .map(([e]) => e)
     .slice(0, 30);
