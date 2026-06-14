@@ -10,7 +10,7 @@ import {
   TouchableOpacity, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useSettings, type BreakingSensitivity } from '../contexts/SettingsContext';
+import { useSettings, BreakingSensitivity } from '../contexts/SettingsContext';
 import {
   getCachedPushToken,
   registerForPush, requestNotificationPermission, updatePushPreferences,
@@ -27,8 +27,8 @@ export default function NotificationSettingsScreen() {
   const navigation = useNavigation();
   const {
     notifBreaking, setNotifBreaking,
-    breakingSensitivity, setBreakingSensitivity,
     notifAiFeed, setNotifAiFeed,
+    breakingSensitivity, setBreakingSensitivity,
     notifTech, setNotifTech,
     notifDigest, setNotifDigest,
     favSources,
@@ -161,31 +161,29 @@ export default function NotificationSettingsScreen() {
               thumbColor={notifAiFeed ? VIOLET : '#444'} />
           </View>
           {/* Sensitivity picker */}
-          <View style={[styles.row, styles.rowBorder, styles.nestedRow, { flexDirection: 'column', alignItems: 'flex-start', gap: 8 }]}>
-            <View>
-              <Text style={styles.nestedLabel}>Sensitivity</Text>
-              <Text style={styles.rowSub}>
-                {breakingSensitivity === 'all' ? 'Every breaking story' : breakingSensitivity === 'important' ? '2+ sources confirming' : '3+ sources confirming'}
-              </Text>
-            </View>
-            <View style={{ flexDirection: 'row', gap: 6 }}>
-              {([['all', 'All'], ['important', 'Important'], ['critical', 'Critical']] as [BreakingSensitivity, string][]).map(([key, label]) => (
-                <Pressable
-                  key={key}
-                  onPress={() => setBreakingSensitivity(key)}
-                  style={{
-                    paddingHorizontal: 12, paddingVertical: 6,
-                    borderRadius: 8,
-                    backgroundColor: breakingSensitivity === key ? '#1C3A6A' : '#1A1A1A',
-                    borderWidth: 1,
-                    borderColor: breakingSensitivity === key ? BLUE : '#333',
-                  }}>
-                  <Text style={{
-                    color: breakingSensitivity === key ? '#FFF' : '#888',
-                    fontSize: 12, fontWeight: '600',
-                  }}>{label}</Text>
-                </Pressable>
-              ))}
+          <View style={[styles.row, styles.rowBorder, { flexDirection: 'column', alignItems: 'flex-start', gap: 8 }]}>
+            <Text style={[styles.rowLabel, { fontSize: 13 }]}>Sensitivity</Text>
+            <View style={{ flexDirection: 'row', gap: 6, width: '100%' }}>
+              {([
+                { key: 'all' as BreakingSensitivity, label: 'All', desc: 'Every breaking story' },
+                { key: 'important' as BreakingSensitivity, label: 'Important', desc: '2+ sources confirming' },
+                { key: 'critical' as BreakingSensitivity, label: 'Critical', desc: '3+ sources confirming' },
+              ]).map(opt => {
+                const active = breakingSensitivity === opt.key;
+                return (
+                  <Pressable
+                    key={opt.key}
+                    onPress={() => setBreakingSensitivity(opt.key)}
+                    style={{
+                      flex: 1, paddingVertical: 8, borderRadius: 8,
+                      backgroundColor: active ? '#1C3A6A' : '#1A1A1A',
+                      alignItems: 'center',
+                    }}>
+                    <Text style={{ color: active ? '#FFF' : '#888', fontSize: 12, fontWeight: '700' }}>{opt.label}</Text>
+                    <Text style={{ color: active ? '#AAC' : '#555', fontSize: 9, marginTop: 2 }}>{opt.desc}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
           </View>
           {/* Theme mutes — apply to BOTH Main + AI Feed breaking. */}

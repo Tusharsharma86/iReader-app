@@ -4,10 +4,11 @@ import { useRouter } from '../contexts/RouterContext';
 import { useTabBar } from '../contexts/TabBarContext';
 import { useSettings } from '../contexts/SettingsContext';
 
-type IconName = 'feed' | 'digest' | 'aifeed' | 'saved' | 'profile';
+type IconName = 'feed' | 'explore' | 'digest' | 'aifeed' | 'saved' | 'profile';
 
 const TAB_ITEMS: Array<{ tab: TabName; screen: NavScreen; icon: IconName; label: string }> = [
   { tab: 'feed',     screen: { name: 'Feed' },     icon: 'feed',    label: 'Feed'    },
+  { tab: 'explore',  screen: { name: 'Explore' },  icon: 'explore', label: 'Explore' },
   { tab: 'digest',   screen: { name: 'Digest' },   icon: 'digest',  label: 'Digest'  },
   { tab: 'aifeed',   screen: { name: 'AIFeed' },   icon: 'aifeed',  label: 'AI Feed' },
   { tab: 'saved',    screen: { name: 'Saved' },    icon: 'saved',   label: 'Saved'   },
@@ -24,6 +25,14 @@ function TabIcon({ name, active }: { name: IconName; active: boolean }) {
     stroke: color, strokeWidth: 32,
     strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const,
   };
+  if (name === 'explore') {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={active ? 2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" fill={active ? color : 'none'} />
+      </svg>
+    );
+  }
   if (name === 'feed') {
     return (
       <svg {...common} fill="none">
@@ -98,13 +107,13 @@ export function TabBar() {
       <div
         style={{
           display: 'flex', alignItems: 'center',
-          padding: '8px',
+          padding: '5px',
           borderRadius: 999,
-          background: 'rgba(15,15,15,0.78)',
-          backdropFilter: visible ? 'blur(24px) saturate(180%)' : 'blur(0px) saturate(100%)',
-          WebkitBackdropFilter: visible ? 'blur(24px) saturate(180%)' : 'blur(0px) saturate(100%)',
-          border: '1px solid rgba(255,255,255,0.08)',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+          background: 'rgba(10,10,10,0.45)',
+          backdropFilter: visible ? 'blur(32px) saturate(200%)' : 'blur(0px) saturate(100%)',
+          WebkitBackdropFilter: visible ? 'blur(32px) saturate(200%)' : 'blur(0px) saturate(100%)',
+          border: '1px solid rgba(255,255,255,0.06)',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
           transition: 'backdrop-filter 0.35s ease, -webkit-backdrop-filter 0.35s ease',
         }}
       >
@@ -127,7 +136,7 @@ export function TabBar() {
               }}
               style={{
                 background: 'none', border: 'none', cursor: 'pointer',
-                padding: '6px 14px',
+                padding: '4px 10px',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 WebkitTapHighlightColor: 'transparent',
               }}
@@ -136,9 +145,9 @@ export function TabBar() {
               <div
                 key={`${item.tab}-${active}`}
                 style={{
-                  width: 36, height: 36, borderRadius: 18,
+                  width: 30, height: 30, borderRadius: 15,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: active ? 'rgba(255,255,255,0.12)' : 'transparent',
+                  background: active ? 'rgba(255,255,255,0.11)' : 'transparent',
                   transform: active ? 'scale(1)' : 'scale(0.92)',
                   transition: 'background 0.2s, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
                   animation: active ? 'tabBounce 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none',

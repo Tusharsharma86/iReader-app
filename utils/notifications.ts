@@ -106,8 +106,6 @@ export async function requestNotificationPermission(): Promise<boolean> {
 // ── Expo push token registration ───────────────────────────────────────────
 const PUSH_API = 'https://ireader.onrender.com/api/push';
 const TOKEN_CACHE_KEY = '@expo_push_token_v1';
-// Separate key set ONLY after backend confirms receipt. If this doesn't match
-// the current token, we re-register regardless of what TOKEN_CACHE_KEY holds.
 const TOKEN_CONFIRMED_KEY = '@expo_push_token_confirmed_v1';
 
 export async function registerForPush(): Promise<string | null> {
@@ -116,7 +114,6 @@ export async function registerForPush(): Promise<string | null> {
     const granted = await requestNotificationPermission();
     if (!granted) return null;
 
-    // Expo SDK 49+ wants the projectId explicitly.
     const projectId =
       Constants.expoConfig?.extra?.eas?.projectId ??
       Constants.easConfig?.projectId;
@@ -126,12 +123,8 @@ export async function registerForPush(): Promise<string | null> {
     const token: string | undefined = tokenRes?.data;
     if (!token) return null;
 
-    // Always cache the raw token so updatePushPreferences / syncMuted can use it.
     await AsyncStorage.setItem(TOKEN_CACHE_KEY, token);
 
-    // Skip backend registration only if backend already confirmed this exact token.
-    // If the previous registration failed (network error, backend outage) the
-    // confirmed key won't match and we retry — the backend is idempotent.
     const confirmed = await AsyncStorage.getItem(TOKEN_CONFIRMED_KEY);
     if (confirmed === token) return token;
 
@@ -142,12 +135,9 @@ export async function registerForPush(): Promise<string | null> {
         body: JSON.stringify({ token, platform: Platform.OS }),
       });
       if (res.ok) {
-        // Mark confirmed so we don't re-register on every cold launch.
         await AsyncStorage.setItem(TOKEN_CONFIRMED_KEY, token);
       }
-    } catch {
-      // Network error — confirmed key stays unset, will retry next launch.
-    }
+    } catch {}
     return token;
   } catch {
     return null;
@@ -264,6 +254,19 @@ function detectBreakingTheme(headline: string, summary: string): string | null {
   return null;
 }
 
+// Broad fallback when no specific theme matched — maps headline to one of the
+// main feed topic labels so the notification title is never just "Breaking".
+function fallbackTopicLabel(headline: string, summary: string): string | null {
+  const t = `${headline} ${summary}`.toLowerCase();
+  if (/\b(modi|bjp|india|delhi|mumbai|congress|parliament|minister|lok sabha|rajya|chief minister|governor|ipc|cbi|enforcement|ed |ncb|aap|nda|upa)\b/.test(t)) return 'India Politics';
+  if (/\b(army|military|air force|navy|general|admiral|colonel|lieutenant|lieutenant general|major general|defence|border patrol|bsf|crpf|paramilitary)\b/.test(t)) return 'Defence';
+  if (/\b(google|apple|openai|microsoft|amazon|meta|\bai\b|chip|semiconductor|software|iphone|android|startup|tech|robot|quantum)\b/.test(t)) return 'Tech';
+  if (/\b(\bus\b|usa|china|russia|ukraine|nato|president|white house|ceasefire|nuclear|sanctions|united nations|\bun\b|g20|imf|world bank)\b/.test(t)) return 'World';
+  if (/\b(sensex|nifty|rupee|\$|stock market|economy|rbi|inflation|rate cut|gdp|share price|crude oil|gold price)\b/.test(t)) return 'Markets';
+  if (/\b(company|ceo|startup|ipo|revenue|profit|funding|acquisition|merger|valuation|listed)\b/.test(t)) return 'Business';
+  return null;
+}
+
 // ── Headline similarity / follow-up detection ─────────────────────────────
 const STOPWORDS = new Set([
   'the','a','an','is','are','was','were','be','been','has','have','had','do',
@@ -325,24 +328,61 @@ export async function classifyBreakingHeadline(headline: string): Promise<Breaki
   return 'new';
 }
 
-export async function fireBreakingNotif(id: string, headline: string, summary?: string, imageUrl?: string): Promise<void> {
+export async function fireBreakingNotif(
+  id: string, headline: string, summary?: string, imageUrl?: string,
+  extra?: { url?: string; source?: string; publishedAt?: string },
+): Promise<void> {
   const seen = await getSeenIds();
   if (seen.has(id)) return;
-  const kind = await classifyBreakingHeadline(headline);
-  if (kind === 'duplicate') { await markSeen(id); return; }
+  const headlineKind = await classifyBreakingHeadline(headline);
+  if (headlineKind === 'duplicate') { await markSeen(id); return; }
   const theme = detectBreakingTheme(headline, summary ?? '');
+  const fallback = theme ? null : fallbackTopicLabel(headline, summary ?? '');
   const parts = ['Breaking'];
-  if (kind === 'follow-up') parts.push('Follow Up');
+  if (headlineKind === 'follow-up') parts.push('Follow Up');
   if (theme) parts.push(theme);
+  else if (fallback) parts.push(fallback);
   const title = parts.join(' · ');
-  try { await send(CHANNEL_BREAKING, title, headline, { type: 'breaking', id }, imageUrl); } catch {}
+  try {
+    await send(CHANNEL_BREAKING, title, headline, {
+      kind: 'breaking',
+      id,
+      article: {
+        id,
+        headline,
+        summary: summary ?? '',
+        imageUrl: imageUrl ?? '',
+        url: extra?.url ?? '',
+        source: extra?.source ?? '',
+        publishedAt: extra?.publishedAt ?? '',
+      },
+    }, imageUrl);
+  } catch {}
   await markSeen(id);
   await pushRecentHeadline(headline);
 }
 
-export async function fireFavSourceNotif(id: string, source: string, headline: string): Promise<void> {
+export async function fireFavSourceNotif(
+  id: string, source: string, headline: string,
+  extra?: { url?: string; summary?: string; imageUrl?: string; publishedAt?: string },
+): Promise<void> {
   const seen = await getSeenIds();
   if (seen.has(id)) return;
-  try { await send(CHANNEL_SOURCES, source, headline, { type: 'source', source, id }); } catch {}
+  try {
+    await send(CHANNEL_SOURCES, source, headline, {
+      kind: 'source',
+      source,
+      id,
+      article: {
+        id,
+        headline,
+        source,
+        url: extra?.url ?? '',
+        summary: extra?.summary ?? '',
+        imageUrl: extra?.imageUrl ?? '',
+        publishedAt: extra?.publishedAt ?? '',
+      },
+    });
+  } catch {}
   await markSeen(id);
 }

@@ -7,7 +7,7 @@ import { useRouter } from '../contexts/RouterContext';
 import { useTabBar } from '../contexts/TabBarContext';
 import { loadProfile, rankStories, rankStoriesStandard } from '../utils/personalization';
 import { scoreClusterInterest } from '../utils/interestTopics';
-import { getUsageStats, trackVisit } from '../utils/usageTracker';
+import { trackVisit } from '../utils/usageTracker';
 import { annotateUpdates, unfollow, markSeen } from '../utils/followStore';
 import { TOPIC_SUBTOPICS, storyMatchesSubTopic } from '../utils/topics';
 
@@ -16,14 +16,64 @@ const CARD_GAP = 12;
 const BG_REFRESH_THRESHOLD_MS = 10 * 60 * 1000;
 
 const CATEGORIES = [
-  { topic: 'myspace' as CategoryTopic,       label: 'For You',  icon: '✨' },
-  { topic: 'breaking' as CategoryTopic,      label: 'Breaking', icon: '🔴' },
-  { topic: 'technology' as CategoryTopic,    label: 'Tech',     icon: '💻' },
-  { topic: 'india-politics' as CategoryTopic,label: 'India',    icon: '🇮🇳' },
-  { topic: 'geopolitics' as CategoryTopic,   label: 'World',    icon: '🌍' },
-  { topic: 'markets' as CategoryTopic,       label: 'Markets',  icon: '📈' },
-  { topic: 'business' as CategoryTopic,      label: 'Business', icon: '💼' },
+  { topic: 'myspace' as CategoryTopic,        label: 'For You',  icon: 'for-you'  },
+  { topic: 'breaking' as CategoryTopic,       label: 'Breaking', icon: 'breaking' },
+  { topic: 'technology' as CategoryTopic,     label: 'Tech',     icon: 'tech'     },
+  { topic: 'india-politics' as CategoryTopic, label: 'India',    icon: 'india'    },
+  { topic: 'geopolitics' as CategoryTopic,    label: 'World',    icon: 'world'    },
+  { topic: 'markets' as CategoryTopic,        label: 'Markets',  icon: 'markets'  },
+  { topic: 'business' as CategoryTopic,       label: 'Business', icon: 'business' },
 ] as const;
+
+type CategoryIconName = typeof CATEGORIES[number]['icon'];
+
+function CategoryIcon({ name, active }: { name: CategoryIconName; active: boolean }) {
+  const c = active ? '#000' : '#888';
+  const s = 13;
+  if (name === 'for-you') return (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill={c}>
+      <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" />
+    </svg>
+  );
+  if (name === 'breaking') return (
+    <svg width={s} height={s} viewBox="0 0 512 512" fill={c}>
+      <path d="M315.27 33L96 304h128l-31.51 173.23a2.81 2.81 0 005 2.17L416 208H288l31.61-173.25a2.81 2.81 0 00-4.34-2.92z" />
+    </svg>
+  );
+  if (name === 'tech') return (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="3" width="20" height="14" rx="2" />
+      <line x1="8" y1="21" x2="16" y2="21" />
+      <line x1="12" y1="17" x2="12" y2="21" />
+    </svg>
+  );
+  if (name === 'india') return (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+      <line x1="4" y1="22" x2="4" y2="15" />
+    </svg>
+  );
+  if (name === 'world') return (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  );
+  if (name === 'markets') return (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+      <polyline points="17 6 23 6 23 12" />
+    </svg>
+  );
+  // business
+  return (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="7" width="20" height="14" rx="2" />
+      <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+    </svg>
+  );
+}
 
 const REAL_TOPICS: CategoryTopic[] = ['breaking', 'technology', 'india-politics', 'geopolitics', 'markets', 'business'];
 
@@ -113,8 +163,8 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
         onClick={canTimeline ? openTimeline : undefined}
         style={{ paddingLeft: sideMargin, paddingRight: sideMargin, marginBottom: 12, cursor: canTimeline ? 'pointer' : 'default', WebkitTapHighlightColor: 'transparent' }}
       >
-        {/* Meta row ABOVE headline: TREND/BREAKING pill + clock + stories pill (right) */}
-        {showMetaPill && (cluster.collection || isBreaking || canTimeline || cluster.stories.length > 1) && (
+        {/* TREND / BREAKING pills — own row above headline */}
+        {showMetaPill && (cluster.collection || isBreaking) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             {cluster.collection && cluster.stories.length >= 3 && (
               <span style={{
@@ -130,13 +180,26 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
                 background: 'rgba(255,59,48,0.12)', border: '1px solid rgba(255,59,48,0.3)',
               }}>BREAKING</span>
             )}
+          </div>
+        )}
+        {/* Headline row: clock prefix + text + stories pill inline */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, flex: 1, minWidth: 0 }}>
             {canTimeline && (
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#5A5A5A" strokeWidth="2" style={{ flexShrink: 0 }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#5A5A5A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 4 }}>
                 <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
               </svg>
             )}
+            <div style={{
+              color: '#fff', fontSize: 18, fontWeight: 800, letterSpacing: -0.3, lineHeight: 1.25,
+              display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+            }}>
+              {cluster.topicLabel}
+            </div>
+          </div>
+          {showMetaPill && cluster.stories.length > 1 && (
             <span style={{
-              marginLeft: 'auto', flexShrink: 0,
+              flexShrink: 0, marginTop: 2,
               color: '#888', fontSize: 10, fontWeight: 700, letterSpacing: 0.6,
               padding: '3px 9px', borderRadius: 999,
               background: 'rgba(255,255,255,0.05)',
@@ -145,13 +208,7 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
             }}>
               {cluster.stories.length} stories
             </span>
-          </div>
-        )}
-        <div style={{
-          color: '#fff', fontSize: 18, fontWeight: 800, letterSpacing: -0.3, lineHeight: 1.25,
-          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-        }}>
-          {cluster.topicLabel}
+          )}
         </div>
         {/* Cluster subtitle removed — headline alone reads cleaner; stories speak for themselves. */}
         {(() => {
@@ -224,15 +281,20 @@ function parseServerFeed(raw: unknown[]): ServerFeedItem[] {
 }
 
 function storyIsBreaking(s: Story): boolean {
-  return s.isBreaking || (Date.now() - new Date(s.publishedAt).getTime()) < 60 * 60 * 1000;
+  return s.isBreaking ?? false;
 }
 
 function serverItemToCluster(item: ServerFeedItem): StoryCluster | null {
   if (item.type === 'cluster') {
     if (item.articles.length === 0) return null;
+    // Use AI topicTitle if it looks complete (≥30 chars); otherwise fall back to
+    // the best article headline so the label is never a 3-word fragment.
+    const label = item.topicTitle && item.topicTitle.length >= 20
+      ? item.topicTitle
+      : (item.articles[0].headline ?? item.topicTitle);
     return {
       id: `cluster-${item.articles[0].id}`,
-      topicLabel: item.topicTitle,
+      topicLabel: label,
       subtitle: item.topicSummary || (item.articles[0].summary ?? ''),
       stories: item.articles,
       isBreaking: !item.collection && item.articles.some(storyIsBreaking),
@@ -242,7 +304,7 @@ function serverItemToCluster(item: ServerFeedItem): StoryCluster | null {
   }
   return {
     id: item.id,
-    topicLabel: generateTopicLabel(item.headline),
+    topicLabel: item.headline,   // full headline — never a 3-word fragment
     subtitle: item.summary ?? '',
     stories: [item],
     isBreaking: storyIsBreaking(item),
@@ -260,8 +322,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   const { reportScroll } = useTabBar();
   const isVisibleRef = useRef(isVisible);
   useEffect(() => { isVisibleRef.current = isVisible; }, [isVisible]);
-  const [streak, setStreak] = useState(0);
-  useEffect(() => { try { trackVisit(); setStreak(getUsageStats().streakDays); } catch {} }, []);
+  useEffect(() => { try { trackVisit(); } catch {} }, []);
   const [followV, setFollowV] = useState(0);
 
   const [cardWidth, setCardWidth] = useState(() => Math.min(window.innerWidth - 28, 452));
@@ -489,6 +550,28 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTopic]);
 
+  // Pull-to-refresh
+  const [pullProgress, setPullProgress] = useState(0);
+  const touchStartYRef = useRef(0);
+  const PULL_THRESHOLD = 80;
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    if (!pullToRefresh || refreshing) return;
+    if ((containerRef.current?.scrollTop ?? 1) > 0) return;
+    touchStartYRef.current = e.touches[0].clientY;
+  }, [pullToRefresh, refreshing]);
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!pullToRefresh || refreshing || touchStartYRef.current === 0) return;
+    const dy = e.touches[0].clientY - touchStartYRef.current;
+    setPullProgress(dy <= 0 ? 0 : Math.min(1, dy / PULL_THRESHOLD));
+  }, [pullToRefresh, refreshing]);
+  const onTouchEnd = useCallback(() => {
+    if (!pullToRefresh) return;
+    const prog = pullProgress;
+    touchStartYRef.current = 0;
+    setPullProgress(0);
+    if (prog >= 1) onRefresh();
+  }, [pullToRefresh, pullProgress, onRefresh]);
+
   const applyPending = useCallback(() => {
     if (!pendingFeed) return;
     setAllFeed(pendingFeed);
@@ -583,6 +666,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   );
   return (
     <div ref={containerRef} onScroll={handleScroll}
+      onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
       style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', background: '#000', WebkitOverflowScrolling: 'touch' }}>
 
       {/* Header */}
@@ -590,34 +674,53 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
         <img src="/icons/header-logo.png" alt="iReader" style={{ width: 82, height: 82, objectFit: 'contain', background: 'transparent', margin: '-12px -8px -12px -8px' }} />
         <div>
           <div style={{ color: '#fff', fontSize: 26, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.2 }}>{greeting()}</div>
-        </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
-          {streak > 0 && (
-            <button onClick={() => navigate({ name: 'Usage' })} title={`${streak}-day reading streak`}
-              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 10px', borderRadius: 20, background: 'rgba(255,149,0,0.14)', border: '1px solid rgba(255,149,0,0.3)', cursor: 'pointer' }}>
-              <span style={{ fontSize: 13 }}>🔥</span>
-              <span style={{ color: '#FF9F0A', fontSize: 13, fontWeight: 800 }}>{streak}</span>
-            </button>
-          )}
-          <button onClick={onRefresh} disabled={refreshing}
-            style={{ background: 'none', border: 'none', width: 38, height: 38, borderRadius: '50%', cursor: refreshing ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: refreshing ? 0.3 : 1, transition: 'opacity 0.2s' }}>
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-              style={{ animation: refreshing ? 'spin 0.9s linear infinite' : 'none' }}>
-              <polyline points="1 4 1 10 7 10"/>
-              <path d="M3.51 15a9 9 0 1 0 .49-4.95"/>
-            </svg>
-          </button>
+          <div style={{ color: '#444', fontSize: 12, fontWeight: 500, marginTop: 3 }}>
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          </div>
         </div>
       </div>
 
+      {/* Pull-to-refresh / refreshing indicator — inline, no text, no overlap */}
+      {(refreshing || pullProgress > 0.1) && (
+        <div style={{
+          display: 'flex', justifyContent: 'center', alignItems: 'center',
+          height: 28,
+          opacity: refreshing ? 1 : pullProgress,
+          transition: refreshing ? 'opacity 0.15s' : 'none',
+        }}>
+          <div style={{
+            width: 16, height: 16, borderRadius: '50%',
+            border: '2px solid rgba(255,255,255,0.08)',
+            borderTop: `2px solid ${pullProgress >= 1 && !refreshing ? '#fff' : 'rgba(255,255,255,0.45)'}`,
+            animation: refreshing ? 'spin 0.7s linear infinite' : 'none',
+            transform: refreshing ? undefined : `rotate(${pullProgress * 360}deg)`,
+          }} />
+        </div>
+      )}
+
       {/* Category tabs */}
-      <div style={{ display: 'flex', overflowX: 'auto', padding: '0 16px', gap: 8, marginBottom: 8, scrollbarWidth: 'none', height: 48, alignItems: 'center' }}>
+      <div style={{ display: 'flex', overflowX: 'auto', padding: '0 16px', gap: 7, marginBottom: 8, scrollbarWidth: 'none', height: 44, alignItems: 'center' }}>
         {visibleCategories.map(cat => {
           const active = cat.topic === activeTopic;
           return (
-            <button key={cat.topic} onClick={() => { if (cat.topic === activeTopic) { onRefresh(); containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } else { containerRef.current?.scrollTo({ top: 0, behavior: 'auto' }); setActiveTopic(cat.topic); } }}
-              style={{ flexShrink: 0, padding: '7px 16px', borderRadius: 999, background: active ? '#fff' : 'rgba(255,255,255,0.1)', border: 'none', cursor: 'pointer' }}>
-              <span style={{ color: active ? '#000' : '#aaa', fontSize: 13, fontWeight: 700, letterSpacing: 0.2 }}>{cat.label}</span>
+            <button
+              key={cat.topic}
+              onClick={() => { if (cat.topic === activeTopic) { onRefresh(); containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } else { containerRef.current?.scrollTo({ top: 0, behavior: 'auto' }); setActiveTopic(cat.topic); } }}
+              style={{
+                flexShrink: 0,
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '6px 12px',
+                borderRadius: 999,
+                background: active ? '#fff' : 'rgba(255,255,255,0.06)',
+                border: active ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                backdropFilter: active ? 'none' : 'blur(12px)',
+                WebkitBackdropFilter: active ? 'none' : 'blur(12px)',
+                cursor: 'pointer',
+                transition: 'background 0.2s',
+              }}
+            >
+              <CategoryIcon name={cat.icon as CategoryIconName} active={active} />
+              <span style={{ color: active ? '#000' : '#aaa', fontSize: 12.5, fontWeight: 700, letterSpacing: 0.1 }}>{cat.label}</span>
             </button>
           );
         })}

@@ -170,7 +170,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
   // Sources that block full-text fetch (paywall / scrape protection) — hide the
   // Long Form tab entirely and default to the AI Summary. Matches all variants:
   // "NYT", "NYT World", "New York Times", "NDTV", "NDTV Profit", "Ars Technica", etc.
-  const blockLongform = /\bnyt|new york times|\bndtv|ars\s?technica/i.test(params.source ?? '');
+  const blockLongform = false;
   // Respect the user's Customize → Default tab preference unless the source
   // blocks Long Form (then we force-fall to Summary).
   const userDefaultTab = defaultArticleTab as Tab;
@@ -395,8 +395,28 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
       );
     }
 
+    const inputWords = paragraphs.slice(0, 15).join(' ').slice(0, 2500).trim().split(/\s+/).filter(Boolean).length;
+    const isLimitedSource = inputWords < 150;
     return (
       <div>
+        {!paragraphsLoading && inputWords > 0 && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '7px 10px', borderRadius: 8, marginBottom: 14,
+            background: isLimitedSource ? 'rgba(245,158,11,0.10)' : 'rgba(255,255,255,0.04)',
+            border: `1px solid ${isLimitedSource ? 'rgba(245,158,11,0.30)' : 'rgba(255,255,255,0.07)'}`,
+          }}>
+            {isLimitedSource && <span style={{ fontSize: 12 }}>⚠️</span>}
+            <span style={{
+              color: isLimitedSource ? '#f59e0b' : 'rgba(255,255,255,0.25)',
+              fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5,
+            }}>
+              {isLimitedSource
+                ? `LIMITED SOURCE · ${inputWords} words — full article blocked; summary may be inaccurate`
+                : `AI read ${inputWords} words`}
+            </span>
+          </div>
+        )}
         {aiContent}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 28, marginBottom: 20 }}>
           <div style={{ flex: 1, height: 1, background: `${lighten(dominant, 0.3)}40` }} />

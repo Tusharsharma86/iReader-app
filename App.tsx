@@ -125,6 +125,7 @@ function handleWidgetUrl(url: string | null) {
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const FeedStack = createNativeStackNavigator<FeedStackParamList>();
+const DigestStack = createNativeStackNavigator<FeedStackParamList>();
 const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
@@ -270,6 +271,17 @@ function FeedNavigator() {
       <FeedStack.Screen name="StoryTimeline" component={StoryTimelineScreen} />
       <FeedStack.Screen name="Article" component={ArticleScreen} />
     </FeedStack.Navigator>
+  );
+}
+
+function DigestNavigator() {
+  return (
+    <DigestStack.Navigator
+      screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#080808' } }}
+    >
+      <DigestStack.Screen name="FeedHome" component={DigestScreen} />
+      <DigestStack.Screen name="Article" component={ArticleScreen} />
+    </DigestStack.Navigator>
   );
 }
 
@@ -475,7 +487,7 @@ export default function App() {
           screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: '#080808' } }}
         >
           <Tab.Screen name="Feed"     component={FeedNavigator} />
-          <Tab.Screen name="Digest"   component={DigestScreen} />
+          <Tab.Screen name="Digest"   component={DigestNavigator} />
           <Tab.Screen name="AIFeed"   component={AIFeedScreen} />
           <Tab.Screen name="Saved"    component={SavedScreen} />
           <Tab.Screen name="Settings" component={SettingsNavigator} />

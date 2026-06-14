@@ -353,15 +353,19 @@ function feedToClusterGroups(feed: ApiFeedItem[]): Cluster[] {
     if (item.type === 'cluster') {
       const rep = item.articles[0];
       if (!rep) return [];
+      // AI label if complete (≥30 chars), else best article headline
+      const label = item.topicTitle && item.topicTitle.length >= 20
+        ? item.topicTitle
+        : (rep.headline ?? item.topicTitle);
       return [{
         id: `cluster-${rep.id}`,
-        headline: item.topicTitle,
-        topicLabel: item.topicTitle,
+        headline: label,
+        topicLabel: label,
         summary: item.topicSummary || rep.summary,
         imageUrl: rep.imageUrl ?? '',
         publishedAt: rep.publishedAt,
         stories: item.articles,
-        isBreaking: !item.collection && item.articles.some(s => s.isBreaking),
+        isBreaking: !item.collection && (item._category === 'breaking' || item.articles.some(s => s.isBreaking)),
         collection: item.collection,
         _category: item._category,
         biasBreakdown: item.collection ? undefined : (rep as any).biasBreakdown,
@@ -370,12 +374,12 @@ function feedToClusterGroups(feed: ApiFeedItem[]): Cluster[] {
     return [{
       id: item.id,
       headline: item.headline,
-      topicLabel: generateTopicLabel(item.headline),
+      topicLabel: item.headline,   // full headline, not 3-word fragment
       summary: item.summary,
       imageUrl: item.imageUrl ?? '',
       publishedAt: item.publishedAt,
       stories: [item as Story],
-      isBreaking: (item as Story).isBreaking ?? false,
+      isBreaking: item._category === 'breaking' || ((item as Story).isBreaking ?? false),
       _category: item._category,
     }];
   });
@@ -610,7 +614,7 @@ export default function FeedScreen() {
     const res = await fetch(`${API_BASE}?topic=${topic}${forceParam}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json() as { feed?: unknown[] };
-    return normalizeFeedItems(data.feed ?? []);
+    return normalizeFeedItems(data.feed ?? []).map(item => ({ ...item, _category: topic }));
   }
 
   function feedItemId(item: ApiFeedItem): string {
@@ -625,35 +629,44 @@ export default function FeedScreen() {
       const currentIds = new Set(current.map(feedItemId));
       const brandNew = fresh.filter(item => !currentIds.has(feedItemId(item)));
 
-      // Fire local notifications — one per feed item (cluster or single).
+      // Fire local notifications for new breaking news and fav source articles.
       const sensMin = breakingSensitivity === 'critical' ? 3 : breakingSensitivity === 'important' ? 2 : 1;
       for (const item of brandNew) {
         const articles = item.type === 'cluster' ? item.articles : [item as Story];
-        const rep = articles[0];
-        if (!rep) continue;
-        const clusterHeadline = item.type === 'cluster' ? (item.topicTitle || rep.headline) : rep.headline;
-        const sourceName = rep.sources?.[0]?.name ?? '';
-        const sourceCount = item.type === 'cluster' ? articles.length : 1;
-        const isBreakingArticle = articles.some(a => a.isBreaking);
-        const isFavSource = favSources.includes(sourceName);
-        const isFavTopic = favTopics.includes(topic);
-        const historyBase = {
-          id: rep.id,
-          headline: clusterHeadline,
-          summary: rep.summary ?? '',
-          imageUrl: rep.imageUrl ?? '',
-          url: rep.sources?.[0]?.url ?? '',
-          source: sourceName,
-          publishedAt: rep.publishedAt,
-          dominantColor: getArticleColor(rep.id || clusterHeadline),
-          firedAt: Date.now(),
-        };
-        if (notifBreaking && isBreakingArticle && sourceCount >= sensMin && !matchesMutedBreakingTheme(clusterHeadline, rep.summary ?? '')) {
-          fireBreakingNotif(rep.id, clusterHeadline, rep.summary ?? '', rep.imageUrl ?? '').catch(() => {});
-          pushNotifHistory({ ...historyBase, kind: 'breaking' }).catch(() => {});
-        } else if (notifSources && (isFavSource || isFavTopic)) {
-          fireFavSourceNotif(rep.id, sourceName || 'iReader', clusterHeadline).catch(() => {});
-          pushNotifHistory({ ...historyBase, kind: isFavSource ? 'source' : 'topic' }).catch(() => {});
+        const sourceCount = item.type === 'cluster' ? item.articles.length : 1;
+        const itemCategory = item._category ?? topic;
+        for (const a of articles) {
+          const sourceName = a.sources?.[0]?.name ?? '';
+          const isBreakingArticle = itemCategory === 'breaking' || (a.isBreaking ?? false);
+          const isFavSource = favSources.includes(sourceName);
+          const isFavTopic = favTopics.includes(topic);
+          const historyBase = {
+            id: a.id,
+            headline: a.headline,
+            summary: a.summary ?? '',
+            imageUrl: a.imageUrl ?? '',
+            url: a.sources?.[0]?.url ?? '',
+            source: sourceName,
+            publishedAt: a.publishedAt,
+            dominantColor: getArticleColor(a.id || a.headline),
+            firedAt: Date.now(),
+          };
+          if (notifBreaking && isBreakingArticle && sourceCount >= sensMin && !matchesMutedBreakingTheme(a.headline, a.summary ?? '')) {
+            fireBreakingNotif(a.id, a.headline, a.summary ?? '', a.imageUrl ?? '', {
+              url: a.sources?.[0]?.url ?? '',
+              source: sourceName,
+              publishedAt: a.publishedAt,
+            }).catch(() => {});
+            pushNotifHistory({ ...historyBase, kind: 'breaking' }).catch(() => {});
+          } else if (notifSources && (isFavSource || isFavTopic)) {
+            fireFavSourceNotif(a.id, sourceName || 'iReader', a.headline, {
+              url: a.sources?.[0]?.url ?? '',
+              summary: a.summary ?? '',
+              imageUrl: a.imageUrl ?? '',
+              publishedAt: a.publishedAt,
+            }).catch(() => {});
+            pushNotifHistory({ ...historyBase, kind: isFavSource ? 'source' : 'topic' }).catch(() => {});
+          }
         }
       }
 

@@ -87,7 +87,13 @@ async function fetchTopicFeed(topic: string): Promise<Story[]> {
     if (!res.ok) return [];
     const raw = await res.json();
     const items: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
-    return flatten(items).slice(0, 12);
+    return items
+      .map(it => {
+        const stories = it.type === 'cluster' ? (it.articles ?? []) : [it as unknown as Story];
+        return stories.slice().sort((a, b) => (b.sources?.length ?? 0) - (a.sources?.length ?? 0))[0];
+      })
+      .filter((s): s is Story => Boolean(s))
+      .slice(0, 10);
   } catch { return []; }
 }
 
@@ -134,7 +140,7 @@ async function buildSnapshot(): Promise<Snapshot> {
       label: def.label,
       emoji: def.emoji,
       oneLiner: stories[0]?.summary?.slice(0, 140) ?? '',
-      stories: stories.slice(0, 3),
+      stories: stories.slice(0, 5),
     }))
     .filter(s => s.stories.length > 0);
 
@@ -242,7 +248,7 @@ export default function DigestScreen() {
     <div
       onScroll={(e) => reportScroll((e.target as HTMLDivElement).scrollTop)}
       style={{
-        height: '100%', background: '#080808', overflowY: 'auto',
+        height: '100%', background: '#080808', overflowY: 'auto', overflowX: 'hidden',
         WebkitOverflowScrolling: 'touch', color: '#fff',
       }}
     >
