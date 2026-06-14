@@ -19,7 +19,7 @@ const TOPIC_QUEUE = [
   'business',
 ];
 const DEEPDIVE_API = 'https://ireader.onrender.com/api/news/deepdive';
-const CACHE_PREFIX = '@deepdive_v7_'; // v7 — editorial system prompt
+const CACHE_PREFIX = '@deepdive_v8_'; // v8 — confidence score
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const FEED_LIST_CACHE = '@aifeed_list_v5'; // v5 — server-trust rewrite, no client-side clustering
 
@@ -76,6 +76,7 @@ interface DeepDiveData {
   topics?: string[];
   articlesRead?: number;
   articlesAttempted?: number;
+  confidence?: number;
 }
 
 const METRIC_RE = /(?:\$[\d,.]+[BMKTbmkt]?\b|\d[\d,.]*\s*(?:billion|million|trillion|percent|%|bps|basis points)\b|\d{1,2}(?:\/\d{1,2})?(?:\/\d{2,4})|\b(?:Q[1-4]|FY)\s*\d{2,4})/gi;
@@ -1010,17 +1011,16 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
           )}
           <span style={{ color: 'rgba(255,255,255,0.3)' }}>·</span>
           <span>{timeAgo(story.publishedAt)}</span>
-          {data && data.articlesAttempted != null && (() => {
-            const read = data.articlesRead ?? 0;
-            const total = data.articlesAttempted!;
-            const color = read === total && total > 0 ? '#4ade80' : '#f59e0b';
-            const label = read === 0 ? 'SUMMARIES ONLY' : 'FULL TEXT READ';
+          {data?.confidence != null && (() => {
+            const score = data.confidence!;
+            const color = score >= 80 ? '#4ade80' : score >= 60 ? '#f59e0b' : '#f87171';
+            const label = score >= 80 ? 'HIGH' : score >= 60 ? 'MEDIUM' : 'LOW';
             return (
               <>
                 <span style={{ color: 'rgba(255,255,255,0.3)' }}>·</span>
                 <span style={{ width: 6, height: 6, borderRadius: 3, background: color, flexShrink: 0, display: 'inline-block' }} />
-                <span style={{ color, fontSize: 11, fontWeight: 800, letterSpacing: 0 }}>{read}/{total}</span>
-                <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 10, fontWeight: 700, letterSpacing: 0.6 }}>{label}</span>
+                <span style={{ color, fontSize: 11, fontWeight: 800, letterSpacing: 0 }}>{score}%</span>
+                <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 10, fontWeight: 700, letterSpacing: 0.6 }}>{label} CONFIDENCE</span>
               </>
             );
           })()}
@@ -1041,12 +1041,26 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
                 boxShadow: `0 6px 24px ${dominant}22`,
                 borderTop: `2px solid ${VIOLET}`,
               }}>
-                <div style={{
-                  color: VIOLET, fontSize: 10, fontWeight: 800, letterSpacing: 2,
-                  display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14,
-                }}>
-                  <div style={{ flex: 1, height: 1, background: `${VIOLET}33` }} />
-                </div>
+                {data.confidence != null && (() => {
+                  const score = data.confidence!;
+                  const barColor = score >= 80 ? '#4ade80' : score >= 60 ? '#f59e0b' : '#f87171';
+                  const label = score >= 80 ? 'HIGH CONFIDENCE' : score >= 60 ? 'MEDIUM CONFIDENCE' : 'LOW CONFIDENCE';
+                  return (
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 9, fontWeight: 800, letterSpacing: 1.4 }}>AI ACCURACY</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <span style={{ color: barColor, fontSize: 11, fontWeight: 800 }}>{score}%</span>
+                          <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 9, fontWeight: 700, letterSpacing: 0.8 }}>{label}</span>
+                        </div>
+                      </div>
+                      <div style={{ height: 3, borderRadius: 99, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${score}%`, background: barColor, borderRadius: 99, transition: 'width 0.8s cubic-bezier(0.4,0,0.2,1)' }} />
+                      </div>
+                    </div>
+                  );
+                })()}
+                <div style={{ height: 1, background: `${VIOLET}33`, marginBottom: 14 }} />
                 {tldrBody}
               </div>
             ) : null}
