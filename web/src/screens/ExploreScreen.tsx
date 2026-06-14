@@ -204,7 +204,11 @@ export default function ExploreScreen() {
   const [crossEntities, setCrossEntities] = useState<CrossEntity[]>([]);
   // People & Places entities from breaking feed
   const [entities, setEntities] = useState<string[]>([]);
+  // Local news — Pune / Maharashtra
+  const [localNews, setLocalNews] = useState<FeedItem[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
+
+  const LOCAL_KW = /\b(pune|maharashtra|mumbai|nagpur|nashik|thane|aurangabad|solapur|kolhapur|pimpri|pcmc|shiv sena|ncp|maha vikas|eknath shinde|devendra fadnavis|uddhav)\b/i;
 
   // Search
   const [searchText, setSearchText] = useState('');
@@ -258,8 +262,27 @@ export default function ExploreScreen() {
       // People & Places from all headlines (single-topic entities)
       const allEntities = extractEntities(allHeadlines).slice(0, 12);
 
+      // Local news — any item mentioning Pune / Maharashtra / key cities
+      const allItems: FeedItem[] = results.flatMap(r =>
+        r.status === 'fulfilled' ? r.value.items : []
+      );
+      const local = allItems.filter(it => {
+        const text = [
+          it.clusterLabel, it.headline, it.summary,
+          ...(it.articles ?? []).map(a => a.headline),
+        ].join(' ');
+        return LOCAL_KW.test(text);
+      });
+      const seenLocal = new Set<string>();
+      const localDeduped = local.filter(it => {
+        const key = (it.clusterLabel || it.headline || '').slice(0, 40);
+        if (seenLocal.has(key)) return false;
+        seenLocal.add(key); return true;
+      }).slice(0, 8);
+
       setCrossEntities(cross);
       setEntities(allEntities);
+      setLocalNews(localDeduped);
       setDataLoading(false);
     }).catch(() => { if (!cancelled) setDataLoading(false); });
 
@@ -481,7 +504,19 @@ export default function ExploreScreen() {
           </div>
         )}
 
-        {/* ③ People & Places */}
+        {/* ③ Local News — Pune & Maharashtra */}
+        {localNews.length > 0 && searchQuery === '' && (
+          <div style={{ marginBottom: 28 }}>
+            <SectionLabel text="Local · Pune & Maharashtra" />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {localNews.map((item, i) => (
+                <ResultCard key={i} item={item} onOpen={openArticle} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ④ People & Places */}
         {entities.length > 0 && searchQuery === '' && (
           <div style={{ marginBottom: 28 }}>
             <SectionLabel text="People & Places" />
