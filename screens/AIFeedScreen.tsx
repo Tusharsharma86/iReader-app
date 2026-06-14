@@ -34,7 +34,7 @@ import { darken, lighten, getArticleColor } from '../utils/colors';
 const FEED_API_BASE = 'https://ireader.onrender.com/api/news/feed';
 const DEEPDIVE_API = 'https://ireader.onrender.com/api/news/deepdive';
 const ASK_API = 'https://ireader.onrender.com/api/news/ask';
-const CACHE_PREFIX = '@deepdive_v6_'; // v6 — confidence score
+const CACHE_PREFIX = '@deepdive_v7_'; // v7 — 4-signal confidence
 const ASK_CACHE_PREFIX = '@ask_v1_';
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const VIOLET = '#b994ff';
@@ -805,6 +805,7 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
               paragraphs,
               sourceUrls: (item.sources ?? []).map(s => s.url).filter(Boolean),
               depth: deepDiveDepth,
+              publishedAt: story.publishedAt,
             }),
             signal: ctrl.signal,
           });

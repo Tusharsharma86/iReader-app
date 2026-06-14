@@ -19,7 +19,7 @@ const TOPIC_QUEUE = [
   'business',
 ];
 const DEEPDIVE_API = 'https://ireader.onrender.com/api/news/deepdive';
-const CACHE_PREFIX = '@deepdive_v8_'; // v8 — confidence score
+const CACHE_PREFIX = '@deepdive_v9_'; // v9 — 4-signal confidence
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const FEED_LIST_CACHE = '@aifeed_list_v5'; // v5 — server-trust rewrite, no client-side clustering
 
@@ -788,6 +788,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
                 ? [story.sources?.[0]?.url].filter(Boolean) as string[]
                 : (item.sources ?? []).map(s => s.url).filter(Boolean),
               depth: deepDiveDepth,
+              publishedAt: story.publishedAt,
               systemPrompt: DEEPDIVE_SYSTEM_PROMPT,
             }),
             signal: ctrl.signal,
