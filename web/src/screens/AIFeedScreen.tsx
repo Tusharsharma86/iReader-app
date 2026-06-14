@@ -1011,19 +1011,6 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
           )}
           <span style={{ color: 'rgba(255,255,255,0.3)' }}>·</span>
           <span>{timeAgo(story.publishedAt)}</span>
-          {data?.confidence != null && (() => {
-            const score = data.confidence!;
-            const color = score >= 80 ? '#4ade80' : score >= 60 ? '#f59e0b' : '#f87171';
-            const label = score >= 80 ? 'HIGH' : score >= 60 ? 'MEDIUM' : 'LOW';
-            return (
-              <>
-                <span style={{ color: 'rgba(255,255,255,0.3)' }}>·</span>
-                <span style={{ width: 6, height: 6, borderRadius: 3, background: color, flexShrink: 0, display: 'inline-block' }} />
-                <span style={{ color, fontSize: 11, fontWeight: 800, letterSpacing: 0 }}>{score}%</span>
-                <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 10, fontWeight: 700, letterSpacing: 0.6 }}>{label} CONFIDENCE</span>
-              </>
-            );
-          })()}
         </div>
 
         {stage === 'generating' ? (
