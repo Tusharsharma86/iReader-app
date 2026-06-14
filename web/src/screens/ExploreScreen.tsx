@@ -295,8 +295,8 @@ export default function ExploreScreen() {
 
   // Navigation
   const openArticle = useCallback((item: FeedItem) => {
-    const primary = item.articles?.[0];
-    if (!primary) return;
+    const primary = item.articles?.[0] ?? (item as unknown as Story);
+    if (!primary || !primary.id) return;
     trackArticleOpen(primary);
     navigate({
       name: 'Article',
