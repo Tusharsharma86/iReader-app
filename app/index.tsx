@@ -354,7 +354,7 @@ function feedToClusterGroups(feed: ApiFeedItem[]): Cluster[] {
       const rep = item.articles[0];
       if (!rep) return [];
       // AI label if complete (≥30 chars), else best article headline
-      const label = item.topicTitle && item.topicTitle.length >= 30
+      const label = item.topicTitle && item.topicTitle.length >= 20
         ? item.topicTitle
         : (rep.headline ?? item.topicTitle);
       return [{

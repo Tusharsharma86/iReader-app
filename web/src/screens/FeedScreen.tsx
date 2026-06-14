@@ -289,7 +289,7 @@ function serverItemToCluster(item: ServerFeedItem): StoryCluster | null {
     if (item.articles.length === 0) return null;
     // Use AI topicTitle if it looks complete (≥30 chars); otherwise fall back to
     // the best article headline so the label is never a 3-word fragment.
-    const label = item.topicTitle && item.topicTitle.length >= 30
+    const label = item.topicTitle && item.topicTitle.length >= 20
       ? item.topicTitle
       : (item.articles[0].headline ?? item.topicTitle);
     return {
