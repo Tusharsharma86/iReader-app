@@ -25,6 +25,7 @@ interface CrossEntity {
   entity: string;
   topics: string[];
   count: number;
+  imageUrl?: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -337,17 +338,29 @@ export default function ExploreScreen() {
         }
       }
 
+      // Find a representative image for each entity from matching feed items
+      const allItems: FeedItem[] = results.flatMap(r =>
+        r.status === 'fulfilled' ? r.value.items : []
+      );
+      const entityImageMap = new Map<string, string>();
+      for (const [entity] of entityTopics.entries()) {
+        const entityLower = entity.toLowerCase();
+        const match = allItems.find(it => {
+          const text = [it.clusterLabel, it.headline, ...(it.articles ?? []).map(a => a.headline)].join(' ').toLowerCase();
+          return text.includes(entityLower) && (it.imageUrl || it.articles?.[0]?.imageUrl);
+        });
+        const img = match?.imageUrl || match?.articles?.[0]?.imageUrl;
+        if (img) entityImageMap.set(entity, img);
+      }
+
       const cross: CrossEntity[] = [...entityTopics.entries()]
         .filter(([, topics]) => topics.size >= 2)
         .sort((a, b) => b[1].size - a[1].size)
         .slice(0, 14)
-        .map(([entity, topics]) => ({ entity, topics: [...topics], count: topics.size }));
+        .map(([entity, topics]) => ({ entity, topics: [...topics], count: topics.size, imageUrl: entityImageMap.get(entity) }));
 
       const allEntities = extractEntities(allHeadlines).slice(0, 12);
 
-      const allItems: FeedItem[] = results.flatMap(r =>
-        r.status === 'fulfilled' ? r.value.items : []
-      );
       const local = allItems.filter(it => {
         const text = [
           it.clusterLabel, it.headline, it.summary,
@@ -526,24 +539,38 @@ export default function ExploreScreen() {
                       key={i}
                       onClick={() => triggerSearch(ce.entity)}
                       style={{
-                        background: accent.bg,
-                        border: `1px solid ${accent.color}22`,
-                        borderRadius: 14, padding: '12px 14px',
+                        position: 'relative',
+                        height: 100,
+                        background: ce.imageUrl ? '#111' : accent.bg,
+                        border: 'none',
+                        borderRadius: 14,
+                        overflow: 'hidden',
                         cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
-                        textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 8,
+                        padding: 0,
                       }}
                     >
-                      <div style={{ fontSize: 14, fontWeight: 800, color: '#eee', lineHeight: 1.2 }}>{ce.entity}</div>
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                        {ce.topics.slice(0, 3).map(t => (
-                          <span key={t} style={{
-                            fontSize: 9, fontWeight: 700, color: accent.color,
-                            background: `${accent.color}18`, borderRadius: 4,
-                            padding: '2px 6px', whiteSpace: 'nowrap',
-                          }}>
-                            {TOPIC_LABELS[t] ?? t}
-                          </span>
-                        ))}
+                      {ce.imageUrl && (
+                        <img
+                          src={ce.imageUrl}
+                          alt=""
+                          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                          onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      )}
+                      <div style={{
+                        position: 'absolute', inset: 0,
+                        background: ce.imageUrl
+                          ? 'linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.72) 100%)'
+                          : `linear-gradient(135deg, ${accent.bg} 0%, transparent 100%)`,
+                      }} />
+                      <div style={{
+                        position: 'absolute', bottom: 0, left: 0, right: 0,
+                        padding: '0 12px 11px',
+                        textAlign: 'left',
+                      }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 800, color: '#fff', lineHeight: 1.2, textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>
+                          {ce.entity}
+                        </div>
                       </div>
                     </button>
                   );
