@@ -348,15 +348,30 @@ function generateClusterLabel(stories: Story[]): string {
   return shared.length > 0 ? shared.join(' ') : generateTopicLabel(stories[0].headline);
 }
 
+const LIVE_BLOG_RE = /\b(live( blog| updates?)?|live:|\s[-–]\s*live\s*$|rolling coverage|as it happens)\b/i;
+function topicMatchScore(headline: string, topicTitle: string): number {
+  if (!topicTitle || !headline) return 0;
+  const topicWords = new Set((topicTitle.toLowerCase().match(/[a-z]{4,}/g) ?? []));
+  return (headline.toLowerCase().match(/[a-z]{4,}/g) ?? []).filter(w => topicWords.has(w)).length;
+}
+function pickClusterRep(articles: Story[], topicTitle: string): Story | undefined {
+  const nonLive = articles.filter(s => !LIVE_BLOG_RE.test(s.headline ?? ''));
+  const pool = nonLive.length > 0 ? nonLive : articles;
+  return pool.slice().sort((a, b) => {
+    const aScore = (a.sources?.length ?? 0) * 2 + topicMatchScore(a.headline ?? '', topicTitle);
+    const bScore = (b.sources?.length ?? 0) * 2 + topicMatchScore(b.headline ?? '', topicTitle);
+    return bScore - aScore;
+  })[0];
+}
+
 function feedToClusterGroups(feed: ApiFeedItem[]): Cluster[] {
   return feed.flatMap((item): Cluster[] => {
     if (item.type === 'cluster') {
-      const rep = item.articles[0];
-      if (!rep) return [];
-      // Prefer AI-generated topicTitle — it describes the story the cluster covers.
       const label = (item.topicTitle && item.topicTitle.trim().length > 8)
         ? item.topicTitle
-        : (rep.headline ?? item.topicTitle);
+        : (item.articles[0]?.headline ?? item.topicTitle);
+      const rep = pickClusterRep(item.articles, label) ?? item.articles[0];
+      if (!rep) return [];
       return [{
         id: `cluster-${rep.id}`,
         headline: label,
