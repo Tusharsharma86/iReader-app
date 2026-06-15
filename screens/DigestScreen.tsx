@@ -132,6 +132,9 @@ async function fetchTopicFeed(topic: string): Promise<Story[]> {
         return stories.slice().sort((a, b) => (b.sources?.length ?? 0) - (a.sources?.length ?? 0))[0];
       })
       .filter((s): s is Story => Boolean(s))
+      // Re-rank by source count so high-impact multi-source stories surface
+      // over recent single-source ones (server score is recency-biased).
+      .sort((a, b) => (b.sources?.length ?? 0) - (a.sources?.length ?? 0))
       .slice(0, 10);
   } catch { return []; }
 }
