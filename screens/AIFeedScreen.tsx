@@ -176,9 +176,10 @@ async function writeDeepDiveCache(id: string, data: DeepDiveData, depth = 'stand
 // ── Main Screen ─────────────────────────────────────────────────────────────
 export default function AIFeedScreen() {
   const { width: screenW, height: screenH } = useWindowDimensions();
-  const [feedH, setFeedH] = useState(screenH);
-  const PEEK = 64; // px of next card visible below current
-  const CARD_H = Math.max(feedH - PEEK, 200);
+  // Header is position:'absolute' so the FlatList fills full screenH.
+  // CARD_H < screenH by PEEK so the next card's top PEEK px are visible.
+  const PEEK = 72;
+  const CARD_H = screenH - PEEK;
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -552,7 +553,6 @@ export default function AIFeedScreen() {
         extraData={`${screenW}x${CARD_H}`}
         snapToInterval={CARD_H}
         getItemLayout={(_d, i) => ({ length: CARD_H, offset: CARD_H * i, index: i })}
-        onLayout={e => setFeedH(e.nativeEvent.layout.height)}
         snapToAlignment="start"
         decelerationRate="fast"
         showsVerticalScrollIndicator={false}
