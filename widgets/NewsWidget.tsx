@@ -13,6 +13,8 @@ export interface WidgetStory {
 }
 
 const BG = '#0A0B12';
+const DIVIDER = '#16182A';
+const META_COLOR = '#6B7280';
 const LOGO = require('../assets/header-logo.png');
 
 function deepLink(s: WidgetStory): string {
@@ -48,40 +50,57 @@ function metaLine(s: WidgetStory): string {
   return time;
 }
 
-function Row({ story }: { story: WidgetStory }) {
+function Row({ story, showDivider }: { story: WidgetStory; showDivider: boolean }) {
   const hasImg = story.imageUrl?.startsWith('http');
   return (
     <FlexWidget
-      clickAction="OPEN_URI"
-      clickActionData={{ uri: deepLink(story) }}
-      style={{
-        flexDirection: 'row',
-        width: 'match_parent',
-        paddingVertical: 9,
-        alignItems: 'center',
-      }}
+      style={{ flexDirection: 'column', width: 'match_parent' }}
     >
-      {hasImg ? (
-        <ImageWidget
-          image={story.imageUrl as ImageWidgetSource}
-          imageWidth={108}
-          imageHeight={72}
-          radius={12}
-          style={{ width: 108, height: 72, marginRight: 14 }}
-        />
-      ) : (
-        <TextWidget text="" style={{ width: 0, height: 72 }} />
+      {showDivider && (
+        <FlexWidget style={{ height: 1, width: 'match_parent', backgroundColor: DIVIDER, marginVertical: 1 }} />
       )}
-      <FlexWidget style={{ flex: 1, flexDirection: 'column' }}>
-        <TextWidget
-          text={metaLine(story)}
-          style={{ fontSize: 11, fontWeight: '500', color: '#9AA0AE', marginBottom: 4, letterSpacing: 0.2 }}
-        />
-        <TextWidget
-          text={story.headline}
-          maxLines={3}
-          style={{ fontSize: 15, fontWeight: '700', color: '#FFFFFF' }}
-        />
+      <FlexWidget
+        clickAction="OPEN_URI"
+        clickActionData={{ uri: deepLink(story) }}
+        style={{
+          flexDirection: 'row',
+          width: 'match_parent',
+          paddingVertical: 10,
+          alignItems: 'center',
+        }}
+      >
+        {/* Thumbnail */}
+        <FlexWidget
+          style={{
+            width: 52, height: 52, borderRadius: 8, marginRight: 12,
+            backgroundColor: '#1A1D2E', overflow: 'hidden',
+          }}
+        >
+          {hasImg ? (
+            <ImageWidget
+              image={story.imageUrl as ImageWidgetSource}
+              imageWidth={52}
+              imageHeight={52}
+              radius={8}
+              style={{ width: 52, height: 52 }}
+            />
+          ) : (
+            <TextWidget text="" style={{ width: 52, height: 52 }} />
+          )}
+        </FlexWidget>
+
+        {/* Text */}
+        <FlexWidget style={{ flex: 1, flexDirection: 'column' }}>
+          <TextWidget
+            text={metaLine(story)}
+            style={{ fontSize: 10, fontWeight: '600', color: META_COLOR, marginBottom: 4, letterSpacing: 0.3 }}
+          />
+          <TextWidget
+            text={story.headline}
+            maxLines={2}
+            style={{ fontSize: 13, fontWeight: '700', color: '#F0F0F5', lineHeight: 18 }}
+          />
+        </FlexWidget>
       </FlexWidget>
     </FlexWidget>
   );
@@ -95,37 +114,58 @@ export function NewsWidget({ stories }: { stories: WidgetStory[]; updatedAt?: nu
         width: 'match_parent',
         backgroundColor: BG,
         borderRadius: 28,
-        paddingHorizontal: 18,
-        paddingTop: 16,
-        paddingBottom: 6,
+        paddingHorizontal: 16,
+        paddingTop: 14,
+        paddingBottom: 8,
         flexDirection: 'column',
       }}
     >
-      {/* Header — transparent logo top-left + greeting, refresh top-right */}
-      <FlexWidget style={{ flexDirection: 'row', width: 'match_parent', alignItems: 'center', marginBottom: 12 }}>
+      {/* Header strip */}
+      <FlexWidget style={{ flexDirection: 'row', width: 'match_parent', alignItems: 'center', marginBottom: 10 }}>
         <FlexWidget
           clickAction="OPEN_URI"
           clickActionData={{ uri: 'ireaderpro://feed' }}
-          style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+          style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }}
         >
-          <ImageWidget image={LOGO} imageWidth={30} imageHeight={30} style={{ width: 30, height: 30, marginRight: 10 }} />
-          <TextWidget text={greeting()} style={{ fontSize: 18, fontWeight: '700', color: '#FFFFFF' }} />
+          {/* Circular logo background */}
+          <FlexWidget
+            style={{
+              width: 34, height: 34, borderRadius: 17,
+              backgroundColor: '#1C1E30',
+              alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <ImageWidget image={LOGO} imageWidth={20} imageHeight={20} style={{ width: 20, height: 20 }} />
+          </FlexWidget>
+          <TextWidget
+            text={greeting()}
+            style={{ fontSize: 16, fontWeight: '700', color: '#FFFFFF', letterSpacing: -0.2 }}
+          />
         </FlexWidget>
+
+        {/* Refresh */}
         <FlexWidget
           clickAction="REFRESH"
-          style={{ width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' }}
+          style={{
+            width: 32, height: 32, borderRadius: 16,
+            backgroundColor: '#1C1E30',
+            alignItems: 'center', justifyContent: 'center',
+          }}
         >
-          <TextWidget text="⟳" style={{ fontSize: 20, fontWeight: '500', color: '#FFFFFF' }} />
+          <TextWidget text="↺" style={{ fontSize: 16, fontWeight: '700', color: '#9AA0AE' }} />
         </FlexWidget>
       </FlexWidget>
 
+      {/* Thin separator under header */}
+      <FlexWidget style={{ height: 1, width: 'match_parent', backgroundColor: DIVIDER, marginBottom: 2 }} />
+
       {stories.length === 0 ? (
         <FlexWidget style={{ flex: 1, width: 'match_parent', justifyContent: 'center', alignItems: 'center' }}>
-          <TextWidget text="Tap to open iReader" style={{ fontSize: 13, color: '#80FFFFFF' }} />
+          <TextWidget text="Tap to open iReader" style={{ fontSize: 13, color: '#4A5060' }} />
         </FlexWidget>
       ) : (
         <ListWidget style={{ height: 'match_parent', width: 'match_parent' }}>
-          {stories.map((s) => <Row key={s.id} story={s} />)}
+          {stories.map((s, i) => <Row key={s.id} story={s} showDivider={i > 0} />)}
         </ListWidget>
       )}
     </FlexWidget>
