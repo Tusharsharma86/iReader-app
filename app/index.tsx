@@ -630,10 +630,12 @@ export default function FeedScreen() {
       const brandNew = fresh.filter(item => !currentIds.has(feedItemId(item)));
 
       // Fire local notifications for new breaking news and fav source articles.
+      // Skip cluster items — only single articles get push notifs.
       const sensMin = breakingSensitivity === 'critical' ? 3 : breakingSensitivity === 'important' ? 2 : 1;
       for (const item of brandNew) {
-        const articles = item.type === 'cluster' ? item.articles : [item as Story];
-        const sourceCount = item.type === 'cluster' ? item.articles.length : 1;
+        if (item.type === 'cluster') continue;
+        const articles = [item as Story];
+        const sourceCount = 1;
         const itemCategory = item._category ?? topic;
         for (const a of articles) {
           const sourceName = a.sources?.[0]?.name ?? '';
