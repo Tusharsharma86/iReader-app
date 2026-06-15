@@ -130,17 +130,39 @@ function pickPrimary(articles: Story[], topicTitle: string): Story {
   })[0];
 }
 
+// Count articles in cluster whose headline matches the topic (coherence signal).
+function clusterCoherence(articles: Story[], topicTitle: string): number {
+  return articles.filter(a => topicMatchScore(a.headline ?? '', topicTitle) > 0).length;
+}
+
 function parseServerFeed(items: ApiItem[]): FeedItem[] {
   const out: FeedItem[] = [];
   for (const it of items) {
     if (it.type === 'cluster' && Array.isArray(it.articles) && it.articles.length > 0) {
       const topicTitle = String((it as any).topicTitle ?? '');
-      const primary = pickPrimary(it.articles, topicTitle);
       const sources = dedupeSources(it.articles.flatMap(a => a.sources ?? []));
+
+      // Gate 1: require 2+ unique sources — single-source clusters are unverified noise.
+      if (sources.length < 2) continue;
+
+      // Gate 2: coherence — at least 2 articles must share keywords with topicTitle.
+      // Clusters where only 1 article matches the topic are likely mis-clustered.
+      if (topicTitle && clusterCoherence(it.articles, topicTitle) < 2) continue;
+
+      const primary = pickPrimary(it.articles, topicTitle);
+
+      // Gate 3: primary article must have some keyword overlap with topicTitle.
+      // Zero overlap = chosen article is not about the cluster topic at all.
+      if (topicTitle && topicMatchScore(primary.headline ?? '', topicTitle) === 0) continue;
+
       out.push({ primary, allStories: it.articles, sources });
     } else {
       const s = it as unknown as Story;
-      if (s?.headline && !LIVE_BLOG_RE.test(s.headline)) out.push({ primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []) });
+      // Single articles: require 2+ sources and no live blog.
+      const srcCount = dedupeSources(s.sources ?? []).length;
+      if (s?.headline && !LIVE_BLOG_RE.test(s.headline) && srcCount >= 2) {
+        out.push({ primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []) });
+      }
     }
   }
   return out;

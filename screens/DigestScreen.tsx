@@ -125,6 +125,10 @@ function topicMatchScore(headline: string, topicTitle: string): number {
   return (headline.toLowerCase().match(/[a-z]{4,}/g) ?? []).filter(w => topicWords.has(w)).length;
 }
 
+function clusterCoherence(articles: Story[], topicTitle: string): number {
+  return articles.filter(a => topicMatchScore(a.headline ?? '', topicTitle) > 0).length;
+}
+
 async function fetchTopicFeed(topic: string): Promise<Story[]> {
   try {
     const url = `${FEED_API}?topic=${topic}`;
@@ -133,29 +137,37 @@ async function fetchTopicFeed(topic: string): Promise<Story[]> {
     const raw = await res.json();
     const items: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
 
-    return items
-      .map(it => {
-        if (it.type === 'cluster') {
-          const topicTitle = String((it as any).topicTitle ?? '');
-          const articles = (it.articles ?? []) as Story[];
-          // Prefer non-live-blog articles; fall back to live blogs only if nothing else exists.
-          const nonLive = articles.filter(s => !LIVE_BLOG_RE.test(s.headline ?? ''));
-          const pool = nonLive.length > 0 ? nonLive : articles;
-          // Score = source count (importance signal) + topic keyword match (relevance signal).
-          // This prevents picking a high-source article that is unrelated to the cluster topic.
-          return pool.slice().sort((a, b) => {
-            const aScore = (a.sources?.length ?? 0) * 2 + topicMatchScore(a.headline ?? '', topicTitle);
-            const bScore = (b.sources?.length ?? 0) * 2 + topicMatchScore(b.headline ?? '', topicTitle);
-            return bScore - aScore;
-          })[0];
-        }
-        // Single article — skip live blogs
+    const results: Story[] = [];
+    for (const it of items) {
+      if (it.type === 'cluster') {
+        const topicTitle = String((it as any).topicTitle ?? '');
+        const articles = (it.articles ?? []) as Story[];
+        const allSources = [...new Set(articles.flatMap(a => (a.sources ?? []).map(s => s.name)).filter(Boolean))];
+
+        // Gate 1: 2+ unique sources
+        if (allSources.length < 2) continue;
+        // Gate 2: coherence — 2+ articles match topicTitle keywords
+        if (topicTitle && clusterCoherence(articles, topicTitle) < 2) continue;
+
+        const nonLive = articles.filter(s => !LIVE_BLOG_RE.test(s.headline ?? ''));
+        const pool = nonLive.length > 0 ? nonLive : articles;
+        const rep = pool.slice().sort((a, b) => {
+          const aScore = (a.sources?.length ?? 0) * 2 + topicMatchScore(a.headline ?? '', topicTitle);
+          const bScore = (b.sources?.length ?? 0) * 2 + topicMatchScore(b.headline ?? '', topicTitle);
+          return bScore - aScore;
+        })[0];
+
+        // Gate 3: chosen rep must share at least one keyword with topicTitle
+        if (rep && topicTitle && topicMatchScore(rep.headline ?? '', topicTitle) === 0) continue;
+        if (rep) results.push(rep);
+      } else {
         const story = it as unknown as Story;
-        return LIVE_BLOG_RE.test(story.headline ?? '') ? null : story;
-      })
-      .filter((s): s is Story => Boolean(s))
-      // Re-rank by source count so high-impact multi-source stories surface
-      // over recent single-source ones (server score is recency-biased).
+        const srcCount = [...new Set((story.sources ?? []).map(s => s.name).filter(Boolean))].length;
+        if (story.headline && !LIVE_BLOG_RE.test(story.headline) && srcCount >= 2) results.push(story);
+      }
+    }
+
+    return results
       .sort((a, b) => (b.sources?.length ?? 0) - (a.sources?.length ?? 0))
       .slice(0, 10);
   } catch { return []; }
