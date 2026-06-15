@@ -155,6 +155,10 @@ function relTime(ts?: string): string {
   return `${Math.round(h / 24)}d ago`;
 }
 
+function isHindi(text: string): boolean {
+  return /[ऀ-ॿ]/.test(text);
+}
+
 function dedup(items: FeedItem[], limit: number): FeedItem[] {
   const seen = new Set<string>();
   const out: FeedItem[] = [];
@@ -430,15 +434,19 @@ export default function ExploreScreen() {
       const allItems: FeedItem[] = results.flatMap(r => r.status === 'fulfilled' ? r.value.items : []);
       allItemsRef.current = allItems;
 
-      // ① Trending — score by sources × freshness, dedup
+      // ① Trending — score by sources × freshness, dedup; skip Hindi headlines
+      const noHindi = (it: FeedItem) => {
+        const h = it.clusterLabel || it.headline || it.articles?.[0]?.headline || '';
+        return !isHindi(h);
+      };
       const trending = dedup(
-        [...allItems].sort((a, b) => scoreItem(b) - scoreItem(a)),
+        [...allItems].filter(noHindi).sort((a, b) => scoreItem(b) - scoreItem(a)),
         20
       );
 
       // ② Deep Dives — 3+ sources
       const ddItems = dedup(
-        [...allItems].filter(it => (it.sourceCount ?? it.articles?.length ?? 1) >= 3)
+        [...allItems].filter(noHindi).filter(it => (it.sourceCount ?? it.articles?.length ?? 1) >= 3)
           .sort((a, b) => scoreItem(b) - scoreItem(a)),
         12
       );
@@ -535,7 +543,11 @@ export default function ExploreScreen() {
 
     const storyMatches = dedup(
       allItemsRef.current.filter(it => {
-        const text = [it.clusterLabel, it.headline, it.summary, ...(it.articles ?? []).map(a => a.headline)].join(' ').toLowerCase();
+        const srcNames = [
+          ...(it.sources ?? []).map(s => s.name),
+          ...(it.articles ?? []).flatMap(a => (a.sources ?? []).map(s => s.name)),
+        ];
+        const text = [it.clusterLabel, it.headline, it.summary, ...(it.articles ?? []).map(a => a.headline), ...srcNames].join(' ').toLowerCase();
         return text.includes(kw);
       }),
       20
@@ -547,13 +559,6 @@ export default function ExploreScreen() {
     setSearchResults({ stories: storyMatches, companies: compMatches, people: personMatches, places: placeMatches });
     setSearchLoading(false);
   }, [companies, people, places]);
-
-  const handleSearch = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    const q = searchText.trim();
-    if (!q) { setSearchQuery(''); setSearchResults({ stories: [], companies: [], people: [], places: [] }); return; }
-    await doSearch(q);
-  }, [searchText, doSearch]);
 
   const triggerSearch = useCallback((term: string) => {
     setSearchText(term);
@@ -609,23 +614,22 @@ export default function ExploreScreen() {
         {/* Header + Search */}
         <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)', paddingBottom: 16 }}>
           <h1 style={{ margin: '0 0 14px', fontSize: 28, fontWeight: 800, color: '#fff', letterSpacing: -0.5 }}>Explore</h1>
-          <form onSubmit={handleSearch}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#111', border: '1px solid #1E1E1E', borderRadius: 12, padding: '10px 14px' }}>
-              <IconSearch size={15} color="#444" />
-              <input
-                type="text"
-                placeholder="Search stories, companies, people…"
-                value={searchText}
-                onChange={e => setSearchText(e.target.value)}
-                autoCorrect="off" autoCapitalize="none" spellCheck={false} autoComplete="off"
-                style={{ flex: 1, background: 'none', border: 'none', outline: 'none', fontSize: 14, color: '#ccc', caretColor: '#4A90D9' }}
-              />
-              {searchText.length > 0 && (
-                <button type="button" onClick={() => { setSearchText(''); setSearchQuery(''); setSearchResults({ stories: [], companies: [], people: [], places: [] }); }}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#555', fontSize: 18, lineHeight: 1, WebkitTapHighlightColor: 'transparent' }}>×</button>
-              )}
-            </div>
-          </form>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#111', border: '1px solid #1E1E1E', borderRadius: 12, padding: '10px 14px' }}>
+            <IconSearch size={15} color="#444" />
+            <input
+              type="search"
+              placeholder="Search stories, companies, people…"
+              value={searchText}
+              onChange={e => setSearchText(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const q = searchText.trim(); if (q) doSearch(q); else { setSearchQuery(''); setSearchResults({ stories: [], companies: [], people: [], places: [] }); } } }}
+              autoCorrect="off" autoCapitalize="none" spellCheck={false} autoComplete="off"
+              style={{ flex: 1, background: 'none', border: 'none', outline: 'none', fontSize: 16, color: '#ccc', caretColor: '#4A90D9' }}
+            />
+            {searchText.length > 0 && (
+              <button type="button" onClick={() => { setSearchText(''); setSearchQuery(''); setSearchResults({ stories: [], companies: [], people: [], places: [] }); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#555', fontSize: 18, lineHeight: 1, WebkitTapHighlightColor: 'transparent' }}>×</button>
+            )}
+          </div>
         </div>
 
         {/* ── SEARCH RESULTS ─────────────────────────────────────────────── */}
