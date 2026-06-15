@@ -117,6 +117,14 @@ function extractNumber(text: string): string | null {
 
 const LIVE_BLOG_RE = /\b(live( blog| updates?)?|live:|\s[-–]\s*live\s*$|rolling coverage|as it happens)\b/i;
 
+// Count words (4+ chars) shared between headline and cluster topic label.
+// Higher = article is actually about the cluster topic.
+function topicMatchScore(headline: string, topicTitle: string): number {
+  if (!topicTitle || !headline) return 0;
+  const topicWords = new Set((topicTitle.toLowerCase().match(/[a-z]{4,}/g) ?? []));
+  return (headline.toLowerCase().match(/[a-z]{4,}/g) ?? []).filter(w => topicWords.has(w)).length;
+}
+
 async function fetchTopicFeed(topic: string): Promise<Story[]> {
   try {
     const url = `${FEED_API}?topic=${topic}`;
@@ -124,19 +132,28 @@ async function fetchTopicFeed(topic: string): Promise<Story[]> {
     if (!res.ok) return [];
     const raw = await res.json();
     const items: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
-    // Take one representative per cluster (API returns clusters in score order —
-    // highest importance first). Never explode a cluster into all its articles or
-    // the top N slots fill with variants of the same story.
+
     return items
       .map(it => {
-        const stories = it.type === 'cluster' ? (it.articles ?? []) : [it as unknown as Story];
-        // Pick the story with most sources that is NOT a live blog.
-        // Live blogs have mismatched headline/content (headline = latest update,
-        // body = multi-topic context) which breaks AI Deep Dive summaries.
-        const sorted = stories.slice().sort((a, b) => (b.sources?.length ?? 0) - (a.sources?.length ?? 0));
-        return sorted.find(s => !LIVE_BLOG_RE.test(s.headline ?? '')) ?? sorted[0];
+        if (it.type === 'cluster') {
+          const topicTitle = String((it as any).topicTitle ?? '');
+          const articles = (it.articles ?? []) as Story[];
+          // Prefer non-live-blog articles; fall back to live blogs only if nothing else exists.
+          const nonLive = articles.filter(s => !LIVE_BLOG_RE.test(s.headline ?? ''));
+          const pool = nonLive.length > 0 ? nonLive : articles;
+          // Score = source count (importance signal) + topic keyword match (relevance signal).
+          // This prevents picking a high-source article that is unrelated to the cluster topic.
+          return pool.slice().sort((a, b) => {
+            const aScore = (a.sources?.length ?? 0) * 2 + topicMatchScore(a.headline ?? '', topicTitle);
+            const bScore = (b.sources?.length ?? 0) * 2 + topicMatchScore(b.headline ?? '', topicTitle);
+            return bScore - aScore;
+          })[0];
+        }
+        // Single article — skip live blogs
+        const story = it as unknown as Story;
+        return LIVE_BLOG_RE.test(story.headline ?? '') ? null : story;
       })
-      .filter((s): s is Story => Boolean(s) && !LIVE_BLOG_RE.test(s.headline ?? ''))
+      .filter((s): s is Story => Boolean(s))
       // Re-rank by source count so high-impact multi-source stories surface
       // over recent single-source ones (server score is recency-biased).
       .sort((a, b) => (b.sources?.length ?? 0) - (a.sources?.length ?? 0))
