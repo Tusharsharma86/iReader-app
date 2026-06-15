@@ -115,6 +115,8 @@ function extractNumber(text: string): string | null {
   return matches[0].trim().replace(/^Rs\.?\s*/i, '₹').slice(0, 24);
 }
 
+const LIVE_BLOG_RE = /\b(live( blog| updates?)?|live:|\s[-–]\s*live\s*$|rolling coverage|as it happens)\b/i;
+
 async function fetchTopicFeed(topic: string): Promise<Story[]> {
   try {
     const url = `${FEED_API}?topic=${topic}`;
@@ -128,10 +130,13 @@ async function fetchTopicFeed(topic: string): Promise<Story[]> {
     return items
       .map(it => {
         const stories = it.type === 'cluster' ? (it.articles ?? []) : [it as unknown as Story];
-        // Pick the story with the most sources — most-covered = most newsworthy.
-        return stories.slice().sort((a, b) => (b.sources?.length ?? 0) - (a.sources?.length ?? 0))[0];
+        // Pick the story with most sources that is NOT a live blog.
+        // Live blogs have mismatched headline/content (headline = latest update,
+        // body = multi-topic context) which breaks AI Deep Dive summaries.
+        const sorted = stories.slice().sort((a, b) => (b.sources?.length ?? 0) - (a.sources?.length ?? 0));
+        return sorted.find(s => !LIVE_BLOG_RE.test(s.headline ?? '')) ?? sorted[0];
       })
-      .filter((s): s is Story => Boolean(s))
+      .filter((s): s is Story => Boolean(s) && !LIVE_BLOG_RE.test(s.headline ?? ''))
       // Re-rank by source count so high-impact multi-source stories surface
       // over recent single-source ones (server score is recency-biased).
       .sort((a, b) => (b.sources?.length ?? 0) - (a.sources?.length ?? 0))
