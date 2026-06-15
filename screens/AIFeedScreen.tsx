@@ -176,7 +176,9 @@ async function writeDeepDiveCache(id: string, data: DeepDiveData, depth = 'stand
 // ── Main Screen ─────────────────────────────────────────────────────────────
 export default function AIFeedScreen() {
   const { width: screenW, height: screenH } = useWindowDimensions();
-  const CARD_H = screenH - 80; // 80px peek of next card
+  const [feedH, setFeedH] = useState(screenH);
+  const PEEK = 64; // px of next card visible below current
+  const CARD_H = Math.max(feedH - PEEK, 200);
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -547,9 +549,10 @@ export default function AIFeedScreen() {
         data={items}
         keyExtractor={it => it.primary.id}
         renderItem={renderCard}
-        extraData={`${screenW}x${screenH}`}
+        extraData={`${screenW}x${CARD_H}`}
         snapToInterval={CARD_H}
         getItemLayout={(_d, i) => ({ length: CARD_H, offset: CARD_H * i, index: i })}
+        onLayout={e => setFeedH(e.nativeEvent.layout.height)}
         snapToAlignment="start"
         decelerationRate="fast"
         showsVerticalScrollIndicator={false}
@@ -655,12 +658,12 @@ function Header({ topInset, counter, currentTopic, onPickTopic }: {
 }
 
 // ── Full-bleed card ─────────────────────────────────────────────────────────
-function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: _h, topInset, onOpen }: {
+function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH, topInset, onOpen }: {
   item: FeedItem; index: number; total: number; width: number; height: number; topInset: number; onOpen: () => void;
 }) {
-  // Always read live window dimensions inside the card — props can lag on
-  // foldable resize (fold close especially).
-  const { width, height } = useWindowDimensions();
+  // Use live width for foldable resize; height comes from prop so it matches
+  // the FlatList layout (getItemLayout) and prevents drift on scroll.
+  const { width } = useWindowDimensions();
   const story = item.primary;
   const dominant = useMemo(() => getArticleColor(story.id || story.headline), [story.id, story.headline]);
   const accent = useMemo(() => lighten(dominant, 0.55), [dominant]);
@@ -678,7 +681,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: _h, to
   return (
     <Pressable
       onPress={onOpen}
-      style={({ pressed }) => ({ width, height, backgroundColor: dominant, overflow: 'hidden', borderRadius: 16, transform: [{ scale: pressed ? 0.985 : 1 }] })}
+      style={({ pressed }) => ({ width, height: cardH, backgroundColor: dominant, overflow: 'hidden', borderRadius: 16, transform: [{ scale: pressed ? 0.985 : 1 }] })}
     >
       {story.imageUrl ? (
         <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: heroScale }] }]}>
