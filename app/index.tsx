@@ -1330,9 +1330,8 @@ const TopicSection = React.memo(function TopicSection({
           )}
           {/* Headline row — clock prefix + headline + stories pill inline */}
           <TouchableOpacity
-            activeOpacity={count >= 3 ? 0.65 : 1}
-            disabled={count < 3}
-            onPress={count >= 3 ? () => navigation.navigate('StoryTimeline', { clusterId: cluster.id, headline, stories: JSON.stringify(cluster.stories) }) : undefined}
+            activeOpacity={0.65}
+            onPress={() => navigation.navigate('StoryTimeline', { clusterId: cluster.id, headline, stories: JSON.stringify(cluster.stories) })}
           >
             <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
               {count > 1 && (
