@@ -158,7 +158,7 @@ function formattedDate(): string {
 
 const DEVANAGARI_RE = /[ऀ-ॿ]/;
 // Always-blocked: deals, promo codes, phone prices
-const BLOCKED_ALWAYS_RE = /\b(promo.?codes?|coupons?|discount.?codes?|cashback|voucher|sale.?offer|deal.?alert|exclusive.?deal|special.?offer|affiliate|referral.?codes?|invite.?codes?|offer.?codes?|redeem.?codes?|flat \d+%|flash sale|best deals?|top deals?|today.{0,8}deals?|today.{0,8}offers?|limited.{0,8}offer|get \d+% off|save \d+%|\d+%\s*off|phone price|smartphone price|price drops?|price cut|price hike|lowest price|best price|launched at|starts at rs|starts at \$|goes on sale|specs leak|hands.?on review|camera test|(?:cpu|gpu|phone|device|gaming|graphics|processor)\s+benchmark|unboxing|vs comparison|budget phone|flagship phone|gadget deal|record low price|all.?time low|exchange offer)\b/i;
+const BLOCKED_ALWAYS_RE = /\b(promo.?codes?|coupons?|discount.?codes?|cashback|voucher|sale.?offer|deal.?alert|exclusive.?deal|special.?offer|affiliate|referral.?codes?|invite.?codes?|offer.?codes?|redeem.?codes?|flat \d+%|flash sale|best deals?|top deals?|today.{0,8}deals?|today.{0,8}offers?|limited.{0,8}offer|get \d+% off|save \d+%|\d+%\s*off|phone price|smartphone price|price drops?|price cut|price hike|lowest price|best price|now cheaper|gets? cheaper|launched at|starts at rs|starts at \$|goes on sale|now available (for|in india|at)|available (for purchase|to buy)|specs leak|hands.?on review|camera test|(?:cpu|gpu|phone|device|gaming|graphics|processor)\s+benchmark|unboxing|vs comparison|budget phone|flagship phone|gadget deal|record low price|all.?time low|exchange offer)\b/i;
 // Sports — blocked unless user enables in settings
 const BLOCKED_SPORTS_RE = /\b(cricket|ipl|bcci|test match|odi|t20i?|football|fifa|tennis|wimbledon|formula[- ]1|f1 race|chess|olympics|hockey|badminton|icc|world cup|fantasy cricket|dream11|match report|scorecard|batting|bowling|wicket|wickets|run chase|penalty kick|goal scored|transfer window)\b/i;
 // Entertainment/Bollywood — blocked unless user enables in settings
@@ -845,7 +845,7 @@ export default function FeedScreen() {
       sources: c.stories[0]?.sources ?? [],
       publishedAt: c.publishedAt,
       imageUrl: c.imageUrl,
-      isBreaking: c.stories.some(s => s.isBreaking),
+      isBreaking: c.isBreaking ?? false,
       isTrending: c.stories.length >= 3,
       _i: i,
       _category: c._category,
