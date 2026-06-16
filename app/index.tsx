@@ -1012,7 +1012,7 @@ export default function FeedScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 16, gap: 16, paddingBottom: 10, alignItems: 'center' }}
+          contentContainerStyle={{ paddingHorizontal: 16, gap: 16, paddingTop: 4, paddingBottom: 12, flexDirection: 'row' }}
           style={{ marginBottom: 4 }}
         >
           {/* All chip */}
