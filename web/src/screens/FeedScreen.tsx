@@ -728,23 +728,28 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
 
       {/* Tech source filter bar */}
       {activeTopic === 'technology' && techSources.length > 0 && (
-        <div style={{ display: 'flex', overflowX: 'auto', padding: '0 16px 10px', gap: 10, scrollbarWidth: 'none', alignItems: 'center' }}>
-          <button onClick={() => setTechSourceFilter(new Set())}
-            style={{ flexShrink: 0, padding: '6px 12px', borderRadius: 99, background: techSourceFilter.size === 0 ? '#fff' : 'rgba(255,255,255,0.1)', border: 'none', cursor: 'pointer', color: techSourceFilter.size === 0 ? '#000' : '#888', fontSize: 12, fontWeight: 700 }}>
-            All
+        <div style={{ display: 'flex', overflowX: 'auto', padding: '4px 16px 12px', gap: 18, scrollbarWidth: 'none' }}>
+          {/* All chip */}
+          <button onClick={() => setTechSourceFilter(new Set())} style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', padding: 0, width: 52 }}>
+            <div style={{ width: 42, height: 42, borderRadius: '50%', background: techSourceFilter.size === 0 ? 'rgba(74,144,217,0.15)' : 'rgba(255,255,255,0.07)', border: `2px solid ${techSourceFilter.size === 0 ? '#4A90D9' : 'transparent'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={techSourceFilter.size === 0 ? '#4A90D9' : '#666'} strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            </div>
+            <span style={{ color: techSourceFilter.size === 0 ? '#4A90D9' : '#666', fontSize: 10, fontWeight: 600, letterSpacing: 0.2 }}>All</span>
           </button>
+
           {techSources.map(src => {
             const active = techSourceFilter.has(src.name);
+            const shortName = src.name.replace(/^The /, '').replace(/ Tech$/, '').replace(/^9to5/, '').split(' ')[0];
             return (
               <button key={src.name} onClick={() => setTechSourceFilter(prev => {
                 const next = new Set(prev);
                 if (next.has(src.name)) next.delete(src.name); else next.add(src.name);
                 return next;
-              })}
-                style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 99, background: active ? '#fff' : 'rgba(255,255,255,0.1)', border: active ? 'none' : '1px solid transparent', cursor: 'pointer' }}>
-                <img src={src.favicon} alt="" style={{ width: 16, height: 16, borderRadius: 4 }} />
-                <span style={{ color: active ? '#000' : '#aaa', fontSize: 12, fontWeight: 600 }}>{src.name}</span>
-                {active && <span style={{ color: '#000', fontSize: 11, fontWeight: 800, marginLeft: 1 }}>✕</span>}
+              })} style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', padding: 0, width: 52 }}>
+                <div style={{ width: 42, height: 42, borderRadius: '50%', background: active ? 'rgba(74,144,217,0.15)' : 'rgba(255,255,255,0.07)', border: `2px solid ${active ? '#4A90D9' : 'transparent'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <img src={src.favicon} alt="" style={{ width: 24, height: 24, borderRadius: 6 }} />
+                </div>
+                <span style={{ color: active ? '#4A90D9' : '#666', fontSize: 10, fontWeight: 600, letterSpacing: 0.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 52 }}>{shortName}</span>
               </button>
             );
           })}

@@ -158,7 +158,7 @@ function formattedDate(): string {
 
 const DEVANAGARI_RE = /[ऀ-ॿ]/;
 // Always-blocked: deals, promo codes, phone prices
-const BLOCKED_ALWAYS_RE = /\b(promo.?codes?|coupons?|discount.?codes?|cashback|voucher|sale.?offer|deal.?alert|exclusive.?deal|special.?offer|affiliate|referral.?codes?|invite.?codes?|offer.?codes?|redeem.?codes?|flat \d+%|flash sale|best deals?|top deals?|today.{0,8}deals?|today.{0,8}offers?|limited.{0,8}offer|get \d+% off|save \d+%|\d+%\s*off|phone price|smartphone price|price drops?|price cut|price hike|lowest price|best price|launched at|starts at rs|starts at \$|goes on sale|specs leak|hands.?on review|camera test|(?:cpu|gpu|phone|device|gaming|graphics|processor)\s+benchmark|unboxing|vs comparison|budget phone|flagship phone|gadget deal|record low price|all.?time low|exchange offer)\b/i;
+const BLOCKED_ALWAYS_RE = /\b(promo.?codes?|coupons?|discount.?codes?|cashback|voucher|sale.?offer|deal.?alert|exclusive.?deal|special.?offer|affiliate|referral.?codes?|invite.?codes?|offer.?codes?|redeem.?codes?|flat \d+%|flash sale|best deals?|top deals?|today.{0,8}deals?|today.{0,8}offers?|limited.{0,8}offer|get \d+% off|save \d+%|\d+%\s*off|phone price|smartphone price|price drops?|price cut|price hike|lowest price|best price|now cheaper|gets? cheaper|launched at|starts at rs|starts at \$|goes on sale|now available (for|in india|at)|available (for purchase|to buy)|specs leak|hands.?on review|camera test|(?:cpu|gpu|phone|device|gaming|graphics|processor)\s+benchmark|unboxing|vs comparison|budget phone|flagship phone|gadget deal|record low price|all.?time low|exchange offer)\b/i;
 // Sports — blocked unless user enables in settings
 const BLOCKED_SPORTS_RE = /\b(cricket|ipl|bcci|test match|odi|t20i?|football|fifa|tennis|wimbledon|formula[- ]1|f1 race|chess|olympics|hockey|badminton|icc|world cup|fantasy cricket|dream11|match report|scorecard|batting|bowling|wicket|wickets|run chase|penalty kick|goal scored|transfer window)\b/i;
 // Entertainment/Bollywood — blocked unless user enables in settings
@@ -845,7 +845,7 @@ export default function FeedScreen() {
       sources: c.stories[0]?.sources ?? [],
       publishedAt: c.publishedAt,
       imageUrl: c.imageUrl,
-      isBreaking: c.stories.some(s => s.isBreaking),
+      isBreaking: c.isBreaking ?? false,
       isTrending: c.stories.length >= 3,
       _i: i,
       _category: c._category,
@@ -1012,34 +1012,36 @@ export default function FeedScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingBottom: 10 }}
+          contentContainerStyle={{ paddingHorizontal: 16, gap: 16, paddingTop: 4, paddingBottom: 12, flexDirection: 'row' }}
           style={{ marginBottom: 4 }}
         >
-          {/* All sources pill */}
-          <Pressable
-            onPress={() => setTechSourceFilter(null)}
-            style={[styles.sourceFilterPill, !techSourceFilter && styles.sourceFilterPillActive]}
-          >
-            <Text style={[styles.sourceFilterText, !techSourceFilter && styles.sourceFilterTextActive]}>All</Text>
+          {/* All chip */}
+          <Pressable onPress={() => setTechSourceFilter(null)} style={styles.srcChip}>
+            <View style={[styles.srcCircle, !techSourceFilter && styles.srcCircleActive]}>
+              <Ionicons name="apps-outline" size={18} color={!techSourceFilter ? '#4A90D9' : '#666'} />
+            </View>
+            <Text style={[styles.srcChipLabel, !techSourceFilter && styles.srcChipLabelActive]}>All</Text>
           </Pressable>
+
           {techSources.map(srcName => {
             const domain = SOURCE_DOMAINS[srcName];
             const isActive = techSourceFilter === srcName;
+            const shortName = srcName.replace(/^The /, '').replace(/ Tech$/, '').replace(/^9to5/, '').split(' ')[0];
             return (
-              <Pressable
-                key={srcName}
-                onPress={() => setTechSourceFilter(srcName)}
-                style={[styles.sourceFilterPill, isActive && styles.sourceFilterPillActive]}
-              >
-                {domain ? (
-                  <Image
-                    source={{ uri: `https://www.google.com/s2/favicons?domain=${domain}&sz=32` }}
-                    style={{ width: 14, height: 14, borderRadius: 3 }}
-                    contentFit="cover"
-                  />
-                ) : null}
-                <Text style={[styles.sourceFilterText, isActive && styles.sourceFilterTextActive]}>
-                  {srcName.replace('The ', '').replace(' Tech', '')}
+              <Pressable key={srcName} onPress={() => setTechSourceFilter(srcName)} style={styles.srcChip}>
+                <View style={[styles.srcCircle, isActive && styles.srcCircleActive]}>
+                  {domain ? (
+                    <Image
+                      source={{ uri: `https://www.google.com/s2/favicons?domain=${domain}&sz=64` }}
+                      style={{ width: 24, height: 24, borderRadius: 6 }}
+                      contentFit="cover"
+                    />
+                  ) : (
+                    <Text style={{ color: '#888', fontSize: 11, fontWeight: '700' }}>{shortName.slice(0, 2).toUpperCase()}</Text>
+                  )}
+                </View>
+                <Text style={[styles.srcChipLabel, isActive && styles.srcChipLabelActive]} numberOfLines={1}>
+                  {shortName}
                 </Text>
               </Pressable>
             );
@@ -1504,28 +1506,33 @@ const styles = StyleSheet.create({
   errorText: { color: '#FFF', fontSize: 16, fontWeight: '600', marginBottom: 6 },
   errorDetail: { color: '#555', fontSize: 13 },
 
-  // Tech source filter pills
-  sourceFilterPill: {
-    flexDirection: 'row',
+  // Tech source filter icon chips
+  srcChip: {
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    width: 52,
   },
-  sourceFilterPillActive: {
-    backgroundColor: 'rgba(74,144,217,0.18)',
+  srcCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 2,
+    borderColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  srcCircleActive: {
+    backgroundColor: 'rgba(74,144,217,0.15)',
     borderColor: '#4A90D9',
   },
-  sourceFilterText: {
-    color: '#777',
-    fontSize: 12,
+  srcChipLabel: {
+    color: '#666',
+    fontSize: 10,
     fontWeight: '600',
+    letterSpacing: 0.2,
   },
-  sourceFilterTextActive: {
+  srcChipLabelActive: {
     color: '#4A90D9',
   },
 
