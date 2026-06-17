@@ -145,15 +145,16 @@ function parseServerFeed(items: ApiItem[]): FeedItem[] {
       // Gate 1: require 2+ unique sources — single-source clusters are unverified noise.
       if (sources.length < 2) continue;
 
-      // Gate 2: coherence — at least 2 articles must share keywords with topicTitle.
-      // Clusters where only 1 article matches the topic are likely mis-clustered.
-      if (topicTitle && clusterCoherence(it.articles, topicTitle) < 2) continue;
+      // Gate 2: coherence — relax for small clusters (2-3 articles need only 1 match).
+      if (topicTitle) {
+        const minCoherence = it.articles.length >= 4 ? 2 : 1;
+        if (clusterCoherence(it.articles, topicTitle) < minCoherence) continue;
+      }
 
       const primary = pickPrimary(it.articles, topicTitle);
-
-      // Gate 3: primary article must have some keyword overlap with topicTitle.
-      // Zero overlap = chosen article is not about the cluster topic at all.
-      if (topicTitle && topicMatchScore(primary.headline ?? '', topicTitle) === 0) continue;
+      // Gate 3 removed — topic title words often don't appear verbatim in headlines
+      // (e.g. "Threads 500M users" vs "Meta announces new Threads features").
+      // Gate 1 + 2 are sufficient quality signals.
 
       out.push({ primary, allStories: it.articles, sources });
     } else {
