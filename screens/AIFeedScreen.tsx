@@ -130,10 +130,6 @@ function pickPrimary(articles: Story[], topicTitle: string): Story {
   })[0];
 }
 
-// Count articles in cluster whose headline matches the topic (coherence signal).
-function clusterCoherence(articles: Story[], topicTitle: string): number {
-  return articles.filter(a => topicMatchScore(a.headline ?? '', topicTitle) > 0).length;
-}
 
 function parseServerFeed(items: ApiItem[]): FeedItem[] {
   const out: FeedItem[] = [];
@@ -142,18 +138,10 @@ function parseServerFeed(items: ApiItem[]): FeedItem[] {
       const topicTitle = String((it as any).topicTitle ?? '');
       const sources = dedupeSources(it.articles.flatMap(a => a.sources ?? []));
 
-      // Gate 1: require 2+ unique sources — single-source clusters are unverified noise.
+      // Only gate: require 2+ unique sources — single-source clusters are unverified noise.
       if (sources.length < 2) continue;
 
-      // Gate 2: coherence — at least 2 articles must share keywords with topicTitle.
-      // Clusters where only 1 article matches the topic are likely mis-clustered.
-      if (topicTitle && clusterCoherence(it.articles, topicTitle) < 2) continue;
-
       const primary = pickPrimary(it.articles, topicTitle);
-
-      // Gate 3: primary article must have some keyword overlap with topicTitle.
-      // Zero overlap = chosen article is not about the cluster topic at all.
-      if (topicTitle && topicMatchScore(primary.headline ?? '', topicTitle) === 0) continue;
 
       out.push({ primary, allStories: it.articles, sources });
     } else {
@@ -298,7 +286,13 @@ export default function AIFeedScreen() {
       const existingIds = new Set(itemsRef.current.map(it => it.primary.id));
       const newOnes = incoming.filter(it => !existingIds.has(it.primary.id));
       if (newOnes.length === 0 && !isInitial) {
-        setExhausted(true);
+        // Current topic exhausted — advance cursor to next topic so onEndReached
+        // can load the next one. Only mark fully exhausted after all topics done.
+        setTopicCursor(prev => {
+          const next = prev + 1;
+          if (next >= TOPIC_QUEUE.length) { setExhausted(true); return prev; }
+          return next;
+        });
         return;
       }
       setItems(prev => isInitial ? rankFeedItems(newOnes) : [...prev, ...newOnes]);
@@ -523,9 +517,16 @@ export default function AIFeedScreen() {
 
   const onEndReached = useCallback(() => {
     if (loadingMore || exhausted) return;
-    // Stay within the currently-selected topic — no auto-cycle into others.
     loadTopic(topicCursor, false);
   }, [loadingMore, exhausted, topicCursor, loadTopic]);
+
+  // When topicCursor advances (current topic exhausted), auto-load the next topic.
+  const prevTopicCursorRef = useRef(topicCursor);
+  useEffect(() => {
+    if (topicCursor === prevTopicCursorRef.current) return;
+    prevTopicCursorRef.current = topicCursor;
+    if (!exhausted) loadTopic(topicCursor, false);
+  }, [topicCursor, exhausted, loadTopic]);
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ index: number | null }> }) => {
@@ -1104,16 +1105,27 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
                         </Text>
                         <View style={overlayStyles.labelDivider} />
                       </View>
-                      {item.sources.slice(0, 8).map((s, i) => (
-                        <Pressable
-                          key={i}
-                          onPress={() => s.url && WebBrowser.openBrowserAsync(s.url).catch(() => {})}
-                          style={overlayStyles.sourceRow}
-                        >
-                          <Text style={overlayStyles.sourceName}>{s.name}</Text>
-                          <Text style={[overlayStyles.sourceArrow, { color: VIOLET }]}>↗</Text>
-                        </Pressable>
-                      ))}
+                      {item.sources.slice(0, 8).map((s, i) => {
+                        const srcStory = item.allStories.find(a => a.sources?.[0]?.name === s.name);
+                        const oneLiner = srcStory?.headline ?? srcStory?.summary ?? null;
+                        return (
+                          <Pressable
+                            key={i}
+                            onPress={() => s.url && WebBrowser.openBrowserAsync(s.url).catch(() => {})}
+                            style={overlayStyles.sourceRow}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <Text style={overlayStyles.sourceName}>{s.name}</Text>
+                              {!!oneLiner && (
+                                <Text numberOfLines={2} style={{ color: 'rgba(255,255,255,0.38)', fontSize: 11, fontWeight: '400', lineHeight: 16, marginTop: 3 }}>
+                                  {oneLiner}
+                                </Text>
+                              )}
+                            </View>
+                            <Text style={[overlayStyles.sourceArrow, { color: VIOLET }]}>↗</Text>
+                          </Pressable>
+                        );
+                      })}
                     </View></Stagger>
                   )}
                 </>
@@ -1705,12 +1717,12 @@ const overlayStyles = StyleSheet.create({
   retryBtnText: { color: '#ff8888', fontSize: 10, fontWeight: '700', letterSpacing: 1.2 },
 
   sourceRow: {
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row', alignItems: 'flex-start',
     padding: 14, borderRadius: 12, marginBottom: 8,
     backgroundColor: 'rgba(185,148,255,0.05)',
     borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(185,148,255,0.12)',
   },
-  sourceName: { flex: 1, color: '#e8e8e8', fontSize: 13, fontWeight: '600' },
+  sourceName: { color: '#e8e8e8', fontSize: 13, fontWeight: '600' },
   sourceArrow: { fontSize: 14, fontWeight: '700' },
 
   loaderCard: {
