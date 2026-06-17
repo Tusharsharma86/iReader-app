@@ -130,10 +130,6 @@ function pickPrimary(articles: Story[], topicTitle: string): Story {
   })[0];
 }
 
-// Count articles in cluster whose headline matches the topic (coherence signal).
-function clusterCoherence(articles: Story[], topicTitle: string): number {
-  return articles.filter(a => topicMatchScore(a.headline ?? '', topicTitle) > 0).length;
-}
 
 function parseServerFeed(items: ApiItem[]): FeedItem[] {
   const out: FeedItem[] = [];
@@ -142,19 +138,10 @@ function parseServerFeed(items: ApiItem[]): FeedItem[] {
       const topicTitle = String((it as any).topicTitle ?? '');
       const sources = dedupeSources(it.articles.flatMap(a => a.sources ?? []));
 
-      // Gate 1: require 2+ unique sources — single-source clusters are unverified noise.
+      // Only gate: require 2+ unique sources — single-source clusters are unverified noise.
       if (sources.length < 2) continue;
 
-      // Gate 2: coherence — relax for small clusters (2-3 articles need only 1 match).
-      if (topicTitle) {
-        const minCoherence = it.articles.length >= 4 ? 2 : 1;
-        if (clusterCoherence(it.articles, topicTitle) < minCoherence) continue;
-      }
-
       const primary = pickPrimary(it.articles, topicTitle);
-      // Gate 3 removed — topic title words often don't appear verbatim in headlines
-      // (e.g. "Threads 500M users" vs "Meta announces new Threads features").
-      // Gate 1 + 2 are sufficient quality signals.
 
       out.push({ primary, allStories: it.articles, sources });
     } else {
