@@ -343,6 +343,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   const [loading, setLoading] = useState(() => !feedCache.has(activeTopic));
   const [refreshing, setRefreshing] = useState(false);
   const [techSourceFilter, setTechSourceFilter] = useState<Set<string>>(new Set());
+  const [filterOpen, setFilterOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const activeTopicRef = useRef(activeTopic);
@@ -698,58 +699,68 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
         </div>
       )}
 
-      {/* Category tabs */}
-      <div style={{ display: 'flex', overflowX: 'auto', padding: '0 16px', gap: 7, marginBottom: 8, scrollbarWidth: 'none', height: 44, alignItems: 'center' }}>
-        {visibleCategories.map(cat => {
-          const active = cat.topic === activeTopic;
-          return (
-            <button
-              key={cat.topic}
-              onClick={() => { if (cat.topic === activeTopic) { onRefresh(); containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } else { containerRef.current?.scrollTo({ top: 0, behavior: 'auto' }); setActiveTopic(cat.topic); } }}
-              style={{
-                flexShrink: 0,
-                display: 'flex', alignItems: 'center', gap: 5,
-                padding: '6px 12px',
-                borderRadius: 999,
-                background: active ? '#fff' : 'rgba(255,255,255,0.06)',
-                border: active ? 'none' : '1px solid rgba(255,255,255,0.08)',
-                backdropFilter: active ? 'none' : 'blur(12px)',
-                WebkitBackdropFilter: active ? 'none' : 'blur(12px)',
-                cursor: 'pointer',
-                transition: 'background 0.2s',
-              }}
-            >
-              <CategoryIcon name={cat.icon as CategoryIconName} active={active} />
-              <span style={{ color: active ? '#000' : '#aaa', fontSize: 12.5, fontWeight: 700, letterSpacing: 0.1 }}>{cat.label}</span>
-            </button>
-          );
-        })}
+      {/* Category tabs + optional filter toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: filterOpen && activeTopic === 'technology' ? 0 : 8 }}>
+        <div style={{ flex: 1, display: 'flex', overflowX: 'auto', padding: '0 16px', gap: 7, scrollbarWidth: 'none', height: 44, alignItems: 'center' }}>
+          {visibleCategories.map(cat => {
+            const active = cat.topic === activeTopic;
+            return (
+              <button
+                key={cat.topic}
+                onClick={() => { if (cat.topic === activeTopic) { onRefresh(); containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } else { containerRef.current?.scrollTo({ top: 0, behavior: 'auto' }); setActiveTopic(cat.topic); setFilterOpen(false); } }}
+                style={{
+                  flexShrink: 0,
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '6px 12px',
+                  borderRadius: 999,
+                  background: active ? '#fff' : 'rgba(255,255,255,0.06)',
+                  border: active ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                  cursor: 'pointer',
+                  transition: 'background 0.2s',
+                }}
+              >
+                <CategoryIcon name={cat.icon as CategoryIconName} active={active} />
+                <span style={{ color: active ? '#000' : '#aaa', fontSize: 12.5, fontWeight: 700, letterSpacing: 0.1 }}>{cat.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Filter toggle — only on Tech tab */}
+        {activeTopic === 'technology' && techSources.length > 0 && (
+          <button
+            onClick={() => setFilterOpen(v => !v)}
+            style={{
+              flexShrink: 0, marginRight: 14, position: 'relative',
+              width: 32, height: 32, borderRadius: '50%',
+              background: filterOpen || techSourceFilter.size > 0 ? 'rgba(74,144,217,0.18)' : 'rgba(255,255,255,0.08)',
+              border: `1px solid ${filterOpen || techSourceFilter.size > 0 ? '#4A90D9' : 'rgba(255,255,255,0.12)'}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={filterOpen || techSourceFilter.size > 0 ? '#4A90D9' : '#888'} strokeWidth="2.5">
+              <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
+            </svg>
+            {techSourceFilter.size > 0 && (
+              <div style={{ position: 'absolute', top: 2, right: 2, width: 7, height: 7, borderRadius: '50%', background: '#4A90D9', border: '1.5px solid #0a0a0f' }} />
+            )}
+          </button>
+        )}
       </div>
 
-      {/* Tech source filter bar */}
-      {activeTopic === 'technology' && techSources.length > 0 && (
-        <div style={{ display: 'flex', overflowX: 'auto', padding: '4px 16px 12px', gap: 18, scrollbarWidth: 'none' }}>
-          {/* All chip */}
-          <button onClick={() => setTechSourceFilter(new Set())} style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', padding: 0, width: 52 }}>
-            <div style={{ width: 42, height: 42, borderRadius: '50%', background: techSourceFilter.size === 0 ? 'rgba(74,144,217,0.15)' : 'rgba(255,255,255,0.07)', border: `2px solid ${techSourceFilter.size === 0 ? '#4A90D9' : 'transparent'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={techSourceFilter.size === 0 ? '#4A90D9' : '#666'} strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-            </div>
-            <span style={{ color: techSourceFilter.size === 0 ? '#4A90D9' : '#666', fontSize: 10, fontWeight: 600, letterSpacing: 0.2 }}>All</span>
+      {/* Tech source filter bar — collapsible, icon-only */}
+      {activeTopic === 'technology' && techSources.length > 0 && filterOpen && (
+        <div style={{ display: 'flex', overflowX: 'auto', padding: '6px 16px 10px', gap: 10, scrollbarWidth: 'none', alignItems: 'center' }}>
+          {/* All */}
+          <button onClick={() => setTechSourceFilter(new Set())} style={{ flexShrink: 0, width: 34, height: 34, borderRadius: '50%', background: techSourceFilter.size === 0 ? 'rgba(74,144,217,0.15)' : 'rgba(255,255,255,0.07)', border: `2px solid ${techSourceFilter.size === 0 ? '#4A90D9' : 'transparent'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={techSourceFilter.size === 0 ? '#4A90D9' : '#666'} strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
           </button>
-
           {techSources.map(src => {
             const active = techSourceFilter.has(src.name);
-            const shortName = src.name.replace(/^The /, '').replace(/ Tech$/, '').replace(/^9to5/, '').split(' ')[0];
             return (
-              <button key={src.name} onClick={() => setTechSourceFilter(prev => {
-                const next = new Set(prev);
-                if (next.has(src.name)) next.delete(src.name); else next.add(src.name);
-                return next;
-              })} style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', padding: 0, width: 52 }}>
-                <div style={{ width: 42, height: 42, borderRadius: '50%', background: active ? 'rgba(74,144,217,0.15)' : 'rgba(255,255,255,0.07)', border: `2px solid ${active ? '#4A90D9' : 'transparent'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <img src={src.favicon} alt="" style={{ width: 24, height: 24, borderRadius: 6 }} />
-                </div>
-                <span style={{ color: active ? '#4A90D9' : '#666', fontSize: 10, fontWeight: 600, letterSpacing: 0.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 52 }}>{shortName}</span>
+              <button key={src.name} onClick={() => setTechSourceFilter(prev => { const next = new Set(prev); if (next.has(src.name)) next.delete(src.name); else next.add(src.name); return next; })}
+                style={{ flexShrink: 0, width: 34, height: 34, borderRadius: '50%', background: active ? 'rgba(74,144,217,0.15)' : 'rgba(255,255,255,0.07)', border: `2px solid ${active ? '#4A90D9' : 'transparent'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0 }}>
+                <img src={src.favicon} alt={src.name} style={{ width: 20, height: 20, borderRadius: 5 }} />
               </button>
             );
           })}
