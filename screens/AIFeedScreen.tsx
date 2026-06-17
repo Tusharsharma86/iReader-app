@@ -298,7 +298,13 @@ export default function AIFeedScreen() {
       const existingIds = new Set(itemsRef.current.map(it => it.primary.id));
       const newOnes = incoming.filter(it => !existingIds.has(it.primary.id));
       if (newOnes.length === 0 && !isInitial) {
-        setExhausted(true);
+        // Current topic exhausted — advance cursor to next topic so onEndReached
+        // can load the next one. Only mark fully exhausted after all topics done.
+        setTopicCursor(prev => {
+          const next = prev + 1;
+          if (next >= TOPIC_QUEUE.length) { setExhausted(true); return prev; }
+          return next;
+        });
         return;
       }
       setItems(prev => isInitial ? rankFeedItems(newOnes) : [...prev, ...newOnes]);
@@ -523,9 +529,16 @@ export default function AIFeedScreen() {
 
   const onEndReached = useCallback(() => {
     if (loadingMore || exhausted) return;
-    // Stay within the currently-selected topic — no auto-cycle into others.
     loadTopic(topicCursor, false);
   }, [loadingMore, exhausted, topicCursor, loadTopic]);
+
+  // When topicCursor advances (current topic exhausted), auto-load the next topic.
+  const prevTopicCursorRef = useRef(topicCursor);
+  useEffect(() => {
+    if (topicCursor === prevTopicCursorRef.current) return;
+    prevTopicCursorRef.current = topicCursor;
+    if (!exhausted) loadTopic(topicCursor, false);
+  }, [topicCursor, exhausted, loadTopic]);
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ index: number | null }> }) => {
