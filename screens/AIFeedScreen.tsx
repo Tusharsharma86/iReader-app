@@ -1005,7 +1005,7 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
                     <Stagger delay={80}><View style={overlayStyles.insightCard}>
                       <View style={overlayStyles.insightBar} />
                       <Text style={overlayStyles.insightLabel}>KEY INSIGHT</Text>
-                      <Text style={[overlayStyles.insightText, { fontSize: 15.5 * ddScale, lineHeight: 24 * ddScale }]}>{data.insight}</Text>
+                      <Text style={[overlayStyles.insightText, { fontSize: 15.5 * ddScale, lineHeight: 24 * ddScale }]}>{data.insight.replace(/\*\*/g, '')}</Text>
                     </View></Stagger>
                   )}
 
@@ -1231,7 +1231,7 @@ function QuestionItem({ question, story, narrative, scale = 1 }: {
     <View style={overlayStyles.questionItem}>
       <Pressable onPress={toggle} style={overlayStyles.questionRow}>
         <Ionicons name="sparkles" size={12} color={VIOLET} />
-        <Text style={[overlayStyles.questionText, { fontSize: 13 * scale, lineHeight: 18 * scale }]}>{question}</Text>
+        <Text style={[overlayStyles.questionText, { fontSize: 13 * scale, lineHeight: 18 * scale }]}>{question.replace(/\*\*/g, '')}</Text>
         <Text style={[overlayStyles.questionChevron, { color: VIOLET, transform: [{ rotate: open ? '90deg' : '0deg' }] }]}>›</Text>
       </Pressable>
       {open && (
