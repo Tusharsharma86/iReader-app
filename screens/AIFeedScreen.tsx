@@ -629,6 +629,7 @@ export default function AIFeedScreen() {
           item={openedItem}
           restored={openedRestored}
           onClose={() => setOpenedItem(null)}
+          onOpenRelated={(s) => setOpenedItem({ primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []) })}
         />
       )}
 
@@ -766,7 +767,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
 }
 
 // ── Deep Dive Overlay ──────────────────────────────────────────────────────
-function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored?: boolean; onClose: () => void }) {
+function DeepDiveOverlay({ item, restored, onClose, onOpenRelated }: { item: FeedItem; restored?: boolean; onClose: () => void; onOpenRelated?: (s: Story) => void }) {
   const story = item.primary;
   // Customize → Deep Dive section toggles + depth + global font size.
   const { showDeepDiveEntities, showDeepDiveCurious, deepDiveDepth, fontSize: globalFontSize } = useSettings();
@@ -1101,7 +1102,7 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
                         return (
                           <Pressable
                             key={i}
-                            onPress={() => srcUrl && WebBrowser.openBrowserAsync(srcUrl).catch(() => {})}
+                            onPress={() => onOpenRelated ? onOpenRelated(s) : srcUrl && WebBrowser.openBrowserAsync(srcUrl).catch(() => {})}
                             style={overlayStyles.relatedRow}
                           >
                             {!!s.imageUrl && (
@@ -1120,7 +1121,7 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
                                 </Text>
                               )}
                             </View>
-                            <Text style={[overlayStyles.sourceArrow, { color: VIOLET }]}>↗</Text>
+                            <Ionicons name="chevron-forward" size={14} color={VIOLET} />
                           </Pressable>
                         );
                       })}
