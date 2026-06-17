@@ -1104,16 +1104,27 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
                         </Text>
                         <View style={overlayStyles.labelDivider} />
                       </View>
-                      {item.sources.slice(0, 8).map((s, i) => (
-                        <Pressable
-                          key={i}
-                          onPress={() => s.url && WebBrowser.openBrowserAsync(s.url).catch(() => {})}
-                          style={overlayStyles.sourceRow}
-                        >
-                          <Text style={overlayStyles.sourceName}>{s.name}</Text>
-                          <Text style={[overlayStyles.sourceArrow, { color: VIOLET }]}>↗</Text>
-                        </Pressable>
-                      ))}
+                      {item.sources.slice(0, 8).map((s, i) => {
+                        const srcStory = item.allStories.find(a => a.sources?.[0]?.name === s.name);
+                        const oneLiner = srcStory?.headline ?? srcStory?.summary ?? null;
+                        return (
+                          <Pressable
+                            key={i}
+                            onPress={() => s.url && WebBrowser.openBrowserAsync(s.url).catch(() => {})}
+                            style={overlayStyles.sourceRow}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <Text style={overlayStyles.sourceName}>{s.name}</Text>
+                              {!!oneLiner && (
+                                <Text numberOfLines={2} style={{ color: 'rgba(255,255,255,0.38)', fontSize: 11, fontWeight: '400', lineHeight: 16, marginTop: 3 }}>
+                                  {oneLiner}
+                                </Text>
+                              )}
+                            </View>
+                            <Text style={[overlayStyles.sourceArrow, { color: VIOLET }]}>↗</Text>
+                          </Pressable>
+                        );
+                      })}
                     </View></Stagger>
                   )}
                 </>
@@ -1705,12 +1716,12 @@ const overlayStyles = StyleSheet.create({
   retryBtnText: { color: '#ff8888', fontSize: 10, fontWeight: '700', letterSpacing: 1.2 },
 
   sourceRow: {
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row', alignItems: 'flex-start',
     padding: 14, borderRadius: 12, marginBottom: 8,
     backgroundColor: 'rgba(185,148,255,0.05)',
     borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(185,148,255,0.12)',
   },
-  sourceName: { flex: 1, color: '#e8e8e8', fontSize: 13, fontWeight: '600' },
+  sourceName: { color: '#e8e8e8', fontSize: 13, fontWeight: '600' },
   sourceArrow: { fontSize: 14, fontWeight: '700' },
 
   loaderCard: {
