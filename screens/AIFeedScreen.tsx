@@ -34,7 +34,7 @@ import { darken, lighten, getArticleColor } from '../utils/colors';
 const FEED_API_BASE = 'https://ireader.onrender.com/api/news/feed';
 const DEEPDIVE_API = 'https://ireader.onrender.com/api/news/deepdive';
 const ASK_API = 'https://ireader.onrender.com/api/news/ask';
-const CACHE_PREFIX = '@deepdive_v7_'; // v7 — 4-signal confidence
+const CACHE_PREFIX = '@deepdive_v8_'; // v8 — cache cleared
 const ASK_CACHE_PREFIX = '@ask_v1_';
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const VIOLET = '#b994ff';
@@ -363,7 +363,7 @@ export default function AIFeedScreen() {
   useEffect(() => {
     fetch('https://ireader.onrender.com/api/news/sources').catch(() => {});
     loadFollowed().catch(() => {});
-    AsyncStorage.getItem('@aifeed_cache_v2').then(raw => {
+    AsyncStorage.getItem('@aifeed_cache_v3').then(raw => {
       if (!raw) { loadClusterForward('initial'); return; }
       try {
         const c = JSON.parse(raw) as { items: FeedItem[]; topicCursor: number; activeIdx: number; at: number };
@@ -371,15 +371,13 @@ export default function AIFeedScreen() {
           // Stale-while-revalidate: render cache INSTANTLY at any age (no
           // skeleton, no wait), then silently refresh in the background if it's
           // older than 10 min. Makes every open after the first feel instant.
-          const tc = c.topicCursor ?? 0;
           setItems(c.items);
-          setTopicCursor(tc);
-          setActiveIdx(c.activeIdx ?? 0);
+          setTopicCursor(0); // always start at breaking on open
+          setActiveIdx(0);
           setLoading(false);
-          setTimeout(() => flatListRef.current?.scrollToOffset({ offset: (c.activeIdx ?? 0) * initialScreenHRef.current, animated: false }), 0);
+          setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: false }), 0);
           if (Date.now() - c.at > 10 * 60_000) {
-            // Default view → re-gather cross-topic clusters; specific topic → refresh that topic.
-            setTimeout(() => (tc === 0 ? loadClusterForward('silent') : silentRefresh(tc)), 400);
+            setTimeout(() => loadClusterForward('silent'), 400);
           }
           return;
         }
@@ -411,7 +409,7 @@ export default function AIFeedScreen() {
   topicCursorRef.current = topicCursor;
   const writeCacheNow = useCallback(() => {
     if (itemsRef.current.length === 0) return;
-    AsyncStorage.setItem('@aifeed_cache_v2', JSON.stringify({
+    AsyncStorage.setItem('@aifeed_cache_v3', JSON.stringify({
       items: itemsRef.current, topicCursor: topicCursorRef.current, activeIdx: activeIdxRef.current, at: Date.now(),
     })).catch(() => {});
   }, []);

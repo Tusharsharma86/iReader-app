@@ -19,9 +19,9 @@ const TOPIC_QUEUE = [
   'business',
 ];
 const DEEPDIVE_API = 'https://ireader.onrender.com/api/news/deepdive';
-const CACHE_PREFIX = '@deepdive_v9_'; // v9 — 4-signal confidence
+const CACHE_PREFIX = '@deepdive_v9_'; // v9 — cache cleared
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const FEED_LIST_CACHE = '@aifeed_list_v5'; // v5 — server-trust rewrite, no client-side clustering
+const FEED_LIST_CACHE = '@aifeed_list_v6'; // v6 — cache cleared
 
 const DEEPDIVE_SYSTEM_PROMPT = `You are an experienced journalist and editor writing for a modern mobile news app.
 
