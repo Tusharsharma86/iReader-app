@@ -146,9 +146,8 @@ function parseServerFeed(items: ApiItem[]): FeedItem[] {
       out.push({ primary, allStories: it.articles, sources });
     } else {
       const s = it as unknown as Story;
-      // Single articles: require 2+ sources and no live blog.
-      const srcCount = dedupeSources(s.sources ?? []).length;
-      if (s?.headline && !LIVE_BLOG_RE.test(s.headline) && srcCount >= 2) {
+      // Single articles: skip live blogs only.
+      if (s?.headline && !LIVE_BLOG_RE.test(s.headline)) {
         out.push({ primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []) });
       }
     }
