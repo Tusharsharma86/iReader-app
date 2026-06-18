@@ -652,7 +652,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
           textShadow: '0 4px 24px rgba(0,0,0,0.7)',
         }}>{story.headline}</h2>
 
-        {story.summary && (
+        {story.summary ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
             {splitToBullets(story.summary).map((bullet, bi) => (
               <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
@@ -664,6 +664,11 @@ function FullPreviewCard({ item, index, total, onOpen }: {
                 }}>{bullet.trim()}</p>
               </div>
             ))}
+          </div>
+        ) : (
+          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <SparkleIcon color={VIOLET} size={12} />
+            <span style={{ color: VIOLET, fontSize: 11, fontWeight: 800, letterSpacing: 0.8 }}>TAP FOR AI DEEP DIVE</span>
           </div>
         )}
 

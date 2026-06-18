@@ -779,7 +779,12 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
               </View>
             ))}
           </View>
-        ) : null}
+        ) : (
+          <View style={{ marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Ionicons name="sparkles" size={12} color={VIOLET} />
+            <Text style={{ color: VIOLET, fontSize: 11, fontWeight: '700', letterSpacing: 0.8 }}>TAP FOR AI DEEP DIVE</Text>
+          </View>
+        )}
       </CardTextBounce>
 
       <Text style={styles.swipeHint}>↑ SWIPE FOR NEXT</Text>
