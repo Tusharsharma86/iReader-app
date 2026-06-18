@@ -152,6 +152,19 @@ function parseServerFeed(items: ApiItem[]): FeedItem[] {
   return out;
 }
 
+function splitToBullets(text: string, count = 3): string[] {
+  let parts = text.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 10);
+  if (parts.length >= 2) return parts.slice(0, count);
+  parts = text.split(/\s+[–—;]\s+/).filter(s => s.trim().length > 10);
+  if (parts.length >= 2) return parts.slice(0, count);
+  const words = text.split(/\s+/);
+  const size = Math.ceil(words.length / count);
+  const chunks: string[] = [];
+  for (let i = 0; i < words.length && chunks.length < count; i += size)
+    chunks.push(words.slice(i, i + size).join(' '));
+  return chunks.filter(Boolean);
+}
+
 // Freshness-aware ranking — clusters and singletons compete on equal footing.
 function rankFeedItems(items: FeedItem[]): FeedItem[] {
   if (items.length === 0) return items;
@@ -755,10 +768,10 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
         <Text style={styles.cardHeadline}>{story.headline}</Text>
         {story.summary ? (
           <View style={{ marginTop: 6, gap: 4 }}>
-            {story.summary.split(/(?<=[.!?])\s+/).filter(Boolean).slice(0, 3).map((bullet, bi) => (
+            {splitToBullets(story.summary).map((bullet, bi) => (
               <View key={bi} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 7 }}>
                 <View style={{ width: 4, height: 4, borderRadius: 2, marginTop: 5, backgroundColor: 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
-                <Text style={{ color: '#e5e5e5', fontSize: 12, lineHeight: 18, flex: 1 }}>{bullet.trim()}</Text>
+                <Text numberOfLines={2} style={{ color: '#e5e5e5', fontSize: 12, lineHeight: 18, flex: 1 }}>{bullet.trim()}</Text>
               </View>
             ))}
           </View>
