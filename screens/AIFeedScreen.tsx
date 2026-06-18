@@ -624,6 +624,7 @@ export default function AIFeedScreen() {
 
       {openedItem && (
         <DeepDiveOverlay
+          key={openedItem.primary.id}
           item={openedItem}
           restored={openedRestored}
           onClose={() => setOpenedItem(null)}
@@ -1115,11 +1116,12 @@ function DeepDiveOverlay({ item, restored, onClose, onOpenRelated }: { item: Fee
                             <View style={overlayStyles.relatedCardBody}>
                               <Text style={overlayStyles.sourceName}>{srcName.toUpperCase()}</Text>
                               <Text numberOfLines={3} style={overlayStyles.relatedCardHeadline}>{s.headline}</Text>
-                              {!!s.summary && (
-                                <Text numberOfLines={2} style={overlayStyles.relatedSummary}>
-                                  {s.summary.split(/\s+/).slice(0, 25).join(' ')}…
-                                </Text>
-                              )}
+                              {!!s.summary && s.summary.split(/(?<=[.!?])\s+/).filter(Boolean).slice(0, 3).map((bullet, bi) => (
+                                <View key={bi} style={{ flexDirection: 'row', gap: 8, marginTop: 6, alignItems: 'flex-start' }}>
+                                  <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, backgroundColor: VIOLET, flexShrink: 0 }} />
+                                  <Text numberOfLines={2} style={overlayStyles.relatedSummary}>{bullet.trim()}</Text>
+                                </View>
+                              ))}
                               <Text style={overlayStyles.relatedCardCta}>DEEP DIVE ›</Text>
                             </View>
                           </Pressable>

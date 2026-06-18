@@ -485,6 +485,7 @@ export default function AIFeedScreen() {
       {/* Full-screen deep dive overlay */}
       {openedItem && (
         <DeepDiveOverlay
+          key={openedItem.primary.id}
           item={openedItem}
           onClose={() => setOpenedItem(null)}
           onOpenRelated={(s) => setOpenedItem({ primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []) })}
@@ -1154,7 +1155,12 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
                         <div style={{ padding: '12px 14px 14px' }}>
                           <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10, fontWeight: 800, letterSpacing: 1.2, marginBottom: 6 }}>{srcName.toUpperCase()}</div>
                           <div style={{ color: '#f0f0f0', fontSize: 15, fontWeight: 700, lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>{s.headline}</div>
-                          {s.summary && <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12, marginTop: 6, lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{s.summary.split(/\s+/).slice(0, 25).join(' ')}…</div>}
+                          {s.summary && s.summary.split(/(?<=[.!?])\s+/).filter(Boolean).slice(0, 3).map((bullet, bi) => (
+                            <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 6 }}>
+                              <div style={{ width: 5, height: 5, borderRadius: 3, marginTop: 5, background: VIOLET, flexShrink: 0 }} />
+                              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{bullet.trim()}</div>
+                            </div>
+                          ))}
                           <div style={{ marginTop: 10, color: VIOLET, fontSize: 10, fontWeight: 800, letterSpacing: 0.8 }}>DEEP DIVE ›</div>
                         </div>
                       </button>
