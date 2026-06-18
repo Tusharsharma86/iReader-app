@@ -823,6 +823,66 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
   );
 }
 
+// ── Related story card (EARLIER IN STORY) — pre-fetches AI bullets ─────────
+function RelatedStoryCard({ s, onPress }: { s: Story; onPress: () => void }) {
+  const { deepDiveDepth } = useSettings();
+  const [aiBullets, setAiBullets] = useState<string[] | null>(null);
+  const srcName = s.sources?.[0]?.name ?? 'Source';
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(DEEPDIVE_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: s.sources?.[0]?.url ?? '',
+            headline: s.headline,
+            paragraphs: [s.headline + '. ' + (s.summary ?? s.headline)],
+            sourceUrls: [s.sources?.[0]?.url].filter(Boolean) as string[],
+            depth: deepDiveDepth,
+            publishedAt: s.publishedAt,
+          }),
+        });
+        if (!res.ok || cancelled) return;
+        const json: DeepDiveData = await res.json();
+        if (cancelled) return;
+        if (json.tldr?.length) setAiBullets(json.tldr.slice(0, 4).map(b => b.replace(/\*\*/g, '')));
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [s.id, deepDiveDepth]);
+
+  const bullets = aiBullets ?? (s.summary ? splitToBullets(s.summary) : null);
+
+  return (
+    <Pressable onPress={onPress} style={overlayStyles.relatedCard}>
+      {s.imageUrl ? (
+        <Image source={{ uri: s.imageUrl }} style={overlayStyles.relatedCardImage} contentFit="cover" />
+      ) : (
+        <View style={overlayStyles.relatedCardImageFallback} />
+      )}
+      <View style={overlayStyles.relatedCardBody}>
+        <Text style={overlayStyles.sourceName}>{srcName.toUpperCase()}</Text>
+        <Text numberOfLines={3} style={overlayStyles.relatedCardHeadline}>{s.headline}</Text>
+        {bullets?.length ? bullets.map((bullet, bi) => (
+          <View key={bi} style={{ flexDirection: 'row', gap: 8, marginTop: 6, alignItems: 'flex-start' }}>
+            <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, backgroundColor: aiBullets ? VIOLET : 'rgba(255,255,255,0.4)', flexShrink: 0 }} />
+            <Text style={overlayStyles.relatedSummary}>{bullet.trim()}</Text>
+          </View>
+        )) : !aiBullets ? (
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 6, alignItems: 'center' }}>
+            <Ionicons name="sparkles" size={10} color={VIOLET} />
+            <Text style={[overlayStyles.relatedSummary, { color: VIOLET, opacity: 0.7, fontSize: 10 }]}>Loading AI summary…</Text>
+          </View>
+        ) : null}
+        <Text style={overlayStyles.relatedCardCta}>DEEP DIVE ›</Text>
+      </View>
+    </Pressable>
+  );
+}
+
 // ── Deep Dive Overlay ──────────────────────────────────────────────────────
 function DeepDiveOverlay({ item, restored, onClose, onOpenRelated }: { item: FeedItem; restored?: boolean; onClose: () => void; onOpenRelated?: (s: Story) => void }) {
   const story = item.primary;
@@ -1155,34 +1215,12 @@ function DeepDiveOverlay({ item, restored, onClose, onOpenRelated }: { item: Fee
                       </View>
                       {item.allStories.slice(1, 6).map((s, i) => {
                         const srcUrl = s.sources?.[0]?.url ?? null;
-                        const srcName = s.sources?.[0]?.name ?? 'Source';
                         return (
-                          <Pressable
-                            key={i}
+                          <RelatedStoryCard
+                            key={s.id || i}
+                            s={s}
                             onPress={() => onOpenRelated ? onOpenRelated(s) : srcUrl && WebBrowser.openBrowserAsync(srcUrl).catch(() => {})}
-                            style={overlayStyles.relatedCard}
-                          >
-                            {s.imageUrl ? (
-                              <Image
-                                source={{ uri: s.imageUrl }}
-                                style={overlayStyles.relatedCardImage}
-                                contentFit="cover"
-                              />
-                            ) : (
-                              <View style={overlayStyles.relatedCardImageFallback} />
-                            )}
-                            <View style={overlayStyles.relatedCardBody}>
-                              <Text style={overlayStyles.sourceName}>{srcName.toUpperCase()}</Text>
-                              <Text numberOfLines={3} style={overlayStyles.relatedCardHeadline}>{s.headline}</Text>
-                              {!!s.summary && s.summary.split(/(?<=[.!?])\s+/).filter(Boolean).slice(0, 3).map((bullet, bi) => (
-                                <View key={bi} style={{ flexDirection: 'row', gap: 8, marginTop: 6, alignItems: 'flex-start' }}>
-                                  <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, backgroundColor: VIOLET, flexShrink: 0 }} />
-                                  <Text numberOfLines={2} style={overlayStyles.relatedSummary}>{bullet.trim()}</Text>
-                                </View>
-                              ))}
-                              <Text style={overlayStyles.relatedCardCta}>DEEP DIVE ›</Text>
-                            </View>
-                          </Pressable>
+                          />
                         );
                       })}
                     </View></Stagger>
