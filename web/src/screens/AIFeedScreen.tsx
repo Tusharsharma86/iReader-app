@@ -200,15 +200,18 @@ function rankFeedItems(items: FeedItem[]): FeedItem[] {
 }
 
 function splitToBullets(text: string, count = 3): string[] {
-  let parts = text.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 10);
+  const clean = text.replace(/\.{2,}$/, '').trim();
+  let parts = clean.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 30);
   if (parts.length >= 2) return parts.slice(0, count);
-  parts = text.split(/\s+[–—;]\s+/).filter(s => s.trim().length > 10);
+  parts = clean.split(/\s+[–—;]\s+/).filter(s => s.trim().length > 30);
   if (parts.length >= 2) return parts.slice(0, count);
-  const words = text.split(/\s+/);
+  const words = clean.split(/\s+/);
   const size = Math.ceil(words.length / count);
   const chunks: string[] = [];
-  for (let i = 0; i < words.length && chunks.length < count; i += size)
-    chunks.push(words.slice(i, i + size).join(' '));
+  for (let i = 0; i < words.length && chunks.length < count; i += size) {
+    const chunk = words.slice(i, i + size).join(' ');
+    if (chunk.length > 30) chunks.push(chunk);
+  }
   return chunks.filter(Boolean);
 }
 
