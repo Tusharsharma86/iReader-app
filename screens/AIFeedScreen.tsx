@@ -754,9 +754,14 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
         </View>
         <Text style={styles.cardHeadline}>{story.headline}</Text>
         {story.summary ? (
-          <Text style={styles.cardSummary} numberOfLines={8}>
-            {story.summary.split(/\s+/).slice(0, 100).join(' ')}{story.summary.split(/\s+/).length > 100 ? '…' : ''}
-          </Text>
+          <View style={{ marginTop: 8, gap: 5 }}>
+            {story.summary.split(/(?<=[.!?])\s+/).filter(Boolean).slice(0, 4).map((bullet, bi) => (
+              <View key={bi} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+                <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, backgroundColor: 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
+                <Text style={styles.cardSummary} numberOfLines={2}>{bullet.trim()}</Text>
+              </View>
+            ))}
+          </View>
         ) : null}
       </CardTextBounce>
 
