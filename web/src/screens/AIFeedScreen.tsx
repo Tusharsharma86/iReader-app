@@ -636,13 +636,13 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         }}>{story.headline}</h2>
 
         {story.summary && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 4 }}>
-            {story.summary.split(/(?<=[.!?])\s+/).filter(Boolean).slice(0, 4).map((bullet, bi) => (
-              <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                <div style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, background: 'rgba(255,255,255,0.5)', flexShrink: 0, textShadow: 'none' }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+            {story.summary.split(/(?<=[.!?])\s+/).filter(Boolean).slice(0, 3).map((bullet, bi) => (
+              <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
+                <div style={{ width: 4, height: 4, borderRadius: 2, marginTop: 6, background: 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
                 <p style={{
-                  margin: 0, color: '#e5e5e5', fontSize: 13, lineHeight: 1.55,
-                  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                  margin: 0, color: '#e5e5e5', fontSize: 12, lineHeight: 1.5,
+                  overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
                   textShadow: '0 2px 12px rgba(0,0,0,0.55)',
                 }}>{bullet.trim()}</p>
               </div>
