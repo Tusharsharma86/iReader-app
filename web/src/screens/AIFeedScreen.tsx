@@ -199,6 +199,19 @@ function rankFeedItems(items: FeedItem[]): FeedItem[] {
     .map(x => x.item);
 }
 
+function splitToBullets(text: string, count = 3): string[] {
+  let parts = text.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 10);
+  if (parts.length >= 2) return parts.slice(0, count);
+  parts = text.split(/\s+[–—;]\s+/).filter(s => s.trim().length > 10);
+  if (parts.length >= 2) return parts.slice(0, count);
+  const words = text.split(/\s+/);
+  const size = Math.ceil(words.length / count);
+  const chunks: string[] = [];
+  for (let i = 0; i < words.length && chunks.length < count; i += size)
+    chunks.push(words.slice(i, i + size).join(' '));
+  return chunks.filter(Boolean);
+}
+
 function dedupeSources(arr: { name: string; url: string }[]): { name: string; url: string }[] {
   const seen = new Set<string>();
   const out: { name: string; url: string }[] = [];
@@ -637,11 +650,12 @@ function FullPreviewCard({ item, index, total, onOpen }: {
 
         {story.summary && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
-            {story.summary.split(/(?<=[.!?])\s+/).filter(Boolean).slice(0, 3).map((bullet, bi) => (
+            {splitToBullets(story.summary).map((bullet, bi) => (
               <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
                 <div style={{ width: 4, height: 4, borderRadius: 2, marginTop: 6, background: 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
                 <p style={{
                   margin: 0, color: '#e5e5e5', fontSize: 12, lineHeight: 1.5,
+                  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
                   textShadow: '0 2px 12px rgba(0,0,0,0.55)',
                 }}>{bullet.trim()}</p>
               </div>
