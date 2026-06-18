@@ -735,7 +735,6 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      await new Promise(r => setTimeout(r, 2000));
       if (cancelled) return;
       try {
         const res = await fetch(DEEPDIVE_API, {
