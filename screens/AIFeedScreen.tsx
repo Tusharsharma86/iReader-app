@@ -1101,25 +1101,27 @@ function DeepDiveOverlay({ item, restored, onClose, onOpenRelated }: { item: Fee
                           <Pressable
                             key={i}
                             onPress={() => onOpenRelated ? onOpenRelated(s) : srcUrl && WebBrowser.openBrowserAsync(srcUrl).catch(() => {})}
-                            style={overlayStyles.relatedRow}
+                            style={overlayStyles.relatedCard}
                           >
-                            {!!s.imageUrl && (
+                            {s.imageUrl ? (
                               <Image
                                 source={{ uri: s.imageUrl }}
-                                style={overlayStyles.relatedThumb}
+                                style={overlayStyles.relatedCardImage}
                                 contentFit="cover"
                               />
+                            ) : (
+                              <View style={overlayStyles.relatedCardImageFallback} />
                             )}
-                            <View style={{ flex: 1 }}>
+                            <View style={overlayStyles.relatedCardBody}>
                               <Text style={overlayStyles.sourceName}>{srcName.toUpperCase()}</Text>
-                              <Text numberOfLines={2} style={overlayStyles.relatedHeadline}>{s.headline}</Text>
+                              <Text numberOfLines={3} style={overlayStyles.relatedCardHeadline}>{s.headline}</Text>
                               {!!s.summary && (
                                 <Text numberOfLines={2} style={overlayStyles.relatedSummary}>
-                                  {s.summary.split(/\s+/).slice(0, 20).join(' ')}…
+                                  {s.summary.split(/\s+/).slice(0, 25).join(' ')}…
                                 </Text>
                               )}
+                              <Text style={overlayStyles.relatedCardCta}>DEEP DIVE ›</Text>
                             </View>
-                            <Ionicons name="chevron-forward" size={14} color={VIOLET} />
                           </Pressable>
                         );
                       })}
@@ -1725,10 +1727,19 @@ const overlayStyles = StyleSheet.create({
     backgroundColor: 'rgba(185,148,255,0.05)',
     borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(185,148,255,0.12)',
   },
+  relatedCard: {
+    borderRadius: 14, marginBottom: 10, overflow: 'hidden',
+    backgroundColor: 'rgba(185,148,255,0.05)',
+    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(185,148,255,0.12)',
+  },
+  relatedCardImage: { width: '100%', height: 160 },
+  relatedCardImageFallback: { width: '100%', height: 80, backgroundColor: 'rgba(185,148,255,0.08)' },
+  relatedCardBody: { padding: 14 },
+  relatedCardHeadline: { color: '#f0f0f0', fontSize: 15, fontWeight: '700', lineHeight: 21, marginTop: 4 },
+  relatedCardCta: { color: VIOLET, fontSize: 10, fontWeight: '800', letterSpacing: 0.8, marginTop: 10 },
   relatedThumb: { width: 64, height: 64, borderRadius: 8, flexShrink: 0 },
-  relatedHeadline: { color: '#e8e8e8', fontSize: 13, fontWeight: '600', lineHeight: 18, marginTop: 3 },
-  relatedSummary: { color: 'rgba(255,255,255,0.38)', fontSize: 11, lineHeight: 16, marginTop: 3 },
-  sourceName: { color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '700', letterSpacing: 0.8 },
+  relatedSummary: { color: 'rgba(255,255,255,0.4)', fontSize: 12, lineHeight: 17, marginTop: 5 },
+  sourceName: { color: 'rgba(255,255,255,0.45)', fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
   sourceArrow: { fontSize: 14, fontWeight: '700' },
 
   loaderCard: {

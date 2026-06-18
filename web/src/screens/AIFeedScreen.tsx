@@ -1138,22 +1138,25 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
                     const srcName = s.sources?.[0]?.name ?? 'Source';
                     return (
                       <button key={i} onClick={() => onOpenRelated ? onOpenRelated(s) : srcUrl && window.open(srcUrl, '_blank')} style={{
-                        display: 'flex', alignItems: 'flex-start', gap: 10,
-                        padding: '12px 14px', borderRadius: 12,
+                        display: 'flex', flexDirection: 'column',
+                        borderRadius: 14,
                         background: 'rgba(185,148,255,0.05)',
                         border: '1px solid rgba(185,148,255,0.12)',
                         textAlign: 'left', cursor: 'pointer',
-                        width: '100%',
+                        width: '100%', overflow: 'hidden',
+                        marginBottom: 2,
                       }}>
-                        {s.imageUrl && (
-                          <img src={s.imageUrl} alt="" style={{ width: 64, height: 64, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
+                        {s.imageUrl ? (
+                          <img src={s.imageUrl} alt="" style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }} />
+                        ) : (
+                          <div style={{ width: '100%', height: 100, background: `linear-gradient(135deg, ${dominant}44 0%, #0a0a10 100%)` }} />
                         )}
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: 700, letterSpacing: 0.8, marginBottom: 3 }}>{srcName.toUpperCase()}</div>
-                          <div style={{ color: '#e8e8e8', fontSize: 13, fontWeight: 600, lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{s.headline}</div>
-                          {s.summary && <div style={{ color: '#666', fontSize: 11, marginTop: 3, lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{s.summary.split(/\s+/).slice(0, 20).join(' ')}…</div>}
+                        <div style={{ padding: '12px 14px 14px' }}>
+                          <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10, fontWeight: 800, letterSpacing: 1.2, marginBottom: 6 }}>{srcName.toUpperCase()}</div>
+                          <div style={{ color: '#f0f0f0', fontSize: 15, fontWeight: 700, lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>{s.headline}</div>
+                          {s.summary && <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12, marginTop: 6, lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{s.summary.split(/\s+/).slice(0, 25).join(' ')}…</div>}
+                          <div style={{ marginTop: 10, color: VIOLET, fontSize: 10, fontWeight: 800, letterSpacing: 0.8 }}>DEEP DIVE ›</div>
                         </div>
-                        <span style={{ color: VIOLET, fontSize: 14, flexShrink: 0 }}>›</span>
                       </button>
                     );
                   })}
