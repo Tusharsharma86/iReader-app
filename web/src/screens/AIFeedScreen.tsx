@@ -234,6 +234,7 @@ export default function AIFeedScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openedItem, setOpenedItem] = useState<FeedItem | null>(null);
+  const [itemHistory, setItemHistory] = useState<FeedItem[]>([]);
   const [topicCursor, setTopicCursor] = useState(0);
   const [exhausted, setExhausted] = useState(false);
   const [activeTopic, setActiveTopic] = useState<string>(TOPIC_QUEUE[0]);
@@ -504,8 +505,20 @@ export default function AIFeedScreen() {
         <DeepDiveOverlay
           key={openedItem.primary.id}
           item={openedItem}
-          onClose={() => setOpenedItem(null)}
-          onOpenRelated={(s) => setOpenedItem({ primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []) })}
+          onClose={() => {
+            if (itemHistory.length > 0) {
+              const prev = itemHistory[itemHistory.length - 1];
+              setItemHistory(h => h.slice(0, -1));
+              setOpenedItem(prev);
+            } else {
+              setOpenedItem(null);
+              setItemHistory([]);
+            }
+          }}
+          onOpenRelated={(s) => {
+            if (openedItem) setItemHistory(h => [...h, openedItem]);
+            setOpenedItem({ primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []) });
+          }}
         />
       )}
 

@@ -229,6 +229,7 @@ export default function AIFeedScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openedItem, setOpenedItemState] = useState<FeedItem | null>(null);
+  const [itemHistory, setItemHistory] = useState<FeedItem[]>([]);
   // Tracks whether openedItem came from mount restoration (fold/unfold) — used
   // to suppress the Modal slide-in animation in that case so it doesn't look
   // like a fresh open. Cleared as soon as user interacts.
@@ -246,6 +247,7 @@ export default function AIFeedScreen() {
     if (!parent) return;
     const unsub = parent.addListener('tabPress', () => {
       setOpenedItemState(null);
+      setItemHistory([]);
       flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     });
     return unsub;
@@ -256,6 +258,7 @@ export default function AIFeedScreen() {
   const setOpenedItem = useCallback((item: FeedItem | null) => {
     setOpenedItemState(item);
     setOpenedRestored(false); // user-initiated open/close — animate normally
+    if (!item) setItemHistory([]);
     if (item) {
       const a = item.primary;
       // Track usage: count Deep Dive opens as AI usage + article read.
@@ -644,8 +647,26 @@ export default function AIFeedScreen() {
           key={openedItem.primary.id}
           item={openedItem}
           restored={openedRestored}
-          onClose={() => setOpenedItem(null)}
-          onOpenRelated={(s) => setOpenedItem({ primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []) })}
+          onClose={() => {
+            if (itemHistory.length > 0) {
+              const prev = itemHistory[itemHistory.length - 1];
+              setItemHistory(h => h.slice(0, -1));
+              setOpenedItemState(prev);
+              setOpenedRestored(false);
+              const a = prev.primary;
+              AsyncStorage.setItem('@aifeed_open_item', JSON.stringify({
+                id: a.id, headline: a.headline, summary: a.summary, imageUrl: a.imageUrl,
+                url: a.sources?.[0]?.url ?? '', source: a.sources?.[0]?.name ?? '',
+                publishedAt: a.publishedAt, at: Date.now(), closed: false,
+              })).catch(() => {});
+            } else {
+              setOpenedItem(null);
+            }
+          }}
+          onOpenRelated={(s) => {
+            if (openedItem) setItemHistory(h => [...h, openedItem]);
+            setOpenedItem({ primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []) });
+          }}
         />
       )}
 
