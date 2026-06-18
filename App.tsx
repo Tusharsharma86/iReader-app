@@ -11,6 +11,7 @@ import { tabBarTranslateY } from './utils/tabBarAnim';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import ArticleScreen from './screens/ArticleScreen';
 import TopicFeedScreen from './screens/TopicFeedScreen';
+import ExploreScreen from './screens/ExploreScreen';
 import SavedScreen from './screens/SavedScreen';
 import FeedScreen from './app/index';
 import DigestScreen from './screens/DigestScreen';
@@ -21,7 +22,7 @@ import SourcesScreen from './screens/SourcesScreen';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { SourceProvider } from './contexts/SourceContext';
 import { SavedProvider } from './contexts/SavedContext';
-import { FeedStackParamList, RootTabParamList, SettingsStackParamList } from './types/navigation';
+import { FeedStackParamList, RootTabParamList, SettingsStackParamList, ExploreStackParamList } from './types/navigation';
 import FavSourcesScreen from './screens/FavSourcesScreen';
 import UsageScreen from './screens/UsageScreen';
 import CostDashboardScreen from './screens/CostDashboardScreen';
@@ -126,6 +127,7 @@ function handleWidgetUrl(url: string | null) {
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const FeedStack = createNativeStackNavigator<FeedStackParamList>();
 const DigestStack = createNativeStackNavigator<FeedStackParamList>();
+const ExploreStack = createNativeStackNavigator<ExploreStackParamList>();
 const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
@@ -134,6 +136,7 @@ const TAB_ITEMS: { route: keyof RootTabParamList; label: string; icon: IoniconsN
   { route: 'Feed',     label: 'Feed',     icon: 'newspaper-outline',  iconActive: 'newspaper'  },
   { route: 'Digest',   label: 'Digest',   icon: 'flash-outline',      iconActive: 'flash'      },
   { route: 'AIFeed',   label: 'AI Feed',  icon: 'sparkles-outline',   iconActive: 'sparkles'   },
+  { route: 'Explore',  label: 'Explore',  icon: 'compass-outline',    iconActive: 'compass'    },
   { route: 'Saved',    label: 'Saved',    icon: 'bookmark-outline',   iconActive: 'bookmark'   },
   { route: 'Settings', label: 'Settings', icon: 'settings-outline',   iconActive: 'settings'   },
 ];
@@ -282,6 +285,18 @@ function DigestNavigator() {
       <DigestStack.Screen name="FeedHome" component={DigestScreen} />
       <DigestStack.Screen name="Article" component={ArticleScreen} />
     </DigestStack.Navigator>
+  );
+}
+
+function ExploreNavigator() {
+  return (
+    <ExploreStack.Navigator
+      screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#080808' } }}
+    >
+      <ExploreStack.Screen name="ExploreHome" component={ExploreScreen} />
+      <ExploreStack.Screen name="TopicFeed" component={TopicFeedScreen} />
+      <ExploreStack.Screen name="Article" component={ArticleScreen} />
+    </ExploreStack.Navigator>
   );
 }
 
@@ -489,6 +504,7 @@ export default function App() {
           <Tab.Screen name="Feed"     component={FeedNavigator} />
           <Tab.Screen name="Digest"   component={DigestNavigator} />
           <Tab.Screen name="AIFeed"   component={AIFeedScreen} />
+          <Tab.Screen name="Explore"  component={ExploreNavigator} />
           <Tab.Screen name="Saved"    component={SavedScreen} />
           <Tab.Screen name="Settings" component={SettingsNavigator} />
         </Tab.Navigator>
