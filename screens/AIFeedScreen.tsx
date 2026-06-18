@@ -754,11 +754,11 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
         </View>
         <Text style={styles.cardHeadline}>{story.headline}</Text>
         {story.summary ? (
-          <View style={{ marginTop: 8, gap: 5 }}>
-            {story.summary.split(/(?<=[.!?])\s+/).filter(Boolean).slice(0, 4).map((bullet, bi) => (
-              <View key={bi} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
-                <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, backgroundColor: 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
-                <Text style={styles.cardSummary} numberOfLines={2}>{bullet.trim()}</Text>
+          <View style={{ marginTop: 6, gap: 4 }}>
+            {story.summary.split(/(?<=[.!?])\s+/).filter(Boolean).slice(0, 3).map((bullet, bi) => (
+              <View key={bi} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 7 }}>
+                <View style={{ width: 4, height: 4, borderRadius: 2, marginTop: 5, backgroundColor: 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
+                <Text style={{ color: '#e5e5e5', fontSize: 12, lineHeight: 18 }} numberOfLines={1}>{bullet.trim()}</Text>
               </View>
             ))}
           </View>
