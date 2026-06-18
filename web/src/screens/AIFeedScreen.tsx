@@ -545,7 +545,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
     let timer: ReturnType<typeof setTimeout>;
     const observer = new IntersectionObserver(([entry]) => {
       if (entry.isIntersecting) {
-        timer = setTimeout(async () => {
+        timer = setTimeout(async () => {  // small tick to avoid fetch on quick swipe-through
           if (cancelled) return;
           try {
             const res = await fetch(DEEPDIVE_API, {
@@ -565,7 +565,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
             if (cancelled) return;
             if (json.tldr?.length) setAiBullets(json.tldr.slice(0, 4).map(b => b.replace(/\*\*/g, '')));
           } catch {}
-        }, 2000);
+        }, 300);
       } else {
         clearTimeout(timer);
       }
