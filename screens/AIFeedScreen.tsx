@@ -159,14 +159,7 @@ function splitToBullets(text: string, count = 4): string[] {
   if (parts.length >= 2) return parts.slice(0, count).map(cap);
   parts = clean.split(/\s+[–—;]\s+/).filter(s => s.trim().length > 30);
   if (parts.length >= 2) return parts.slice(0, count).map(cap);
-  const words = clean.split(/\s+/);
-  const size = Math.ceil(words.length / count);
-  const chunks: string[] = [];
-  for (let i = 0; i < words.length && chunks.length < count; i += size) {
-    const chunk = words.slice(i, i + size).join(' ');
-    if (chunk.length > 30) chunks.push(cap(chunk));
-  }
-  return chunks.filter(Boolean);
+  return clean.length > 10 ? [cap(clean)] : [];
 }
 
 // Freshness-aware ranking — clusters and singletons compete on equal footing.
