@@ -138,9 +138,6 @@ function parseServerFeed(items: ApiItem[]): FeedItem[] {
       const topicTitle = String((it as any).topicTitle ?? '');
       const sources = dedupeSources(it.articles.flatMap(a => a.sources ?? []));
 
-      // Only gate: require 2+ unique sources — single-source clusters are unverified noise.
-      if (sources.length < 2) continue;
-
       const primary = pickPrimary(it.articles, topicTitle);
 
       out.push({ primary, allStories: it.articles, sources });
@@ -630,6 +627,7 @@ export default function AIFeedScreen() {
           item={openedItem}
           restored={openedRestored}
           onClose={() => setOpenedItem(null)}
+          onOpenRelated={(s) => setOpenedItem({ primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []) })}
         />
       )}
 
@@ -750,11 +748,6 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
       <CardTextBounce>
         <View style={styles.metaRow}>
           <Text style={[styles.metaText, { color: accent }]}>{sourceName.toUpperCase()}</Text>
-          {extraSources > 0 && (
-            <View style={styles.sourceCountPill}>
-              <Text style={styles.sourceCountText}>+{extraSources} {extraSources === 1 ? 'SOURCE' : 'SOURCES'}</Text>
-            </View>
-          )}
           <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.4)' }]}>·</Text>
           <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.65)' }]}>{timeAgo(story.publishedAt)}</Text>
         </View>
@@ -772,7 +765,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
 }
 
 // ── Deep Dive Overlay ──────────────────────────────────────────────────────
-function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored?: boolean; onClose: () => void }) {
+function DeepDiveOverlay({ item, restored, onClose, onOpenRelated }: { item: FeedItem; restored?: boolean; onClose: () => void; onOpenRelated?: (s: Story) => void }) {
   const story = item.primary;
   // Customize → Deep Dive section toggles + depth + global font size.
   const { showDeepDiveEntities, showDeepDiveCurious, deepDiveDepth, fontSize: globalFontSize } = useSettings();
@@ -832,7 +825,6 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
         setStage('generating');
         const paragraphs = [
           story.headline + '. ' + (story.summary ?? story.headline),
-          ...item.allStories.slice(1, 12).filter(s => s.summary && s.summary !== story.summary).map(s => `[${s.sources?.[0]?.name ?? 'Source'}]: ${s.summary}`),
         ];
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 95000);
@@ -1003,7 +995,7 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
                     <Stagger delay={80}><View style={overlayStyles.insightCard}>
                       <View style={overlayStyles.insightBar} />
                       <Text style={overlayStyles.insightLabel}>KEY INSIGHT</Text>
-                      <Text style={[overlayStyles.insightText, { fontSize: 15.5 * ddScale, lineHeight: 24 * ddScale }]}>{data.insight}</Text>
+                      <Text style={[overlayStyles.insightText, { fontSize: 15.5 * ddScale, lineHeight: 24 * ddScale }]}>{data.insight.replace(/\*\*/g, '')}</Text>
                     </View></Stagger>
                   )}
 
@@ -1093,33 +1085,41 @@ function DeepDiveOverlay({ item, restored, onClose }: { item: FeedItem; restored
                     </View></Stagger>
                   )}
 
-                  {/* Sources */}
-                  {item.sources.length > 0 && (
+                  {/* Related Coverage */}
+                  {item.allStories.length > 1 && (
                     <Stagger delay={440}><View style={{ marginTop: 4 }}>
                       <View style={overlayStyles.sectionLabelRow}>
                         <Text style={overlayStyles.sectionLabel}>
-                          COVERED BY <TickNumber to={item.sources.length} /> {item.sources.length === 1 ? 'SOURCE' : 'SOURCES'}
+                          EARLIER IN STORY
                         </Text>
                         <View style={overlayStyles.labelDivider} />
                       </View>
-                      {item.sources.slice(0, 8).map((s, i) => {
-                        const srcStory = item.allStories.find(a => a.sources?.[0]?.name === s.name);
-                        const oneLiner = srcStory?.headline ?? srcStory?.summary ?? null;
+                      {item.allStories.slice(1, 6).map((s, i) => {
+                        const srcUrl = s.sources?.[0]?.url ?? null;
+                        const srcName = s.sources?.[0]?.name ?? 'Source';
                         return (
                           <Pressable
                             key={i}
-                            onPress={() => s.url && WebBrowser.openBrowserAsync(s.url).catch(() => {})}
-                            style={overlayStyles.sourceRow}
+                            onPress={() => onOpenRelated ? onOpenRelated(s) : srcUrl && WebBrowser.openBrowserAsync(srcUrl).catch(() => {})}
+                            style={overlayStyles.relatedRow}
                           >
+                            {!!s.imageUrl && (
+                              <Image
+                                source={{ uri: s.imageUrl }}
+                                style={overlayStyles.relatedThumb}
+                                contentFit="cover"
+                              />
+                            )}
                             <View style={{ flex: 1 }}>
-                              <Text style={overlayStyles.sourceName}>{s.name}</Text>
-                              {!!oneLiner && (
-                                <Text numberOfLines={2} style={{ color: 'rgba(255,255,255,0.38)', fontSize: 11, fontWeight: '400', lineHeight: 16, marginTop: 3 }}>
-                                  {oneLiner}
+                              <Text style={overlayStyles.sourceName}>{srcName.toUpperCase()}</Text>
+                              <Text numberOfLines={2} style={overlayStyles.relatedHeadline}>{s.headline}</Text>
+                              {!!s.summary && (
+                                <Text numberOfLines={2} style={overlayStyles.relatedSummary}>
+                                  {s.summary.split(/\s+/).slice(0, 20).join(' ')}…
                                 </Text>
                               )}
                             </View>
-                            <Text style={[overlayStyles.sourceArrow, { color: VIOLET }]}>↗</Text>
+                            <Ionicons name="chevron-forward" size={14} color={VIOLET} />
                           </Pressable>
                         );
                       })}
@@ -1229,7 +1229,7 @@ function QuestionItem({ question, story, narrative, scale = 1 }: {
     <View style={overlayStyles.questionItem}>
       <Pressable onPress={toggle} style={overlayStyles.questionRow}>
         <Ionicons name="sparkles" size={12} color={VIOLET} />
-        <Text style={[overlayStyles.questionText, { fontSize: 13 * scale, lineHeight: 18 * scale }]}>{question}</Text>
+        <Text style={[overlayStyles.questionText, { fontSize: 13 * scale, lineHeight: 18 * scale }]}>{question.replace(/\*\*/g, '')}</Text>
         <Text style={[overlayStyles.questionChevron, { color: VIOLET, transform: [{ rotate: open ? '90deg' : '0deg' }] }]}>›</Text>
       </Pressable>
       {open && (
@@ -1719,7 +1719,16 @@ const overlayStyles = StyleSheet.create({
     backgroundColor: 'rgba(185,148,255,0.05)',
     borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(185,148,255,0.12)',
   },
-  sourceName: { color: '#e8e8e8', fontSize: 13, fontWeight: '600' },
+  relatedRow: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
+    padding: 12, borderRadius: 12, marginBottom: 8,
+    backgroundColor: 'rgba(185,148,255,0.05)',
+    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(185,148,255,0.12)',
+  },
+  relatedThumb: { width: 64, height: 64, borderRadius: 8, flexShrink: 0 },
+  relatedHeadline: { color: '#e8e8e8', fontSize: 13, fontWeight: '600', lineHeight: 18, marginTop: 3 },
+  relatedSummary: { color: 'rgba(255,255,255,0.38)', fontSize: 11, lineHeight: 16, marginTop: 3 },
+  sourceName: { color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '700', letterSpacing: 0.8 },
   sourceArrow: { fontSize: 14, fontWeight: '700' },
 
   loaderCard: {
