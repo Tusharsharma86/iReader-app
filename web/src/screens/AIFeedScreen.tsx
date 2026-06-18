@@ -726,6 +726,75 @@ function FullPreviewCard({ item, index, total, onOpen }: {
   );
 }
 
+// ── Related story card — pre-fetches AI bullets ───────────────────────────────
+
+function RelatedStoryCard({ s, onPress }: { s: Story; onPress: () => void }) {
+  const { deepDiveDepth } = useSettings();
+  const [aiBullets, setAiBullets] = React.useState<string[] | null>(null);
+  const srcName = s.sources?.[0]?.name ?? 'Source';
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(DEEPDIVE_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: s.sources?.[0]?.url ?? '',
+            headline: s.headline,
+            paragraphs: [s.headline + '. ' + (s.summary ?? s.headline)],
+            sourceUrls: [s.sources?.[0]?.url].filter(Boolean) as string[],
+            depth: deepDiveDepth,
+            publishedAt: s.publishedAt,
+          }),
+        });
+        if (!res.ok || cancelled) return;
+        const json = await res.json() as DeepDiveData;
+        if (cancelled) return;
+        if (json.tldr?.length) setAiBullets(json.tldr.slice(0, 4).map((b: string) => b.replace(/\*\*/g, '')));
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [s.id, deepDiveDepth]);
+
+  const bullets = aiBullets ?? (s.summary ? splitToBullets(s.summary) : null);
+
+  return (
+    <button onClick={onPress} style={{
+      display: 'flex', flexDirection: 'column',
+      borderRadius: 14,
+      background: 'rgba(185,148,255,0.05)',
+      border: '1px solid rgba(185,148,255,0.12)',
+      textAlign: 'left', cursor: 'pointer',
+      width: '100%', overflow: 'hidden',
+      marginBottom: 2,
+    }}>
+      {s.imageUrl ? (
+        <img src={s.imageUrl} alt="" style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }} />
+      ) : (
+        <div style={{ width: '100%', height: 100, background: 'linear-gradient(135deg, rgba(185,148,255,0.15) 0%, #0a0a10 100%)' }} />
+      )}
+      <div style={{ padding: '12px 14px 14px' }}>
+        <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10, fontWeight: 800, letterSpacing: 1.2, marginBottom: 6 }}>{srcName.toUpperCase()}</div>
+        <div style={{ color: '#f0f0f0', fontSize: 15, fontWeight: 700, lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as const }}>{s.headline}</div>
+        {bullets?.length ? bullets.map((bullet, bi) => (
+          <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 6 }}>
+            <div style={{ width: 5, height: 5, borderRadius: 3, marginTop: 5, background: aiBullets ? VIOLET : 'rgba(255,255,255,0.4)', flexShrink: 0 }} />
+            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, lineHeight: 1.5 }}>{bullet.trim()}</div>
+          </div>
+        )) : !aiBullets ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+            <span style={{ color: VIOLET, fontSize: 10 }}>✦</span>
+            <span style={{ color: VIOLET, fontSize: 10, opacity: 0.7 }}>Loading AI summary…</span>
+          </div>
+        ) : null}
+        <div style={{ marginTop: 10, color: VIOLET, fontSize: 10, fontWeight: 800, letterSpacing: 0.8 }}>DEEP DIVE ›</div>
+      </div>
+    </button>
+  );
+}
+
 // ── Deep dive overlay (renders only on tap) ──────────────────────────────────
 
 function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onClose: () => void; onOpenRelated?: (s: Story) => void }) {
@@ -1207,34 +1276,12 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {item.allStories.slice(1, 6).map((s, i) => {
                     const srcUrl = s.sources?.[0]?.url ?? null;
-                    const srcName = s.sources?.[0]?.name ?? 'Source';
                     return (
-                      <button key={i} onClick={() => onOpenRelated ? onOpenRelated(s) : srcUrl && window.open(srcUrl, '_blank')} style={{
-                        display: 'flex', flexDirection: 'column',
-                        borderRadius: 14,
-                        background: 'rgba(185,148,255,0.05)',
-                        border: '1px solid rgba(185,148,255,0.12)',
-                        textAlign: 'left', cursor: 'pointer',
-                        width: '100%', overflow: 'hidden',
-                        marginBottom: 2,
-                      }}>
-                        {s.imageUrl ? (
-                          <img src={s.imageUrl} alt="" style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }} />
-                        ) : (
-                          <div style={{ width: '100%', height: 100, background: `linear-gradient(135deg, ${dominant}44 0%, #0a0a10 100%)` }} />
-                        )}
-                        <div style={{ padding: '12px 14px 14px' }}>
-                          <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10, fontWeight: 800, letterSpacing: 1.2, marginBottom: 6 }}>{srcName.toUpperCase()}</div>
-                          <div style={{ color: '#f0f0f0', fontSize: 15, fontWeight: 700, lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>{s.headline}</div>
-                          {s.summary && s.summary.split(/(?<=[.!?])\s+/).filter(Boolean).slice(0, 3).map((bullet, bi) => (
-                            <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 6 }}>
-                              <div style={{ width: 5, height: 5, borderRadius: 3, marginTop: 5, background: VIOLET, flexShrink: 0 }} />
-                              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{bullet.trim()}</div>
-                            </div>
-                          ))}
-                          <div style={{ marginTop: 10, color: VIOLET, fontSize: 10, fontWeight: 800, letterSpacing: 0.8 }}>DEEP DIVE ›</div>
-                        </div>
-                      </button>
+                      <RelatedStoryCard
+                        key={s.id || i}
+                        s={s}
+                        onPress={() => onOpenRelated ? onOpenRelated(s) : srcUrl && window.open(srcUrl, '_blank')}
+                      />
                     );
                   })}
                 </div>
