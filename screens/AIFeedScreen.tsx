@@ -729,15 +729,12 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
   const [aiBullets, setAiBullets] = useState<string[] | null>(null);
 
   useEffect(() => {
+    readDeepDiveCache(story.id).then(d => setHasCached(!!d));
+  }, [story.id]);
+
+  useEffect(() => {
     let cancelled = false;
-    readDeepDiveCache(story.id, deepDiveDepth).then(async cached => {
-      if (cancelled) return;
-      if (cached?.tldr?.length) {
-        setHasCached(true);
-        setAiBullets(cached.tldr.slice(0, 4).map(b => b.replace(/\*\*/g, '')));
-        return;
-      }
-      // Pre-fetch in background after card is on screen for 2s
+    (async () => {
       await new Promise(r => setTimeout(r, 2000));
       if (cancelled) return;
       try {
@@ -756,13 +753,9 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
         if (!res.ok || cancelled) return;
         const json: DeepDiveData = await res.json();
         if (cancelled) return;
-        if (!json.degraded) writeDeepDiveCache(story.id, json, deepDiveDepth);
-        if (json.tldr?.length) {
-          setHasCached(true);
-          setAiBullets(json.tldr.slice(0, 4).map(b => b.replace(/\*\*/g, '')));
-        }
+        if (json.tldr?.length) setAiBullets(json.tldr.slice(0, 4).map(b => b.replace(/\*\*/g, '')));
       } catch {}
-    });
+    })();
     return () => { cancelled = true; };
   }, [story.id, deepDiveDepth]);
 
