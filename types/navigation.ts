@@ -21,8 +21,27 @@ export type RootTabParamList = {
   Feed: undefined;
   Digest: undefined;
   AIFeed: undefined;
+  Explore: undefined;
   Saved: undefined;
   Settings: undefined;
+};
+
+export type ExploreStackParamList = {
+  ExploreHome: undefined;
+  TopicFeed: { tag: string };
+  Article: {
+    id: string;
+    url: string;
+    image: string;
+    headline: string;
+    summary: string;
+    source: string;
+    publishedAt: string;
+    dominantColor: string;
+    sources?: string;
+    allStories?: string;
+    sourceBias?: string;
+  };
 };
 
 export type SettingsStackParamList = {
