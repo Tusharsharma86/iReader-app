@@ -199,18 +199,19 @@ function rankFeedItems(items: FeedItem[]): FeedItem[] {
     .map(x => x.item);
 }
 
-function splitToBullets(text: string, count = 3): string[] {
+function splitToBullets(text: string, count = 4): string[] {
   const clean = text.replace(/\.{2,}$/, '').trim();
+  const cap = (s: string) => { const w = s.trim().split(/\s+/); return w.length > 13 ? w.slice(0, 13).join(' ') + '…' : s.trim(); };
   let parts = clean.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 30);
-  if (parts.length >= 2) return parts.slice(0, count);
+  if (parts.length >= 2) return parts.slice(0, count).map(cap);
   parts = clean.split(/\s+[–—;]\s+/).filter(s => s.trim().length > 30);
-  if (parts.length >= 2) return parts.slice(0, count);
+  if (parts.length >= 2) return parts.slice(0, count).map(cap);
   const words = clean.split(/\s+/);
   const size = Math.ceil(words.length / count);
   const chunks: string[] = [];
   for (let i = 0; i < words.length && chunks.length < count; i += size) {
     const chunk = words.slice(i, i + size).join(' ');
-    if (chunk.length > 30) chunks.push(chunk);
+    if (chunk.length > 30) chunks.push(cap(chunk));
   }
   return chunks.filter(Boolean);
 }
