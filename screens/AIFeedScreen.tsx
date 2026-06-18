@@ -921,9 +921,24 @@ function DeepDiveOverlay({ item, restored, onClose, onOpenRelated }: { item: Fee
   const [reloadKey, setReloadKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
+function dedupeMetrics(items: string[]): string[] {
+  const sig = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 3);
+  const out: string[] = [];
+  for (const item of items) {
+    const ws = new Set(sig(item));
+    const isDupe = out.some(ex => {
+      const exWs = new Set(sig(ex));
+      const shared = [...ws].filter(w => exWs.has(w)).length;
+      return shared / Math.min(ws.size, exWs.size) > 0.6;
+    });
+    if (!isDupe) out.push(item);
+  }
+  return out;
+}
+
   const metrics = useMemo(() => {
     if (!data) return [];
-    if (data.keyMetrics && data.keyMetrics.length > 0) return data.keyMetrics.slice(0, 5);
+    if (data.keyMetrics && data.keyMetrics.length > 0) return dedupeMetrics(data.keyMetrics).slice(0, 5);
     const pool = [
       ...(data.tldr ?? []),
       ...(data.tldrSections?.flatMap(s => s.bullets) ?? []),
