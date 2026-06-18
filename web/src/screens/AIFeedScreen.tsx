@@ -537,14 +537,10 @@ function FullPreviewCard({ item, index, total, onOpen }: {
   const extraSources = Math.max(0, item.sources.length - 1);
   const { deepDiveDepth } = useSettings();
   const hasCachedDeepDive = !!readCache(story.id);
-  const [aiBullets, setAiBullets] = useState<string[] | null>(() => {
-    const cached = readCache(story.id);
-    return cached?.tldr?.length ? cached.tldr.slice(0, 4).map(b => b.replace(/\*\*/g, '')) : null;
-  });
+  const [aiBullets, setAiBullets] = useState<string[] | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (aiBullets) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
     const observer = new IntersectionObserver(([entry]) => {
@@ -567,7 +563,6 @@ function FullPreviewCard({ item, index, total, onOpen }: {
             if (!res.ok || cancelled) return;
             const json: DeepDiveData = await res.json();
             if (cancelled) return;
-            if (!json.degraded) writeCache(story.id, json, deepDiveDepth);
             if (json.tldr?.length) setAiBullets(json.tldr.slice(0, 4).map(b => b.replace(/\*\*/g, '')));
           } catch {}
         }, 2000);
