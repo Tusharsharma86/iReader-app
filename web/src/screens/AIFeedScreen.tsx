@@ -484,7 +484,11 @@ export default function AIFeedScreen() {
 
       {/* Full-screen deep dive overlay */}
       {openedItem && (
-        <DeepDiveOverlay item={openedItem} onClose={() => setOpenedItem(null)} />
+        <DeepDiveOverlay
+          item={openedItem}
+          onClose={() => setOpenedItem(null)}
+          onOpenRelated={(s) => setOpenedItem({ primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []) })}
+        />
       )}
 
       <style>{`
@@ -620,16 +624,6 @@ function FullPreviewCard({ item, index, total, onOpen }: {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, color: accent, fontSize: 11, fontWeight: 800, letterSpacing: 1.4 }}>
           <span>{sourceName.toUpperCase()}</span>
-          {extraSources > 0 && (
-            <span style={{
-              padding: '2px 8px', borderRadius: 999,
-              background: 'rgba(255,255,255,0.15)',
-              color: '#fff', fontSize: 9, fontWeight: 800, letterSpacing: 0.8,
-              backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
-            }}>
-              +{extraSources} {extraSources === 1 ? 'SOURCE' : 'SOURCES'}
-            </span>
-          )}
           <span style={{ color: 'rgba(255,255,255,0.4)' }}>·</span>
           <span style={{ color: 'rgba(255,255,255,0.65)' }}>{timeAgo(story.publishedAt)}</span>
         </div>
@@ -662,7 +656,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
 
 // ── Deep dive overlay (renders only on tap) ──────────────────────────────────
 
-function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => void }) {
+function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onClose: () => void; onOpenRelated?: (s: Story) => void }) {
   const story = item.primary;
   // Customize → Deep Dive section toggles + depth.
   const { showDeepDiveEntities, showDeepDiveCurious, deepDiveDepth, fontSize: globalFontSize } = useSettings();
@@ -764,15 +758,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
         // treat as a single-article deep dive — never synthesize unrelated
         // articles into one narrative. Only event clusters (multiple outlets on
         // the SAME story) feed all sources to the synthesis.
-        const paragraphs = item.collection
-          ? [story.headline + '. ' + (story.summary ?? story.headline)]
-          : [
-              story.headline + '. ' + (story.summary ?? story.headline),
-              ...item.allStories
-                .slice(1, 12)
-                .filter(s => s.summary && s.summary !== story.summary)
-                .map(s => `[${s.sources?.[0]?.name ?? 'Source'}]: ${s.summary}`),
-            ];
+        const paragraphs = [story.headline + '. ' + (story.summary ?? story.headline)];
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 95000);
         let dd: Response;
@@ -786,9 +772,7 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
               paragraphs,
               // For event clusters: read every source in full. For theme collections:
               // only the lead article (others are different stories on the same topic).
-              sourceUrls: item.collection
-                ? [story.sources?.[0]?.url].filter(Boolean) as string[]
-                : (item.sources ?? []).map(s => s.url).filter(Boolean),
+              sourceUrls: [story.sources?.[0]?.url].filter(Boolean) as string[],
               depth: deepDiveDepth,
               publishedAt: story.publishedAt,
               systemPrompt: DEEPDIVE_SYSTEM_PROMPT,
@@ -1005,13 +989,6 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
 
         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, color: accent, fontSize: 10, fontWeight: 800, letterSpacing: 1.4 }}>
           <span>{sourceName.toUpperCase()}</span>
-          {extraSources > 0 && (
-            <span style={{
-              padding: '2px 8px', borderRadius: 999,
-              background: 'rgba(255,255,255,0.1)',
-              color: '#fff', fontSize: 9, fontWeight: 800, letterSpacing: 0.8,
-            }}>+{extraSources} {extraSources === 1 ? 'SOURCE' : 'SOURCES'}</span>
-          )}
           <span style={{ color: 'rgba(255,255,255,0.3)' }}>·</span>
           <span>{timeAgo(story.publishedAt)}</span>
         </div>
@@ -1148,31 +1125,36 @@ function DeepDiveOverlay({ item, onClose }: { item: FeedItem; onClose: () => voi
               </Section>
             )}
 
-            {/* ── Sources — violet label ───────────────────────────────── */}
-            {item.sources.length > 0 && (
+            {/* ── Earlier in Story ─────────────────────────────────────── */}
+            {item.allStories.length > 1 && (
               <div style={{ marginTop: 4 }}>
-                <div style={{ color: VIOLET, fontSize: 10, fontWeight: 800, letterSpacing: 1.8, marginBottom: 12 }}>
-                  COVERED BY <TickNumber to={item.sources.length} /> {item.sources.length === 1 ? 'SOURCE' : 'SOURCES'}
+                <div style={{ color: VIOLET, fontSize: 10, fontWeight: 800, letterSpacing: 1.8, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>EARLIER IN STORY</span>
+                  <div style={{ flex: 1, height: 1, background: `${VIOLET}33` }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {item.sources.slice(0, 8).map((s, i) => {
-                    const story = item.allStories.find(a => a.sources?.[0]?.name === s.name);
-                    const oneLiner = story?.headline ?? story?.summary ?? null;
+                  {item.allStories.slice(1, 6).map((s, i) => {
+                    const srcUrl = s.sources?.[0]?.url ?? null;
+                    const srcName = s.sources?.[0]?.name ?? 'Source';
                     return (
-                    <a key={i} href={s.url || '#'} target="_blank" rel="noopener noreferrer" style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '10px 14px', borderRadius: 12,
-                      background: 'rgba(185,148,255,0.05)',
-                      border: '1px solid rgba(185,148,255,0.12)',
-                      color: '#e8e8e8', fontSize: 13, fontWeight: 600,
-                      textDecoration: 'none',
-                    }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ color: '#e8e8e8', fontSize: 13, fontWeight: 600 }}>{s.name}</div>
-                        {oneLiner && <div style={{ color: '#777', fontSize: 11, fontWeight: 400, marginTop: 3, lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{oneLiner}</div>}
-                      </div>
-                      <span style={{ color: VIOLET, fontSize: 11, flexShrink: 0 }}>↗</span>
-                    </a>
+                      <button key={i} onClick={() => onOpenRelated ? onOpenRelated(s) : srcUrl && window.open(srcUrl, '_blank')} style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 10,
+                        padding: '12px 14px', borderRadius: 12,
+                        background: 'rgba(185,148,255,0.05)',
+                        border: '1px solid rgba(185,148,255,0.12)',
+                        textAlign: 'left', cursor: 'pointer',
+                        width: '100%',
+                      }}>
+                        {s.imageUrl && (
+                          <img src={s.imageUrl} alt="" style={{ width: 64, height: 64, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
+                        )}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: 700, letterSpacing: 0.8, marginBottom: 3 }}>{srcName.toUpperCase()}</div>
+                          <div style={{ color: '#e8e8e8', fontSize: 13, fontWeight: 600, lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{s.headline}</div>
+                          {s.summary && <div style={{ color: '#666', fontSize: 11, marginTop: 3, lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{s.summary.split(/\s+/).slice(0, 20).join(' ')}…</div>}
+                        </div>
+                        <span style={{ color: VIOLET, fontSize: 14, flexShrink: 0 }}>›</span>
+                      </button>
                     );
                   })}
                 </div>
