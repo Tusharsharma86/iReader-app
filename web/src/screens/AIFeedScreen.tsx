@@ -642,7 +642,6 @@ function FullPreviewCard({ item, index, total, onOpen }: {
                 <div style={{ width: 4, height: 4, borderRadius: 2, marginTop: 6, background: 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
                 <p style={{
                   margin: 0, color: '#e5e5e5', fontSize: 12, lineHeight: 1.5,
-                  overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
                   textShadow: '0 2px 12px rgba(0,0,0,0.55)',
                 }}>{bullet.trim()}</p>
               </div>
