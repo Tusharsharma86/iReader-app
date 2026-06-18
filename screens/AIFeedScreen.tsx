@@ -758,7 +758,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
             {story.summary.split(/(?<=[.!?])\s+/).filter(Boolean).slice(0, 3).map((bullet, bi) => (
               <View key={bi} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 7 }}>
                 <View style={{ width: 4, height: 4, borderRadius: 2, marginTop: 5, backgroundColor: 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
-                <Text style={{ color: '#e5e5e5', fontSize: 12, lineHeight: 18 }} numberOfLines={1}>{bullet.trim()}</Text>
+                <Text style={{ color: '#e5e5e5', fontSize: 12, lineHeight: 18, flex: 1 }}>{bullet.trim()}</Text>
               </View>
             ))}
           </View>
