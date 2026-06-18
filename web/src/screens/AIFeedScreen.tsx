@@ -535,7 +535,49 @@ function FullPreviewCard({ item, index, total, onOpen }: {
   const accent = useMemo(() => lighten(dominant, 0.55), [dominant]);
   const sourceName = item.sources[0]?.name ?? story.sources?.[0]?.name ?? 'Unknown';
   const extraSources = Math.max(0, item.sources.length - 1);
+  const { deepDiveDepth } = useSettings();
   const hasCachedDeepDive = !!readCache(story.id);
+  const [aiBullets, setAiBullets] = useState<string[] | null>(() => {
+    const cached = readCache(story.id);
+    return cached?.tldr?.length ? cached.tldr.slice(0, 4).map(b => b.replace(/\*\*/g, '')) : null;
+  });
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (aiBullets) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        timer = setTimeout(async () => {
+          if (cancelled) return;
+          try {
+            const res = await fetch(DEEPDIVE_API, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                url: story.sources?.[0]?.url ?? '',
+                headline: story.headline,
+                paragraphs: [story.headline + '. ' + (story.summary ?? story.headline)],
+                sourceUrls: [story.sources?.[0]?.url].filter(Boolean) as string[],
+                depth: deepDiveDepth,
+                publishedAt: story.publishedAt,
+              }),
+            });
+            if (!res.ok || cancelled) return;
+            const json: DeepDiveData = await res.json();
+            if (cancelled) return;
+            if (!json.degraded) writeCache(story.id, json, deepDiveDepth);
+            if (json.tldr?.length) setAiBullets(json.tldr.slice(0, 4).map(b => b.replace(/\*\*/g, '')));
+          } catch {}
+        }, 2000);
+      } else {
+        clearTimeout(timer);
+      }
+    }, { threshold: 0.8 });
+    if (cardRef.current) observer.observe(cardRef.current);
+    return () => { cancelled = true; clearTimeout(timer); observer.disconnect(); };
+  }, [story.id, deepDiveDepth]);
 
   // Track touch displacement so a vertical swipe doesn't fire a tap.
   const touchRef = useRef<{ x: number; y: number; moved: boolean } | null>(null);
@@ -563,6 +605,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
 
   return (
     <div
+      ref={cardRef}
       onClick={handleClick}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
@@ -652,25 +695,29 @@ function FullPreviewCard({ item, index, total, onOpen }: {
           textShadow: '0 4px 24px rgba(0,0,0,0.7)',
         }}>{story.headline}</h2>
 
-        {story.summary ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
-            {splitToBullets(story.summary).map((bullet, bi) => (
-              <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
-                <div style={{ width: 4, height: 4, borderRadius: 2, marginTop: 6, background: 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
-                <p style={{
-                  margin: 0, color: '#e5e5e5', fontSize: 12, lineHeight: 1.5,
-                  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-                  textShadow: '0 2px 12px rgba(0,0,0,0.55)',
-                }}>{bullet.trim()}</p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <SparkleIcon color={VIOLET} size={12} />
-            <span style={{ color: VIOLET, fontSize: 11, fontWeight: 800, letterSpacing: 0.8 }}>TAP FOR AI DEEP DIVE</span>
-          </div>
-        )}
+        {(() => {
+          const bullets = aiBullets ?? (story.summary ? splitToBullets(story.summary) : null);
+          if (bullets?.length) return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+              {bullets.map((bullet, bi) => (
+                <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
+                  <div style={{ width: 4, height: 4, borderRadius: 2, marginTop: 6, background: aiBullets ? VIOLET : 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
+                  <p style={{
+                    margin: 0, color: '#e5e5e5', fontSize: 12, lineHeight: 1.5,
+                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                    textShadow: '0 2px 12px rgba(0,0,0,0.55)',
+                  }}>{bullet.trim()}</p>
+                </div>
+              ))}
+            </div>
+          );
+          return (
+            <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <SparkleIcon color={VIOLET} size={12} />
+              <span style={{ color: VIOLET, fontSize: 11, fontWeight: 800, letterSpacing: 0.8 }}>TAP FOR AI DEEP DIVE</span>
+            </div>
+          );
+        })()}
 
       </div>
 

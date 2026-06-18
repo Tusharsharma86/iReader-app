@@ -724,8 +724,47 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
   const accent = useMemo(() => lighten(dominant, 0.55), [dominant]);
   const sourceName = item.sources[0]?.name ?? story.sources?.[0]?.name ?? 'Unknown';
   const extraSources = Math.max(0, item.sources.length - 1);
+  const { deepDiveDepth } = useSettings();
   const [hasCached, setHasCached] = useState(false);
-  useEffect(() => { readDeepDiveCache(story.id).then(d => setHasCached(!!d)); }, [story.id]);
+  const [aiBullets, setAiBullets] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    readDeepDiveCache(story.id, deepDiveDepth).then(async cached => {
+      if (cancelled) return;
+      if (cached?.tldr?.length) {
+        setHasCached(true);
+        setAiBullets(cached.tldr.slice(0, 4).map(b => b.replace(/\*\*/g, '')));
+        return;
+      }
+      // Pre-fetch in background after card is on screen for 2s
+      await new Promise(r => setTimeout(r, 2000));
+      if (cancelled) return;
+      try {
+        const res = await fetch(DEEPDIVE_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: story.sources?.[0]?.url ?? '',
+            headline: story.headline,
+            paragraphs: [story.headline + '. ' + (story.summary ?? story.headline)],
+            sourceUrls: [story.sources?.[0]?.url].filter(Boolean) as string[],
+            depth: deepDiveDepth,
+            publishedAt: story.publishedAt,
+          }),
+        });
+        if (!res.ok || cancelled) return;
+        const json: DeepDiveData = await res.json();
+        if (cancelled) return;
+        if (!json.degraded) writeDeepDiveCache(story.id, json, deepDiveDepth);
+        if (json.tldr?.length) {
+          setHasCached(true);
+          setAiBullets(json.tldr.slice(0, 4).map(b => b.replace(/\*\*/g, '')));
+        }
+      } catch {}
+    });
+    return () => { cancelled = true; };
+  }, [story.id, deepDiveDepth]);
 
   // Hero zoom-in when card mounts/lands on screen
   const heroScale = useRef(new Animated.Value(1.08)).current;
@@ -770,11 +809,11 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
           <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.65)' }]}>{timeAgo(story.publishedAt)}</Text>
         </View>
         <Text style={styles.cardHeadline}>{story.headline}</Text>
-        {story.summary ? (
+        {(aiBullets ?? (story.summary ? splitToBullets(story.summary) : null))?.length ? (
           <View style={{ marginTop: 6, gap: 4 }}>
-            {splitToBullets(story.summary).map((bullet, bi) => (
+            {(aiBullets ?? splitToBullets(story.summary!)).map((bullet, bi) => (
               <View key={bi} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 7 }}>
-                <View style={{ width: 4, height: 4, borderRadius: 2, marginTop: 5, backgroundColor: 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
+                <View style={{ width: 4, height: 4, borderRadius: 2, marginTop: 5, backgroundColor: aiBullets ? VIOLET : 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
                 <Text style={{ color: '#e5e5e5', fontSize: 12, lineHeight: 18, flex: 1 }}>{bullet.trim()}</Text>
               </View>
             ))}
