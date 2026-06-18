@@ -1036,19 +1036,6 @@ function DeepDiveOverlay({ item, restored, onClose, onOpenRelated }: { item: Fee
                 )}
                 <Text style={[overlayStyles.metaText, { color: 'rgba(255,255,255,0.3)' }]}>·</Text>
                 <Text style={[overlayStyles.metaText, { color: accent }]}>{timeAgo(story.publishedAt)}</Text>
-                {data?.confidence != null && (() => {
-                  const score = data.confidence!;
-                  const color = score >= 80 ? '#4ade80' : score >= 60 ? '#f59e0b' : '#f87171';
-                  const label = score >= 80 ? 'HIGH' : score >= 60 ? 'MEDIUM' : 'LOW';
-                  return (
-                    <>
-                      <Text style={[overlayStyles.metaText, { color: 'rgba(255,255,255,0.3)' }]}>·</Text>
-                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
-                      <Text style={{ color, fontSize: 11, fontWeight: '800' }}>{score}%</Text>
-                      <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 10, fontWeight: '700', letterSpacing: 0.6 }}>{label} CONFIDENCE</Text>
-                    </>
-                  );
-                })()}
               </View>
 
               {stage === 'generating' ? (
@@ -1060,25 +1047,6 @@ function DeepDiveOverlay({ item, restored, onClose, onOpenRelated }: { item: Fee
                   {/* TL;DR — grouped sections if AI emitted them, else flat fallback */}
                   {((data.tldrSections && data.tldrSections.length > 0) || data.tldr.length > 0) && (
                     <Stagger delay={0}><View style={[overlayStyles.card, { borderTopColor: VIOLET, borderTopWidth: 2 }]}>
-                      {data.confidence != null && (() => {
-                        const score = data.confidence!;
-                        const barColor = score >= 80 ? '#4ade80' : score >= 60 ? '#f59e0b' : '#f87171';
-                        const label = score >= 80 ? 'HIGH CONFIDENCE' : score >= 60 ? 'MEDIUM CONFIDENCE' : 'LOW CONFIDENCE';
-                        return (
-                          <View style={{ marginBottom: 14 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                              <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 9, fontWeight: '800', letterSpacing: 1.4 }}>AI ACCURACY</Text>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                                <Text style={{ color: barColor, fontSize: 11, fontWeight: '800' }}>{score}%</Text>
-                                <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 9, fontWeight: '700', letterSpacing: 0.8 }}>{label}</Text>
-                              </View>
-                            </View>
-                            <View style={{ height: 3, borderRadius: 99, backgroundColor: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
-                              <View style={{ height: 3, width: `${score}%`, backgroundColor: barColor, borderRadius: 99 }} />
-                            </View>
-                          </View>
-                        );
-                      })()}
                       <View style={overlayStyles.labelDivider} />
                       {data.tldrSections && data.tldrSections.length > 0 ? (
                         data.tldrSections.map((section, si) => (

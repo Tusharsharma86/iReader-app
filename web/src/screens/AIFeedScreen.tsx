@@ -1149,25 +1149,6 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
                 boxShadow: `0 6px 24px ${dominant}22`,
                 borderTop: `2px solid ${VIOLET}`,
               }}>
-                {data.confidence != null && (() => {
-                  const score = data.confidence!;
-                  const barColor = score >= 80 ? '#4ade80' : score >= 60 ? '#f59e0b' : '#f87171';
-                  const label = score >= 80 ? 'HIGH CONFIDENCE' : score >= 60 ? 'MEDIUM CONFIDENCE' : 'LOW CONFIDENCE';
-                  return (
-                    <div style={{ marginBottom: 16 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 9, fontWeight: 800, letterSpacing: 1.4 }}>AI ACCURACY</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                          <span style={{ color: barColor, fontSize: 11, fontWeight: 800 }}>{score}%</span>
-                          <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 9, fontWeight: 700, letterSpacing: 0.8 }}>{label}</span>
-                        </div>
-                      </div>
-                      <div style={{ height: 3, borderRadius: 99, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${score}%`, background: barColor, borderRadius: 99, transition: 'width 0.8s cubic-bezier(0.4,0,0.2,1)' }} />
-                      </div>
-                    </div>
-                  );
-                })()}
                 <div style={{ height: 1, background: `${VIOLET}33`, marginBottom: 14 }} />
                 {tldrBody}
               </div>
