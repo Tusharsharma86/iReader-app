@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
-  View, Text, ScrollView, Image, Pressable, TextInput,
-  StyleSheet, Dimensions, ActivityIndicator,
+  View, Text, FlatList, Image, Pressable, TextInput,
+  StyleSheet, Dimensions, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -516,243 +516,224 @@ export default function ExploreScreen() {
     setSearchResults({ stories: [], companies: [], people: [], places: [] });
   };
 
+  type Section =
+    | { key: 'trending' }
+    | { key: 'deepDives' }
+    | { key: 'companies' }
+    | { key: 'people' }
+    | { key: 'places' }
+    | { key: 'topics' }
+    | { key: 'sources' }
+    | { key: 'emerging' }
+    | { key: 'searchResults' };
+
+  const sections = useMemo<Section[]>(() => {
+    if (searchQuery !== '') return [{ key: 'searchResults' }];
+    const out: Section[] = [{ key: 'trending' }];
+    if (loading || deepDives.length > 0) out.push({ key: 'deepDives' });
+    if (loading || companies.length > 0) out.push({ key: 'companies' });
+    if (loading || people.length > 0) out.push({ key: 'people' });
+    if (loading || places.length > 0) out.push({ key: 'places' });
+    out.push({ key: 'topics' });
+    if (loading || sources.length > 0) out.push({ key: 'sources' });
+    if (loading || emergingTopics.length > 0) out.push({ key: 'emerging' });
+    return out;
+  }, [searchQuery, loading, deepDives.length, companies.length, people.length, places.length, sources.length, emergingTopics.length]);
+
   const hasSearchResults = searchResults.stories.length > 0 || searchResults.companies.length > 0 ||
     searchResults.people.length > 0 || searchResults.places.length > 0;
 
+  const renderSection = useCallback(({ item }: { item: Section }) => {
+    if (item.key === 'searchResults') {
+      if (!hasSearchResults) return <Text style={s.emptyText}>No results for "{searchQuery}"</Text>;
+      return (
+        <View>
+          {searchResults.stories.length > 0 && (
+            <View style={s.section}>
+              <SectionLabel text="Stories" />
+              {searchResults.stories.map((story, i) => (
+                <SearchStoryCard key={i} item={story} onPress={() => openArticle(story)} />
+              ))}
+            </View>
+          )}
+          {searchResults.companies.length > 0 && (
+            <View style={s.section}>
+              <SectionLabel text="Companies" />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {searchResults.companies.map((c, i) => (
+                  <Pressable key={i} onPress={() => triggerSearch(c.name)} style={s.searchChip}>
+                    <Text style={s.searchChipText}>{c.name}</Text>
+                    <View style={[s.searchChipBadge, { backgroundColor: '#0A84FF18' }]}>
+                      <Text style={[s.searchChipCount, { color: '#0A84FF' }]}>{c.count}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+          {searchResults.people.length > 0 && (
+            <View style={s.section}>
+              <SectionLabel text="People" />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {searchResults.people.map((p, i) => (
+                  <Pressable key={i} onPress={() => triggerSearch(p.name)} style={s.searchChip}>
+                    <Text style={s.searchChipText}>{p.name}</Text>
+                    <View style={[s.searchChipBadge, { backgroundColor: '#FF9F0A18' }]}>
+                      <Text style={[s.searchChipCount, { color: '#FF9F0A' }]}>{p.count}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+          {searchResults.places.length > 0 && (
+            <View style={s.section}>
+              <SectionLabel text="Places" />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {searchResults.places.map((p, i) => (
+                  <Pressable key={i} onPress={() => triggerSearch(p.name)} style={s.searchChip}>
+                    <Text style={s.searchChipText}>{p.name}</Text>
+                    <View style={[s.searchChipBadge, { backgroundColor: '#30D15818' }]}>
+                      <Text style={[s.searchChipCount, { color: '#30D158' }]}>{p.count}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+        </View>
+      );
+    }
+    if (item.key === 'trending') return (
+      <View style={s.section}>
+        <SectionLabel text="Trending Stories" />
+        {loading ? (
+          <><SkeletonBox height={200} style={{ marginBottom: 10 }} /><SkeletonBox height={200} style={{ marginBottom: 10 }} /></>
+        ) : trendingStories.slice(0, 6).map((story, i) => (
+          <VerticalStoryCard key={i} item={story} onPress={() => openArticle(story)} />
+        ))}
+      </View>
+    );
+    if (item.key === 'deepDives') return (
+      <View style={s.section}>
+        <SectionLabel text="AI Deep Dives" />
+        {loading ? (
+          <><SkeletonBox height={200} style={{ marginBottom: 10 }} /><SkeletonBox height={200} style={{ marginBottom: 10 }} /></>
+        ) : deepDives.slice(0, 4).map((story, i) => (
+          <VerticalStoryCard key={i} item={story} onPress={() => openArticle(story)} badge={{ text: '✦ DEEP DIVE', color: '#7C3AED' }} />
+        ))}
+      </View>
+    );
+    if (item.key === 'companies') return (
+      <View style={s.section}>
+        <SectionLabel text="Companies" />
+        {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={96} style={{ width: TILE_W }} />)}</View> : (
+          <View style={s.grid2}>
+            {companies.slice(0, 8).map((c, i) => <EntityTile key={i} entity={c} accent="#0A84FF" bgColor={COMPANY_BGS[i % 4]} onTap={triggerSearch} />)}
+          </View>
+        )}
+      </View>
+    );
+    if (item.key === 'people') return (
+      <View style={s.section}>
+        <SectionLabel text="People" />
+        {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={96} style={{ width: TILE_W }} />)}</View> : (
+          <View style={s.grid2}>
+            {people.slice(0, 8).map((p, i) => <EntityTile key={i} entity={p} accent="#FF9F0A" bgColor={PEOPLE_BGS[i % 4]} onTap={triggerSearch} />)}
+          </View>
+        )}
+      </View>
+    );
+    if (item.key === 'places') return (
+      <View style={s.section}>
+        <SectionLabel text="Places" />
+        {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={96} style={{ width: TILE_W }} />)}</View> : (
+          <View style={s.grid2}>
+            {places.slice(0, 8).map((p, i) => <EntityTile key={i} entity={p} accent="#30D158" bgColor={PLACE_BGS[i % 4]} onTap={triggerSearch} />)}
+          </View>
+        )}
+      </View>
+    );
+    if (item.key === 'topics') return (
+      <View style={s.section}>
+        <SectionLabel text="Browse Topics" />
+        <View style={s.grid2}>
+          {TOPICS.map(t => (
+            <Pressable key={t.tag} onPress={() => openTopic(t.tag)} style={[s.topicTile, { width: TILE_W }]}>
+              <View style={[s.topicIcon, { backgroundColor: t.bg }]}>
+                <Ionicons name={TOPIC_ICONS[t.tag] ?? 'newspaper-outline'} size={18} color={t.color} />
+              </View>
+              <Text style={s.topicLabel}>{t.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+    );
+    if (item.key === 'sources') return (
+      <View style={s.section}>
+        <SectionLabel text="Source Explorer" />
+        {loading ? <View style={s.grid3}>{[0,1,2,3,4,5].map(i => <SkeletonBox key={i} height={88} style={{ width: CHIP_W }} />)}</View> : (
+          <View style={s.grid3}>
+            {sources.slice(0, 9).map((src, i) => <SourceChip key={i} src={src} onTap={triggerSearch} />)}
+          </View>
+        )}
+      </View>
+    );
+    if (item.key === 'emerging') return (
+      <View style={s.section}>
+        <SectionLabel text="Emerging Topics" />
+        {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={96} style={{ width: TILE_W }} />)}</View> : (
+          <View style={s.grid2}>
+            {emergingTopics.slice(0, 8).map((t, i) => <EntityTile key={i} entity={t} accent="#64D2FF" bgColor={EMERGE_BGS[i % 4]} onTap={triggerSearch} />)}
+          </View>
+        )}
+      </View>
+    );
+    return null;
+  }, [loading, trendingStories, deepDives, companies, people, places, sources, emergingTopics,
+      searchQuery, searchResults, hasSearchResults, openArticle, openTopic, triggerSearch]);
+
+  const ListHeader = useMemo(() => (
+    <View style={s.header}>
+      <Text style={s.title}>Explore</Text>
+      <View style={s.searchBar}>
+        <Ionicons name="search-outline" size={15} color="#444" />
+        <TextInput
+          style={s.searchInput}
+          placeholder="Search stories, companies, people…"
+          placeholderTextColor="#444"
+          value={searchText}
+          onChangeText={setSearchText}
+          onSubmitEditing={() => { const q = searchText.trim(); if (q) doSearch(q); else clearSearch(); }}
+          returnKeyType="search"
+          autoCorrect={false}
+          autoCapitalize="none"
+        />
+        {searchText.length > 0 && (
+          <Pressable onPress={clearSearch} hitSlop={8}>
+            <Ionicons name="close" size={16} color="#555" />
+          </Pressable>
+        )}
+      </View>
+    </View>
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [searchText]);
+
   return (
     <SafeAreaView style={s.root} edges={['top']}>
-      <ScrollView
-        style={s.scroll}
+      <FlatList
+        data={sections}
+        keyExtractor={item => item.key}
+        renderItem={renderSection}
+        ListHeaderComponent={ListHeader}
         contentContainerStyle={s.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <Text style={s.title}>Explore</Text>
-
-        {/* Search bar */}
-        <View style={s.searchBar}>
-          <Ionicons name="search-outline" size={15} color="#444" />
-          <TextInput
-            style={s.searchInput}
-            placeholder="Search stories, companies, people…"
-            placeholderTextColor="#444"
-            value={searchText}
-            onChangeText={setSearchText}
-            onSubmitEditing={() => { const q = searchText.trim(); if (q) doSearch(q); else clearSearch(); }}
-            returnKeyType="search"
-            autoCorrect={false}
-            autoCapitalize="none"
-          />
-          {searchText.length > 0 && (
-            <Pressable onPress={clearSearch} hitSlop={8}>
-              <Ionicons name="close" size={16} color="#555" />
-            </Pressable>
-          )}
-        </View>
-
-        {/* ── SEARCH RESULTS ──────────────────────────────────────────────── */}
-        {searchQuery !== '' && (
-          <View style={s.section}>
-            {!hasSearchResults ? (
-              <Text style={s.emptyText}>No results for "{searchQuery}"</Text>
-            ) : (
-              <>
-                {searchResults.stories.length > 0 && (
-                  <View style={s.section}>
-                    <SectionLabel text="Stories" />
-                    {searchResults.stories.map((item, i) => (
-                      <SearchStoryCard key={i} item={item} onPress={() => openArticle(item)} />
-                    ))}
-                  </View>
-                )}
-                {searchResults.companies.length > 0 && (
-                  <View style={s.section}>
-                    <SectionLabel text="Companies" />
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                      {searchResults.companies.map((c, i) => (
-                        <Pressable key={i} onPress={() => triggerSearch(c.name)} style={s.searchChip}>
-                          <Text style={s.searchChipText}>{c.name}</Text>
-                          <View style={[s.searchChipBadge, { backgroundColor: '#0A84FF18' }]}>
-                            <Text style={[s.searchChipCount, { color: '#0A84FF' }]}>{c.count}</Text>
-                          </View>
-                        </Pressable>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
-                {searchResults.people.length > 0 && (
-                  <View style={s.section}>
-                    <SectionLabel text="People" />
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                      {searchResults.people.map((p, i) => (
-                        <Pressable key={i} onPress={() => triggerSearch(p.name)} style={s.searchChip}>
-                          <Text style={s.searchChipText}>{p.name}</Text>
-                          <View style={[s.searchChipBadge, { backgroundColor: '#FF9F0A18' }]}>
-                            <Text style={[s.searchChipCount, { color: '#FF9F0A' }]}>{p.count}</Text>
-                          </View>
-                        </Pressable>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
-                {searchResults.places.length > 0 && (
-                  <View style={s.section}>
-                    <SectionLabel text="Places" />
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                      {searchResults.places.map((p, i) => (
-                        <Pressable key={i} onPress={() => triggerSearch(p.name)} style={s.searchChip}>
-                          <Text style={s.searchChipText}>{p.name}</Text>
-                          <View style={[s.searchChipBadge, { backgroundColor: '#30D15818' }]}>
-                            <Text style={[s.searchChipCount, { color: '#30D158' }]}>{p.count}</Text>
-                          </View>
-                        </Pressable>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
-              </>
-            )}
-          </View>
-        )}
-
-        {/* ── DISCOVERY SECTIONS ──────────────────────────────────────────── */}
-        {searchQuery === '' && (
-          <>
-            {/* 1. Trending */}
-            <View style={s.section}>
-              <SectionLabel text="Trending Stories" />
-              {loading ? (
-                <>
-                  <SkeletonBox height={200} style={{ marginBottom: 10 }} />
-                  <SkeletonBox height={200} style={{ marginBottom: 10 }} />
-                  <SkeletonBox height={200} style={{ marginBottom: 10 }} />
-                </>
-              ) : trendingStories.slice(0, 8).map((item, i) => (
-                <VerticalStoryCard key={i} item={item} onPress={() => openArticle(item)} />
-              ))}
-            </View>
-
-            {/* 2. AI Deep Dives */}
-            {(loading || deepDives.length > 0) && (
-              <View style={s.section}>
-                <SectionLabel text="AI Deep Dives" />
-                {loading ? (
-                  <>
-                    <SkeletonBox height={200} style={{ marginBottom: 10 }} />
-                    <SkeletonBox height={200} style={{ marginBottom: 10 }} />
-                  </>
-                ) : deepDives.slice(0, 5).map((item, i) => (
-                  <VerticalStoryCard key={i} item={item} onPress={() => openArticle(item)} badge={{ text: '✦ DEEP DIVE', color: '#7C3AED' }} />
-                ))}
-              </View>
-            )}
-
-            {/* 3. Companies */}
-            {(loading || companies.length > 0) && (
-              <View style={s.section}>
-                <SectionLabel text="Companies" />
-                {loading ? (
-                  <View style={s.grid2}>
-                    {[0,1,2,3].map(i => <SkeletonBox key={i} height={96} style={{ width: TILE_W }} />)}
-                  </View>
-                ) : (
-                  <View style={s.grid2}>
-                    {companies.slice(0, 10).map((c, i) => (
-                      <EntityTile key={i} entity={c} accent="#0A84FF" bgColor={COMPANY_BGS[i % 4]} onTap={triggerSearch} />
-                    ))}
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* 4. People */}
-            {(loading || people.length > 0) && (
-              <View style={s.section}>
-                <SectionLabel text="People" />
-                {loading ? (
-                  <View style={s.grid2}>
-                    {[0,1,2,3].map(i => <SkeletonBox key={i} height={96} style={{ width: TILE_W }} />)}
-                  </View>
-                ) : (
-                  <View style={s.grid2}>
-                    {people.slice(0, 10).map((p, i) => (
-                      <EntityTile key={i} entity={p} accent="#FF9F0A" bgColor={PEOPLE_BGS[i % 4]} onTap={triggerSearch} />
-                    ))}
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* 5. Places */}
-            {(loading || places.length > 0) && (
-              <View style={s.section}>
-                <SectionLabel text="Places" />
-                {loading ? (
-                  <View style={s.grid2}>
-                    {[0,1,2,3].map(i => <SkeletonBox key={i} height={96} style={{ width: TILE_W }} />)}
-                  </View>
-                ) : (
-                  <View style={s.grid2}>
-                    {places.slice(0, 10).map((p, i) => (
-                      <EntityTile key={i} entity={p} accent="#30D158" bgColor={PLACE_BGS[i % 4]} onTap={triggerSearch} />
-                    ))}
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* 6. Browse Topics */}
-            <View style={s.section}>
-              <SectionLabel text="Browse Topics" />
-              <View style={s.grid2}>
-                {TOPICS.map(t => (
-                  <Pressable key={t.tag} onPress={() => openTopic(t.tag)} style={[s.topicTile, { width: TILE_W }]}>
-                    <View style={[s.topicIcon, { backgroundColor: t.bg }]}>
-                      <Ionicons name={TOPIC_ICONS[t.tag] ?? 'newspaper-outline'} size={18} color={t.color} />
-                    </View>
-                    <Text style={s.topicLabel}>{t.label}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-
-            {/* 7. Source Explorer */}
-            {(loading || sources.length > 0) && (
-              <View style={s.section}>
-                <SectionLabel text="Source Explorer" />
-                {loading ? (
-                  <View style={s.grid3}>
-                    {[0,1,2,3,4,5].map(i => <SkeletonBox key={i} height={88} style={{ width: CHIP_W }} />)}
-                  </View>
-                ) : (
-                  <View style={s.grid3}>
-                    {sources.slice(0, 12).map((src, i) => <SourceChip key={i} src={src} onTap={triggerSearch} />)}
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* 8. Emerging Topics */}
-            {(loading || emergingTopics.length > 0) && (
-              <View style={s.section}>
-                <SectionLabel text="Emerging Topics" />
-                {loading ? (
-                  <View style={s.grid2}>
-                    {[0,1,2,3].map(i => <SkeletonBox key={i} height={96} style={{ width: TILE_W }} />)}
-                  </View>
-                ) : (
-                  <View style={s.grid2}>
-                    {emergingTopics.slice(0, 10).map((t, i) => (
-                      <EntityTile key={i} entity={t} accent="#64D2FF" bgColor={EMERGE_BGS[i % 4]} onTap={triggerSearch} />
-                    ))}
-                  </View>
-                )}
-              </View>
-            )}
-          </>
-        )}
-      </ScrollView>
+        initialNumToRender={3}
+        maxToRenderPerBatch={2}
+        windowSize={5}
+        removeClippedSubviews={true}
+      />
     </SafeAreaView>
   );
 }
@@ -763,6 +744,7 @@ const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#080808' },
   scroll: { flex: 1 },
   content: { paddingHorizontal: 16, paddingBottom: 110 },
+  header: { paddingTop: 8 },
   title: { fontSize: 28, fontWeight: '800', color: '#fff', letterSpacing: -0.5, marginTop: 8, marginBottom: 14 },
 
   searchBar: {
