@@ -331,6 +331,8 @@ export default function AIFeedScreen() {
       );
       if (fresh.length > 0) {
         setItems(fresh);
+        setActiveIdx(0);
+        setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: false }), 0);
         setError(null);
       }
     } catch { /* keep showing cached items */ }
@@ -354,6 +356,10 @@ export default function AIFeedScreen() {
       );
       if (next.length > 0) {
         setItems(next);
+        if (mode === 'refresh') {
+          setActiveIdx(0);
+          setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: false }), 0);
+        }
         setError(null);
       } else if (mode === 'initial') {
         await loadTopic(0, true);
@@ -772,65 +778,84 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
     return () => { cancelled = true; };
   }, [story.id, deepDiveDepth]);
 
+  const imageH = Math.round(cardH * 0.52);
+
   // Hero zoom-in when card mounts/lands on screen
   const heroScale = useRef(new Animated.Value(1.08)).current;
+  const textOp = useRef(new Animated.Value(0)).current;
+  const textTy = useRef(new Animated.Value(16)).current;
   useEffect(() => {
     Animated.timing(heroScale, { toValue: 1, duration: 600, useNativeDriver: true }).start();
-  }, [heroScale]);
+    Animated.parallel([
+      Animated.timing(textOp, { toValue: 1, duration: 350, delay: 120, useNativeDriver: true }),
+      Animated.spring(textTy, { toValue: 0, friction: 6, tension: 80, useNativeDriver: true }),
+    ]).start();
+  }, [heroScale, textOp, textTy]);
+
+  const bullets = aiBullets ?? (story.summary ? splitToBullets(story.summary) : null);
 
   return (
     <Pressable
       onPress={onOpen}
-      style={({ pressed }) => ({ width, height: cardH, backgroundColor: dominant, overflow: 'hidden', borderRadius: 16, transform: [{ scale: pressed ? 0.985 : 1 }] })}
+      style={({ pressed }) => ({
+        width, height: cardH, backgroundColor: '#0A0A0F',
+        overflow: 'hidden', borderRadius: 16,
+        transform: [{ scale: pressed ? 0.985 : 1 }],
+      })}
     >
-      {story.imageUrl ? (
-        <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: heroScale }] }]}>
-          <Image
-            source={{ uri: story.imageUrl }}
-            style={StyleSheet.absoluteFill}
-            contentFit="cover"
-            transition={150}
-          />
-        </Animated.View>
-      ) : (
-        <NoImageFallback dominant={dominant} accent={accent} source={sourceName} url={story.sources?.[0]?.url} />
-      )}
-      <LinearGradient
-        colors={['rgba(0,0,0,0.45)', 'rgba(0,0,0,0.1)', 'rgba(0,0,0,0.15)', 'rgba(5,5,7,0.75)', 'rgba(5,5,7,0.95)']}
-        locations={[0, 0.25, 0.5, 0.8, 1]}
-        style={StyleSheet.absoluteFill}
-      />
+      {/* ── Image section ── */}
+      <View style={{ height: imageH, overflow: 'hidden' }}>
+        {story.imageUrl ? (
+          <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: heroScale }] }]}>
+            <Image
+              source={{ uri: story.imageUrl }}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+              transition={0}
+            />
+          </Animated.View>
+        ) : (
+          <NoImageFallback dominant={dominant} accent={accent} source={sourceName} url={story.sources?.[0]?.url} />
+        )}
+        <LinearGradient
+          colors={['rgba(0,0,0,0.25)', 'transparent', 'rgba(10,10,15,0.6)', 'rgba(10,10,15,1)']}
+          locations={[0, 0.35, 0.75, 1]}
+          style={StyleSheet.absoluteFill}
+        />
+        {hasCached && (
+          <View style={[styles.readyBadge, { top: 12 }]}>
+            <Ionicons name="sparkles" size={9} color="#86efac" />
+            <Text style={styles.readyText}>READY</Text>
+          </View>
+        )}
+      </View>
 
-      {hasCached && (
-        <View style={[styles.readyBadge, { top: topInset + 56 }]}>
-          <Ionicons name="sparkles" size={9} color="#86efac" />
-          <Text style={styles.readyText}>READY</Text>
-        </View>
-      )}
-
-      <CardTextBounce>
+      {/* ── Text section ── */}
+      <Animated.View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 14, gap: 8, opacity: textOp, transform: [{ translateY: textTy }] }}>
         <View style={styles.metaRow}>
           <Text style={[styles.metaText, { color: accent }]}>{sourceName.toUpperCase()}</Text>
           <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.4)' }]}>·</Text>
           <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.65)' }]}>{timeAgo(story.publishedAt)}</Text>
         </View>
-        <Text style={styles.cardHeadline}>{story.headline}</Text>
-        {(aiBullets ?? (story.summary ? splitToBullets(story.summary) : null))?.length ? (
-          <View style={{ marginTop: 6, gap: 4 }}>
-            {(aiBullets ?? splitToBullets(story.summary!)).map((bullet, bi) => (
+        <Text style={[styles.cardHeadline, { fontSize: 20, lineHeight: 26, textShadowColor: 'transparent' }]} numberOfLines={3}>
+          {story.headline}
+        </Text>
+        {bullets?.length ? (
+          <View style={{ gap: 4 }}>
+            {bullets.map((bullet, bi) => (
               <View key={bi} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 7 }}>
-                <View style={{ width: 4, height: 4, borderRadius: 2, marginTop: 5, backgroundColor: aiBullets ? VIOLET : 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
-                <Text style={{ color: '#e5e5e5', fontSize: 12, lineHeight: 18, flex: 1 }}>{bullet.trim()}</Text>
+                <View style={{ width: 4, height: 4, borderRadius: 2, marginTop: 5, backgroundColor: aiBullets ? VIOLET : 'rgba(255,255,255,0.4)', flexShrink: 0 }} />
+                <Text style={{ color: '#d0d0d0', fontSize: 12.5, lineHeight: 18, flex: 1 }}>{bullet.trim()}</Text>
               </View>
             ))}
           </View>
         ) : (
-          <View style={{ marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Ionicons name="sparkles" size={12} color={VIOLET} />
             <Text style={{ color: VIOLET, fontSize: 11, fontWeight: '700', letterSpacing: 0.8 }}>TAP FOR AI DEEP DIVE</Text>
           </View>
         )}
-      </CardTextBounce>
+      </Animated.View>
 
       <Text style={styles.swipeHint}>↑ SWIPE FOR NEXT</Text>
     </Pressable>
