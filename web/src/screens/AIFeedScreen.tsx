@@ -199,6 +199,9 @@ function rankFeedItems(items: FeedItem[]): FeedItem[] {
     .map(x => x.item);
 }
 
+const SOURCE_COVERAGE_RE = /no other sources? (were|was) provided|only one (source|article)|no sources? (were|was) provided|single (source|article)|The article from \S+ highlights/i;
+function isSourcePara(p: string): boolean { return SOURCE_COVERAGE_RE.test(p); }
+
 function splitToBullets(text: string, count = 4): string[] {
   const clean = text.replace(/\.{2,}$/, '').trim();
   const cap = (s: string) => { const w = s.trim().split(/\s+/); return w.length > 13 ? w.slice(0, 13).join(' ') + '…' : s.trim(); };
@@ -893,15 +896,15 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
     // concatenated section bodies if narrative is missing or too short.
     const narrativeText = data.narrative && data.narrative.trim().length > 200 ? data.narrative : null;
     if (narrativeText) {
-      return narrativeText.split(/\n\n+/).filter(Boolean).map((p, i) => para(p, String(i)));
+      return narrativeText.split(/\n\n+/).filter(p => p && !isSourcePara(p)).map((p, i) => para(p, String(i)));
     }
     if (data.storySections && data.storySections.length > 0) {
       return data.storySections.flatMap((sec, si) =>
-        sec.body.split(/\n\n+/).filter(Boolean).map((p, pi) => para(p, `${si}-${pi}`))
+        sec.body.split(/\n\n+/).filter(p => p && !isSourcePara(p)).map((p, pi) => para(p, `${si}-${pi}`))
       );
     }
     if (!data.narrative) return null;
-    return data.narrative.split(/\n\n+/).map((p, i) => para(p, String(i)));
+    return data.narrative.split(/\n\n+/).filter(p => p && !isSourcePara(p)).map((p, i) => para(p, String(i)));
   }, [data, tagList, accent, ddScale]);
 
   useEffect(() => {

@@ -921,6 +921,9 @@ function DeepDiveOverlay({ item, restored, onClose, onOpenRelated }: { item: Fee
   const [reloadKey, setReloadKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
+const SOURCE_COVERAGE_RE = /no other sources? (were|was) provided|only one (source|article)|no sources? (were|was) provided|single (source|article)|The article from \S+ highlights/i;
+function isSourcePara(p: string): boolean { return SOURCE_COVERAGE_RE.test(p); }
+
 function dedupeMetrics(items: string[]): string[] {
   const sig = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 3);
   const out: string[] = [];
@@ -1143,7 +1146,7 @@ function dedupeMetrics(items: string[]): string[] {
                       {(() => {
                         const narrativeText = data.narrative && data.narrative.trim().length > 200 ? data.narrative : null;
                         if (narrativeText) {
-                          return narrativeText.split(/\n\n+/).filter(Boolean).map((p, i) => (
+                          return narrativeText.split(/\n\n+/).filter(p => p && !isSourcePara(p)).map((p, i) => (
                             <Text key={i} style={[overlayStyles.narrativePara, { fontSize: 16 * ddScale, lineHeight: 27 * ddScale }]}>
                               {renderHighlighted(p, allTags(data))}
                             </Text>
@@ -1151,14 +1154,14 @@ function dedupeMetrics(items: string[]): string[] {
                         }
                         if (data.storySections && data.storySections.length > 0) {
                           return data.storySections.flatMap((sec, si) =>
-                            sec.body.split(/\n\n+/).filter(Boolean).map((p, pi) => (
+                            sec.body.split(/\n\n+/).filter(p => p && !isSourcePara(p)).map((p, pi) => (
                               <Text key={`${si}-${pi}`} style={[overlayStyles.narrativePara, { fontSize: 16 * ddScale, lineHeight: 27 * ddScale }]}>
                                 {renderHighlighted(p, allTags(data))}
                               </Text>
                             ))
                           );
                         }
-                        return data.narrative.split(/\n\n+/).map((p, i) => (
+                        return data.narrative.split(/\n\n+/).filter(p => p && !isSourcePara(p)).map((p, i) => (
                           <Text key={i} style={overlayStyles.narrativePara}>
                             {renderHighlighted(p, allTags(data))}
                           </Text>
