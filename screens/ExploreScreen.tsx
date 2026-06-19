@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
 import {
   View, Text, FlatList, Image, Pressable, TextInput,
-  StyleSheet, Dimensions, ScrollView,
+  StyleSheet, Dimensions, ScrollView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -16,6 +16,9 @@ const { width: SCREEN_W } = Dimensions.get('window');
 const CONTENT_W = Math.min(SCREEN_W - 32, 448);
 const TILE_W = (CONTENT_W - 10) / 2;
 const CHIP_W = (CONTENT_W - 20) / 3;
+
+// Android image prop — disables fade animation that causes dropped frames
+const IMG_FADE = Platform.OS === 'android' ? { fadeDuration: 0 } : {};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -219,7 +222,7 @@ function SectionLabel({ text }: { text: string }) {
 
 // ── Vertical story card ───────────────────────────────────────────────────────
 
-function VerticalStoryCard({ item, onPress, badge }: {
+const VerticalStoryCard = memo(function VerticalStoryCard({ item, onPress, badge }: {
   item: FeedItem;
   onPress: () => void;
   badge?: { text: string; color: string };
@@ -228,13 +231,13 @@ function VerticalStoryCard({ item, onPress, badge }: {
   const imgUrl = item.imageUrl || item.articles?.[0]?.imageUrl;
   const srcName = item.sources?.[0]?.name || item.articles?.[0]?.sources?.[0]?.name || '';
   const srcCount = item.sourceCount ?? item.articles?.length ?? 1;
-  const accent = getArticleColor(label);
-  const ts = relTime(item.publishedAt || item.articles?.[0]?.publishedAt);
+  const accent = useMemo(() => getArticleColor(label), [label]);
+  const ts = useMemo(() => relTime(item.publishedAt || item.articles?.[0]?.publishedAt), [item.publishedAt, item.articles]);
 
   return (
     <Pressable onPress={onPress} style={[s.vCard, { backgroundColor: accent }]}>
       {imgUrl ? (
-        <Image source={{ uri: imgUrl }} style={s.vCardImg} resizeMode="cover" />
+        <Image source={{ uri: imgUrl }} style={s.vCardImg} resizeMode="cover" {...IMG_FADE} />
       ) : null}
       <View style={s.vCardGradient} />
 
@@ -261,11 +264,11 @@ function VerticalStoryCard({ item, onPress, badge }: {
       </View>
     </Pressable>
   );
-}
+});
 
 // ── Entity tile ───────────────────────────────────────────────────────────────
 
-function EntityTile({ entity, accent, bgColor, onTap }: {
+const EntityTile = memo(function EntityTile({ entity, accent, bgColor, onTap }: {
   entity: EntityCard;
   accent: string;
   bgColor: string;
@@ -274,7 +277,7 @@ function EntityTile({ entity, accent, bgColor, onTap }: {
   return (
     <Pressable onPress={() => onTap(entity.name)} style={[s.entityTile, { backgroundColor: bgColor, width: TILE_W }]}>
       {entity.imageUrl ? (
-        <Image source={{ uri: entity.imageUrl }} style={s.entityTileImg} resizeMode="cover" />
+        <Image source={{ uri: entity.imageUrl }} style={s.entityTileImg} resizeMode="cover" {...IMG_FADE} />
       ) : null}
       <View style={s.entityTileOverlay} />
       <View style={s.entityTileBody}>
@@ -283,16 +286,16 @@ function EntityTile({ entity, accent, bgColor, onTap }: {
       </View>
     </Pressable>
   );
-}
+});
 
 // ── Source chip ───────────────────────────────────────────────────────────────
 
-function SourceChip({ src, onTap }: { src: SourceCard; onTap: (name: string) => void }) {
+const SourceChip = memo(function SourceChip({ src, onTap }: { src: SourceCard; onTap: (name: string) => void }) {
   const faviconUri = src.domain ? `https://www.google.com/s2/favicons?domain=${src.domain}&sz=32` : null;
   return (
     <Pressable onPress={() => onTap(src.name)} style={[s.sourceChip, { width: CHIP_W }]}>
       {faviconUri ? (
-        <Image source={{ uri: faviconUri }} style={s.sourceFavicon} />
+        <Image source={{ uri: faviconUri }} style={s.sourceFavicon} {...IMG_FADE} />
       ) : (
         <View style={s.sourceFaviconPlaceholder} />
       )}
@@ -300,21 +303,21 @@ function SourceChip({ src, onTap }: { src: SourceCard; onTap: (name: string) => 
       <Text style={s.sourceCount}>{src.count}</Text>
     </Pressable>
   );
-}
+});
 
 // ── Search story card ─────────────────────────────────────────────────────────
 
-function SearchStoryCard({ item, onPress }: { item: FeedItem; onPress: () => void }) {
+const SearchStoryCard = memo(function SearchStoryCard({ item, onPress }: { item: FeedItem; onPress: () => void }) {
   const label = item.clusterLabel || item.headline || item.articles?.[0]?.headline || '';
   const imgUrl = item.imageUrl || item.articles?.[0]?.imageUrl;
   const srcName = item.sources?.[0]?.name || item.articles?.[0]?.sources?.[0]?.name || '';
   const srcCount = item.sourceCount ?? item.articles?.length ?? 1;
-  const accent = getArticleColor(label);
+  const accent = useMemo(() => getArticleColor(label), [label]);
 
   return (
     <Pressable onPress={onPress} style={s.searchCard}>
       <View style={[s.searchCardThumb, { backgroundColor: accent }]}>
-        {imgUrl ? <Image source={{ uri: imgUrl }} style={StyleSheet.absoluteFillObject} resizeMode="cover" /> : null}
+        {imgUrl ? <Image source={{ uri: imgUrl }} style={StyleSheet.absoluteFillObject} resizeMode="cover" {...IMG_FADE} /> : null}
       </View>
       <View style={s.searchCardBody}>
         <Text style={s.searchCardMeta}>{srcName}{srcCount > 1 ? ` · ${srcCount} sources` : ''}</Text>
@@ -322,7 +325,7 @@ function SearchStoryCard({ item, onPress }: { item: FeedItem; onPress: () => voi
       </View>
     </Pressable>
   );
-}
+});
 
 // ── Skeleton placeholders ─────────────────────────────────────────────────────
 
@@ -330,9 +333,246 @@ function SkeletonBox({ height, style }: { height: number; style?: object }) {
   return <View style={[{ height, borderRadius: 16, backgroundColor: '#141414' }, style]} />;
 }
 
+// ── Memoized section components ───────────────────────────────────────────────
+
+const TrendingSection = memo(function TrendingSection({ loading, stories, onPress }: {
+  loading: boolean; stories: FeedItem[]; onPress: (item: FeedItem) => void;
+}) {
+  return (
+    <View style={s.section}>
+      <SectionLabel text="Trending Stories" />
+      {loading ? (
+        <><SkeletonBox height={200} style={{ marginBottom: 10 }} /><SkeletonBox height={200} style={{ marginBottom: 10 }} /></>
+      ) : stories.slice(0, 6).map((story, i) => (
+        <VerticalStoryCard key={i} item={story} onPress={() => onPress(story)} />
+      ))}
+    </View>
+  );
+});
+
+const DeepDivesSection = memo(function DeepDivesSection({ loading, stories, onPress }: {
+  loading: boolean; stories: FeedItem[]; onPress: (item: FeedItem) => void;
+}) {
+  return (
+    <View style={s.section}>
+      <SectionLabel text="AI Deep Dives" />
+      {loading ? (
+        <><SkeletonBox height={200} style={{ marginBottom: 10 }} /><SkeletonBox height={200} style={{ marginBottom: 10 }} /></>
+      ) : stories.slice(0, 4).map((story, i) => (
+        <VerticalStoryCard key={i} item={story} onPress={() => onPress(story)} badge={{ text: '✦ DEEP DIVE', color: '#7C3AED' }} />
+      ))}
+    </View>
+  );
+});
+
+const CompaniesSection = memo(function CompaniesSection({ loading, companies, onTap }: {
+  loading: boolean; companies: EntityCard[]; onTap: (name: string) => void;
+}) {
+  return (
+    <View style={s.section}>
+      <SectionLabel text="Companies" />
+      {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={96} style={{ width: TILE_W }} />)}</View> : (
+        <View style={s.grid2}>
+          {companies.slice(0, 8).map((c, i) => <EntityTile key={i} entity={c} accent="#0A84FF" bgColor={COMPANY_BGS[i % 4]} onTap={onTap} />)}
+        </View>
+      )}
+    </View>
+  );
+});
+
+const PeopleSection = memo(function PeopleSection({ loading, people, onTap }: {
+  loading: boolean; people: EntityCard[]; onTap: (name: string) => void;
+}) {
+  return (
+    <View style={s.section}>
+      <SectionLabel text="People" />
+      {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={96} style={{ width: TILE_W }} />)}</View> : (
+        <View style={s.grid2}>
+          {people.slice(0, 8).map((p, i) => <EntityTile key={i} entity={p} accent="#FF9F0A" bgColor={PEOPLE_BGS[i % 4]} onTap={onTap} />)}
+        </View>
+      )}
+    </View>
+  );
+});
+
+const PlacesSection = memo(function PlacesSection({ loading, places, onTap }: {
+  loading: boolean; places: EntityCard[]; onTap: (name: string) => void;
+}) {
+  return (
+    <View style={s.section}>
+      <SectionLabel text="Places" />
+      {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={96} style={{ width: TILE_W }} />)}</View> : (
+        <View style={s.grid2}>
+          {places.slice(0, 8).map((p, i) => <EntityTile key={i} entity={p} accent="#30D158" bgColor={PLACE_BGS[i % 4]} onTap={onTap} />)}
+        </View>
+      )}
+    </View>
+  );
+});
+
+const TopicsSection = memo(function TopicsSection({ openTopic }: { openTopic: (tag: string) => void }) {
+  return (
+    <View style={s.section}>
+      <SectionLabel text="Browse Topics" />
+      <View style={s.grid2}>
+        {TOPICS.map(t => (
+          <Pressable key={t.tag} onPress={() => openTopic(t.tag)} style={[s.topicTile, { width: TILE_W }]}>
+            <View style={[s.topicIcon, { backgroundColor: t.bg }]}>
+              <Ionicons name={TOPIC_ICONS[t.tag] ?? 'newspaper-outline'} size={18} color={t.color} />
+            </View>
+            <Text style={s.topicLabel}>{t.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+});
+
+const SourcesSection = memo(function SourcesSection({ loading, sources, onTap }: {
+  loading: boolean; sources: SourceCard[]; onTap: (name: string) => void;
+}) {
+  return (
+    <View style={s.section}>
+      <SectionLabel text="Source Explorer" />
+      {loading ? <View style={s.grid3}>{[0,1,2,3,4,5].map(i => <SkeletonBox key={i} height={88} style={{ width: CHIP_W }} />)}</View> : (
+        <View style={s.grid3}>
+          {sources.slice(0, 9).map((src, i) => <SourceChip key={i} src={src} onTap={onTap} />)}
+        </View>
+      )}
+    </View>
+  );
+});
+
+const EmergingSection = memo(function EmergingSection({ loading, emergingTopics, onTap }: {
+  loading: boolean; emergingTopics: EntityCard[]; onTap: (name: string) => void;
+}) {
+  return (
+    <View style={s.section}>
+      <SectionLabel text="Emerging Topics" />
+      {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={96} style={{ width: TILE_W }} />)}</View> : (
+        <View style={s.grid2}>
+          {emergingTopics.slice(0, 8).map((t, i) => <EntityTile key={i} entity={t} accent="#64D2FF" bgColor={EMERGE_BGS[i % 4]} onTap={onTap} />)}
+        </View>
+      )}
+    </View>
+  );
+});
+
+const SearchResultsSection = memo(function SearchResultsSection({ searchQuery, searchResults, hasSearchResults, openArticle, triggerSearch }: {
+  searchQuery: string;
+  searchResults: GroupedSearch;
+  hasSearchResults: boolean;
+  openArticle: (item: FeedItem) => void;
+  triggerSearch: (term: string) => void;
+}) {
+  if (!hasSearchResults) return <Text style={s.emptyText}>No results for "{searchQuery}"</Text>;
+  return (
+    <View>
+      {searchResults.stories.length > 0 && (
+        <View style={s.section}>
+          <SectionLabel text="Stories" />
+          {searchResults.stories.map((story, i) => (
+            <SearchStoryCard key={i} item={story} onPress={() => openArticle(story)} />
+          ))}
+        </View>
+      )}
+      {searchResults.companies.length > 0 && (
+        <View style={s.section}>
+          <SectionLabel text="Companies" />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {searchResults.companies.map((c, i) => (
+              <Pressable key={i} onPress={() => triggerSearch(c.name)} style={s.searchChip}>
+                <Text style={s.searchChipText}>{c.name}</Text>
+                <View style={[s.searchChipBadge, { backgroundColor: '#0A84FF18' }]}>
+                  <Text style={[s.searchChipCount, { color: '#0A84FF' }]}>{c.count}</Text>
+                </View>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+      {searchResults.people.length > 0 && (
+        <View style={s.section}>
+          <SectionLabel text="People" />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {searchResults.people.map((p, i) => (
+              <Pressable key={i} onPress={() => triggerSearch(p.name)} style={s.searchChip}>
+                <Text style={s.searchChipText}>{p.name}</Text>
+                <View style={[s.searchChipBadge, { backgroundColor: '#FF9F0A18' }]}>
+                  <Text style={[s.searchChipCount, { color: '#FF9F0A' }]}>{p.count}</Text>
+                </View>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+      {searchResults.places.length > 0 && (
+        <View style={s.section}>
+          <SectionLabel text="Places" />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {searchResults.places.map((p, i) => (
+              <Pressable key={i} onPress={() => triggerSearch(p.name)} style={s.searchChip}>
+                <Text style={s.searchChipText}>{p.name}</Text>
+                <View style={[s.searchChipBadge, { backgroundColor: '#30D15818' }]}>
+                  <Text style={[s.searchChipCount, { color: '#30D158' }]}>{p.count}</Text>
+                </View>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+    </View>
+  );
+});
+
+// ── Search header (outside FlatList so keystrokes never cause list re-layout) ─
+
+function SearchHeader({ searchText, onChangeText, onSubmit, onClear }: {
+  searchText: string;
+  onChangeText: (t: string) => void;
+  onSubmit: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <View style={s.header}>
+      <Text style={s.title}>Explore</Text>
+      <View style={s.searchBar}>
+        <Ionicons name="search-outline" size={15} color="#444" />
+        <TextInput
+          style={s.searchInput}
+          placeholder="Search stories, companies, people…"
+          placeholderTextColor="#444"
+          value={searchText}
+          onChangeText={onChangeText}
+          onSubmitEditing={onSubmit}
+          returnKeyType="search"
+          autoCorrect={false}
+          autoCapitalize="none"
+        />
+        {searchText.length > 0 && (
+          <Pressable onPress={onClear} hitSlop={8}>
+            <Ionicons name="close" size={16} color="#555" />
+          </Pressable>
+        )}
+      </View>
+    </View>
+  );
+}
+
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 type Nav = NativeStackNavigationProp<ExploreStackParamList>;
+
+type Section =
+  | { key: 'trending' }
+  | { key: 'deepDives' }
+  | { key: 'companies' }
+  | { key: 'people' }
+  | { key: 'places' }
+  | { key: 'topics' }
+  | { key: 'sources' }
+  | { key: 'emerging' }
+  | { key: 'searchResults' };
 
 export default function ExploreScreen() {
   const navigation = useNavigation<Nav>();
@@ -510,22 +750,19 @@ export default function ExploreScreen() {
     navigation.navigate('TopicFeed', { tag });
   }, [navigation]);
 
-  const clearSearch = () => {
+  const handleClearSearch = useCallback(() => {
     setSearchText('');
     setSearchQuery('');
     setSearchResults({ stories: [], companies: [], people: [], places: [] });
-  };
+  }, []);
 
-  type Section =
-    | { key: 'trending' }
-    | { key: 'deepDives' }
-    | { key: 'companies' }
-    | { key: 'people' }
-    | { key: 'places' }
-    | { key: 'topics' }
-    | { key: 'sources' }
-    | { key: 'emerging' }
-    | { key: 'searchResults' };
+  const handleSearchSubmit = useCallback(() => {
+    const q = searchText.trim();
+    if (q) doSearch(q); else handleClearSearch();
+  }, [searchText, doSearch, handleClearSearch]);
+
+  const hasSearchResults = searchResults.stories.length > 0 || searchResults.companies.length > 0 ||
+    searchResults.people.length > 0 || searchResults.places.length > 0;
 
   const sections = useMemo<Section[]>(() => {
     if (searchQuery !== '') return [{ key: 'searchResults' }];
@@ -540,192 +777,34 @@ export default function ExploreScreen() {
     return out;
   }, [searchQuery, loading, deepDives.length, companies.length, people.length, places.length, sources.length, emergingTopics.length]);
 
-  const hasSearchResults = searchResults.stories.length > 0 || searchResults.companies.length > 0 ||
-    searchResults.people.length > 0 || searchResults.places.length > 0;
-
   const renderSection = useCallback(({ item }: { item: Section }) => {
-    if (item.key === 'searchResults') {
-      if (!hasSearchResults) return <Text style={s.emptyText}>No results for "{searchQuery}"</Text>;
-      return (
-        <View>
-          {searchResults.stories.length > 0 && (
-            <View style={s.section}>
-              <SectionLabel text="Stories" />
-              {searchResults.stories.map((story, i) => (
-                <SearchStoryCard key={i} item={story} onPress={() => openArticle(story)} />
-              ))}
-            </View>
-          )}
-          {searchResults.companies.length > 0 && (
-            <View style={s.section}>
-              <SectionLabel text="Companies" />
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {searchResults.companies.map((c, i) => (
-                  <Pressable key={i} onPress={() => triggerSearch(c.name)} style={s.searchChip}>
-                    <Text style={s.searchChipText}>{c.name}</Text>
-                    <View style={[s.searchChipBadge, { backgroundColor: '#0A84FF18' }]}>
-                      <Text style={[s.searchChipCount, { color: '#0A84FF' }]}>{c.count}</Text>
-                    </View>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-          )}
-          {searchResults.people.length > 0 && (
-            <View style={s.section}>
-              <SectionLabel text="People" />
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {searchResults.people.map((p, i) => (
-                  <Pressable key={i} onPress={() => triggerSearch(p.name)} style={s.searchChip}>
-                    <Text style={s.searchChipText}>{p.name}</Text>
-                    <View style={[s.searchChipBadge, { backgroundColor: '#FF9F0A18' }]}>
-                      <Text style={[s.searchChipCount, { color: '#FF9F0A' }]}>{p.count}</Text>
-                    </View>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-          )}
-          {searchResults.places.length > 0 && (
-            <View style={s.section}>
-              <SectionLabel text="Places" />
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {searchResults.places.map((p, i) => (
-                  <Pressable key={i} onPress={() => triggerSearch(p.name)} style={s.searchChip}>
-                    <Text style={s.searchChipText}>{p.name}</Text>
-                    <View style={[s.searchChipBadge, { backgroundColor: '#30D15818' }]}>
-                      <Text style={[s.searchChipCount, { color: '#30D158' }]}>{p.count}</Text>
-                    </View>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-          )}
-        </View>
-      );
+    switch (item.key) {
+      case 'trending':      return <TrendingSection loading={loading} stories={trendingStories} onPress={openArticle} />;
+      case 'deepDives':     return <DeepDivesSection loading={loading} stories={deepDives} onPress={openArticle} />;
+      case 'companies':     return <CompaniesSection loading={loading} companies={companies} onTap={triggerSearch} />;
+      case 'people':        return <PeopleSection loading={loading} people={people} onTap={triggerSearch} />;
+      case 'places':        return <PlacesSection loading={loading} places={places} onTap={triggerSearch} />;
+      case 'topics':        return <TopicsSection openTopic={openTopic} />;
+      case 'sources':       return <SourcesSection loading={loading} sources={sources} onTap={triggerSearch} />;
+      case 'emerging':      return <EmergingSection loading={loading} emergingTopics={emergingTopics} onTap={triggerSearch} />;
+      case 'searchResults': return <SearchResultsSection searchQuery={searchQuery} searchResults={searchResults} hasSearchResults={hasSearchResults} openArticle={openArticle} triggerSearch={triggerSearch} />;
+      default:              return null;
     }
-    if (item.key === 'trending') return (
-      <View style={s.section}>
-        <SectionLabel text="Trending Stories" />
-        {loading ? (
-          <><SkeletonBox height={200} style={{ marginBottom: 10 }} /><SkeletonBox height={200} style={{ marginBottom: 10 }} /></>
-        ) : trendingStories.slice(0, 6).map((story, i) => (
-          <VerticalStoryCard key={i} item={story} onPress={() => openArticle(story)} />
-        ))}
-      </View>
-    );
-    if (item.key === 'deepDives') return (
-      <View style={s.section}>
-        <SectionLabel text="AI Deep Dives" />
-        {loading ? (
-          <><SkeletonBox height={200} style={{ marginBottom: 10 }} /><SkeletonBox height={200} style={{ marginBottom: 10 }} /></>
-        ) : deepDives.slice(0, 4).map((story, i) => (
-          <VerticalStoryCard key={i} item={story} onPress={() => openArticle(story)} badge={{ text: '✦ DEEP DIVE', color: '#7C3AED' }} />
-        ))}
-      </View>
-    );
-    if (item.key === 'companies') return (
-      <View style={s.section}>
-        <SectionLabel text="Companies" />
-        {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={96} style={{ width: TILE_W }} />)}</View> : (
-          <View style={s.grid2}>
-            {companies.slice(0, 8).map((c, i) => <EntityTile key={i} entity={c} accent="#0A84FF" bgColor={COMPANY_BGS[i % 4]} onTap={triggerSearch} />)}
-          </View>
-        )}
-      </View>
-    );
-    if (item.key === 'people') return (
-      <View style={s.section}>
-        <SectionLabel text="People" />
-        {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={96} style={{ width: TILE_W }} />)}</View> : (
-          <View style={s.grid2}>
-            {people.slice(0, 8).map((p, i) => <EntityTile key={i} entity={p} accent="#FF9F0A" bgColor={PEOPLE_BGS[i % 4]} onTap={triggerSearch} />)}
-          </View>
-        )}
-      </View>
-    );
-    if (item.key === 'places') return (
-      <View style={s.section}>
-        <SectionLabel text="Places" />
-        {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={96} style={{ width: TILE_W }} />)}</View> : (
-          <View style={s.grid2}>
-            {places.slice(0, 8).map((p, i) => <EntityTile key={i} entity={p} accent="#30D158" bgColor={PLACE_BGS[i % 4]} onTap={triggerSearch} />)}
-          </View>
-        )}
-      </View>
-    );
-    if (item.key === 'topics') return (
-      <View style={s.section}>
-        <SectionLabel text="Browse Topics" />
-        <View style={s.grid2}>
-          {TOPICS.map(t => (
-            <Pressable key={t.tag} onPress={() => openTopic(t.tag)} style={[s.topicTile, { width: TILE_W }]}>
-              <View style={[s.topicIcon, { backgroundColor: t.bg }]}>
-                <Ionicons name={TOPIC_ICONS[t.tag] ?? 'newspaper-outline'} size={18} color={t.color} />
-              </View>
-              <Text style={s.topicLabel}>{t.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-    );
-    if (item.key === 'sources') return (
-      <View style={s.section}>
-        <SectionLabel text="Source Explorer" />
-        {loading ? <View style={s.grid3}>{[0,1,2,3,4,5].map(i => <SkeletonBox key={i} height={88} style={{ width: CHIP_W }} />)}</View> : (
-          <View style={s.grid3}>
-            {sources.slice(0, 9).map((src, i) => <SourceChip key={i} src={src} onTap={triggerSearch} />)}
-          </View>
-        )}
-      </View>
-    );
-    if (item.key === 'emerging') return (
-      <View style={s.section}>
-        <SectionLabel text="Emerging Topics" />
-        {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={96} style={{ width: TILE_W }} />)}</View> : (
-          <View style={s.grid2}>
-            {emergingTopics.slice(0, 8).map((t, i) => <EntityTile key={i} entity={t} accent="#64D2FF" bgColor={EMERGE_BGS[i % 4]} onTap={triggerSearch} />)}
-          </View>
-        )}
-      </View>
-    );
-    return null;
   }, [loading, trendingStories, deepDives, companies, people, places, sources, emergingTopics,
-      searchQuery, searchResults, hasSearchResults, openArticle, openTopic, triggerSearch]);
-
-  const ListHeader = useMemo(() => (
-    <View style={s.header}>
-      <Text style={s.title}>Explore</Text>
-      <View style={s.searchBar}>
-        <Ionicons name="search-outline" size={15} color="#444" />
-        <TextInput
-          style={s.searchInput}
-          placeholder="Search stories, companies, people…"
-          placeholderTextColor="#444"
-          value={searchText}
-          onChangeText={setSearchText}
-          onSubmitEditing={() => { const q = searchText.trim(); if (q) doSearch(q); else clearSearch(); }}
-          returnKeyType="search"
-          autoCorrect={false}
-          autoCapitalize="none"
-        />
-        {searchText.length > 0 && (
-          <Pressable onPress={clearSearch} hitSlop={8}>
-            <Ionicons name="close" size={16} color="#555" />
-          </Pressable>
-        )}
-      </View>
-    </View>
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [searchText]);
+      openArticle, openTopic, triggerSearch, searchQuery, searchResults, hasSearchResults]);
 
   return (
     <SafeAreaView style={s.root} edges={['top']}>
+      <SearchHeader
+        searchText={searchText}
+        onChangeText={setSearchText}
+        onSubmit={handleSearchSubmit}
+        onClear={handleClearSearch}
+      />
       <FlatList
         data={sections}
         keyExtractor={item => item.key}
         renderItem={renderSection}
-        ListHeaderComponent={ListHeader}
         contentContainerStyle={s.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -742,9 +821,8 @@ export default function ExploreScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#080808' },
-  scroll: { flex: 1 },
   content: { paddingHorizontal: 16, paddingBottom: 110 },
-  header: { paddingTop: 8 },
+  header: { paddingHorizontal: 16, paddingTop: 8 },
   title: { fontSize: 28, fontWeight: '800', color: '#fff', letterSpacing: -0.5, marginTop: 8, marginBottom: 14 },
 
   searchBar: {
@@ -767,7 +845,6 @@ const s = StyleSheet.create({
   vCardImg: { ...StyleSheet.absoluteFillObject },
   vCardGradient: {
     ...StyleSheet.absoluteFillObject,
-    // Simulate gradient with opacity layers
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   vCardBadge: { position: 'absolute', top: 10, left: 10, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 },
