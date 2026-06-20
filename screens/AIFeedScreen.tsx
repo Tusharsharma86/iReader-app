@@ -29,7 +29,7 @@ import { trackAiUsage, trackArticleRead } from '../utils/usageTracker';
 import { trackDeepDive } from '../utils/personalization';
 import { toggleFollow, isFollowing, loadFollowed } from '../utils/followStore';
 import { FALLBACK_IMG } from '../utils/fallback';
-import { darken, lighten, getArticleColor } from '../utils/colors';
+import { darken, lighten, getArticleColor, hexToRgb } from '../utils/colors';
 
 const FEED_API_BASE = 'https://ireader.onrender.com/api/news/feed';
 const DEEPDIVE_API = 'https://ireader.onrender.com/api/news/deepdive';
@@ -778,7 +778,13 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
     return () => { cancelled = true; };
   }, [story.id, deepDiveDepth]);
 
-  const imageH = Math.round(cardH * 0.52);
+  const imageH = Math.round(cardH * 0.62);
+
+  // Derive rgba components from dominant for gradient bleeding
+  const dominantRgb = useMemo(() => hexToRgb(dominant), [dominant]);
+  const dr = dominantRgb?.[0] ?? 10;
+  const dg = dominantRgb?.[1] ?? 10;
+  const db = dominantRgb?.[2] ?? 15;
 
   // Hero zoom-in when card mounts/lands on screen
   const heroScale = useRef(new Animated.Value(1.08)).current;
@@ -798,7 +804,8 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
     <Pressable
       onPress={onOpen}
       style={({ pressed }) => ({
-        width, height: cardH, backgroundColor: '#0A0A0F',
+        width, height: cardH,
+        backgroundColor: `rgb(${Math.round(dr * 0.12)},${Math.round(dg * 0.12)},${Math.round(db * 0.15)})`,
         overflow: 'hidden', borderRadius: 16,
         transform: [{ scale: pressed ? 0.985 : 1 }],
       })}
@@ -817,9 +824,15 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
         ) : (
           <NoImageFallback dominant={dominant} accent={accent} source={sourceName} url={story.sources?.[0]?.url} />
         )}
+        {/* Bottom of image bleeds into dominant color, matching text section */}
         <LinearGradient
-          colors={['rgba(0,0,0,0.25)', 'transparent', 'rgba(10,10,15,0.6)', 'rgba(10,10,15,1)']}
-          locations={[0, 0.35, 0.75, 1]}
+          colors={[
+            'rgba(0,0,0,0.18)',
+            'transparent',
+            `rgba(${dr},${dg},${db},0.45)`,
+            `rgba(${Math.round(dr * 0.12)},${Math.round(dg * 0.12)},${Math.round(db * 0.15)},1)`,
+          ]}
+          locations={[0, 0.3, 0.72, 1]}
           style={StyleSheet.absoluteFill}
         />
         {hasCached && (
@@ -830,31 +843,44 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
         )}
       </View>
 
-      {/* ── Text section ── */}
-      <Animated.View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 14, gap: 8, opacity: textOp, transform: [{ translateY: textTy }] }}>
-        <View style={styles.metaRow}>
-          <Text style={[styles.metaText, { color: accent }]}>{sourceName.toUpperCase()}</Text>
-          <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.4)' }]}>·</Text>
-          <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.65)' }]}>{timeAgo(story.publishedAt)}</Text>
-        </View>
-        <Text style={[styles.cardHeadline, { fontSize: 20, lineHeight: 26, textShadowColor: 'transparent' }]} numberOfLines={3}>
-          {story.headline}
-        </Text>
-        {bullets?.length ? (
-          <View style={{ gap: 4 }}>
-            {bullets.map((bullet, bi) => (
-              <View key={bi} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 7 }}>
-                <View style={{ width: 4, height: 4, borderRadius: 2, marginTop: 5, backgroundColor: aiBullets ? VIOLET : 'rgba(255,255,255,0.4)', flexShrink: 0 }} />
-                <Text style={{ color: '#d0d0d0', fontSize: 12.5, lineHeight: 18, flex: 1 }}>{bullet.trim()}</Text>
-              </View>
-            ))}
+      {/* ── Text section — dynamic color background ── */}
+      <Animated.View style={{ flex: 1, opacity: textOp, transform: [{ translateY: textTy }] }}>
+        <LinearGradient
+          colors={[
+            `rgba(${dr},${dg},${db},0.18)`,
+            `rgba(${Math.round(dr * 0.08)},${Math.round(dg * 0.08)},${Math.round(db * 0.10)},1)`,
+          ]}
+          locations={[0, 1]}
+          style={{ flex: 1, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, gap: 0 }}
+        >
+          {/* Source pill + time */}
+          <View style={[styles.metaRow, { marginBottom: 8 }]}>
+            <View style={{ backgroundColor: `${accent}22`, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 0.5, borderColor: `${accent}55` }}>
+              <Text style={[styles.metaText, { color: accent, fontWeight: '700', letterSpacing: 0.5 }]}>{sourceName.toUpperCase()}</Text>
+            </View>
+            <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.38)', marginLeft: 8 }]}>{timeAgo(story.publishedAt)}</Text>
           </View>
-        ) : (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Ionicons name="sparkles" size={12} color={VIOLET} />
-            <Text style={{ color: VIOLET, fontSize: 11, fontWeight: '700', letterSpacing: 0.8 }}>TAP FOR AI DEEP DIVE</Text>
-          </View>
-        )}
+          <Text style={[styles.cardHeadline, { fontSize: 24, lineHeight: 30, textShadowColor: 'transparent', marginBottom: 10 }]} numberOfLines={3}>
+            {story.headline}
+          </Text>
+          {/* 1px accent separator */}
+          <View style={{ height: 1, backgroundColor: `${accent}30`, marginBottom: 10, marginHorizontal: -20 }} />
+          {bullets?.length ? (
+            <View style={{ gap: 7 }}>
+              {bullets.map((bullet, bi) => (
+                <View key={bi} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 9 }}>
+                  <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, backgroundColor: aiBullets ? accent : `${accent}66`, flexShrink: 0 }} />
+                  <Text style={{ color: 'rgba(255,255,255,0.88)', fontSize: 14, lineHeight: 20, flex: 1, letterSpacing: 0.1 }}>{bullet.trim()}</Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons name="sparkles" size={13} color={VIOLET} />
+              <Text style={{ color: VIOLET, fontSize: 12, fontWeight: '700', letterSpacing: 0.8 }}>TAP FOR AI DEEP DIVE</Text>
+            </View>
+          )}
+        </LinearGradient>
       </Animated.View>
 
       <Text style={styles.swipeHint}>↑ SWIPE FOR NEXT</Text>
