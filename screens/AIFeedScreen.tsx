@@ -380,52 +380,71 @@ export default function AIFeedScreen() {
     fetch('https://ireader.onrender.com/api/news/sources').catch(() => {});
     loadFollowed().catch(() => {});
 
+    const MAX_STALE_MS = 2 * 60 * 60_000; // 2 hours — older than this, don't show stale data
+    const SILENT_REFRESH_MS = 10 * 60_000; // 10 min — trigger background refresh
+
+    const processPrefetch = (prefetchRaw: string | null): FeedItem[] | null => {
+      if (!prefetchRaw) return null;
+      try {
+        const p = JSON.parse(prefetchRaw) as { data: unknown; at: number };
+        const rawItems: ApiItem[] = Array.isArray(p.data) ? p.data : Array.isArray((p.data as { feed?: ApiItem[] })?.feed) ? (p.data as { feed: ApiItem[] }).feed : [];
+        const items = rankFeedItems(
+          parseServerFeed(rawItems)
+            .filter(it => it.primary.headline && it.primary.publishedAt)
+            .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded))
+        );
+        return items.length > 0 ? items : null;
+      } catch { return null; }
+    };
+
     const showItems = (items: FeedItem[], at: number) => {
       setItems(items);
       setTopicCursor(0);
       setActiveIdx(0);
       setLoading(false);
       setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: false }), 0);
-      if (Date.now() - at > 10 * 60_000) {
+      if (Date.now() - at > SILENT_REFRESH_MS) {
         setTimeout(() => loadClusterForward('silent'), 400);
       }
     };
 
-    AsyncStorage.getItem('@aifeed_cache_v3').then(raw => {
-      if (raw) {
+    // Read both caches in parallel — prefer fresher data
+    Promise.all([
+      AsyncStorage.getItem('@aifeed_cache_v3'),
+      AsyncStorage.getItem('@aifeed_prefetch_v1'),
+    ]).then(([cacheRaw, prefetchRaw]) => {
+      AsyncStorage.removeItem('@aifeed_prefetch_v1').catch(() => {});
+
+      let cachedItems: FeedItem[] | null = null;
+      let cacheAt = 0;
+      if (cacheRaw) {
         try {
-          const c = JSON.parse(raw) as { items: FeedItem[]; topicCursor: number; activeIdx: number; at: number };
+          const c = JSON.parse(cacheRaw) as { items: FeedItem[]; at: number };
           if (Array.isArray(c.items) && c.items.length > 0) {
-            showItems(c.items, c.at);
-            return;
+            cachedItems = c.items;
+            cacheAt = c.at;
           }
         } catch {}
       }
 
-      // No processed cache — check if main feed already prefetched raw data
-      AsyncStorage.getItem('@aifeed_prefetch_v1').then(prefetchRaw => {
-        AsyncStorage.removeItem('@aifeed_prefetch_v1').catch(() => {});
-        if (prefetchRaw) {
-          try {
-            const p = JSON.parse(prefetchRaw) as { data: unknown; at: number };
-            const rawItems: ApiItem[] = Array.isArray(p.data) ? p.data : Array.isArray((p.data as { feed?: ApiItem[] })?.feed) ? (p.data as { feed: ApiItem[] }).feed : [];
-            const items = rankFeedItems(
-              parseServerFeed(rawItems)
-                .filter(it => it.primary.headline && it.primary.publishedAt)
-                .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded))
-            );
-            if (items.length > 0) {
-              showItems(items, p.at);
-              // Promote to processed cache so next open is instant too
-              AsyncStorage.setItem('@aifeed_cache_v3', JSON.stringify({
-                items, topicCursor: 0, activeIdx: 0, at: p.at,
-              })).catch(() => {});
-              return;
-            }
-          } catch {}
-        }
+      // Parse prefetch only if it's newer than cache
+      const prefetchParsed = JSON.parse(prefetchRaw ?? 'null') as { data: unknown; at: number } | null;
+      const prefetchAt = prefetchParsed?.at ?? 0;
+      const prefetchItems = prefetchAt > cacheAt ? processPrefetch(prefetchRaw) : null;
+
+      if (prefetchItems && prefetchAt > cacheAt) {
+        // Prefetch is fresher — use it, promote to cache
+        showItems(prefetchItems, prefetchAt);
+        AsyncStorage.setItem('@aifeed_cache_v3', JSON.stringify({
+          items: prefetchItems, topicCursor: 0, activeIdx: 0, at: prefetchAt,
+        })).catch(() => {});
+      } else if (cachedItems && Date.now() - cacheAt < MAX_STALE_MS) {
+        // Cache is fresh enough — show it
+        showItems(cachedItems, cacheAt);
+      } else {
+        // Cache too stale or missing — fetch fresh
         loadClusterForward('initial');
-      }).catch(() => loadClusterForward('initial'));
+      }
     }).catch(() => loadClusterForward('initial'));
   }, [loadTopic, silentRefresh, loadClusterForward]);
 
