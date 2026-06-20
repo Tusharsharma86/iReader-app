@@ -780,11 +780,19 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
 
   const imageH = Math.round(cardH * 0.62);
 
-  // Derive rgba components from dominant for gradient bleeding
+  // Derive raw rgb channels — used for rgba() strings (lighten/darken return rgb(), not hex)
   const dominantRgb = useMemo(() => hexToRgb(dominant), [dominant]);
-  const dr = dominantRgb?.[0] ?? 10;
-  const dg = dominantRgb?.[1] ?? 10;
-  const db = dominantRgb?.[2] ?? 15;
+  const dr = dominantRgb?.[0] ?? 26;
+  const dg = dominantRgb?.[1] ?? 74;
+  const db = dominantRgb?.[2] ?? 138;
+  // textBg: darken dominant 50% — same formula as main feed StoryCard
+  const tbr = Math.round(dr * 0.5);
+  const tbg = Math.round(dg * 0.5);
+  const tbb = Math.round(db * 0.5);
+  // accent rgb channels (lighten 55%)
+  const ar = Math.round(dr + (255 - dr) * 0.55);
+  const ag = Math.round(dg + (255 - dg) * 0.55);
+  const ab = Math.round(db + (255 - db) * 0.55);
 
   // Hero zoom-in when card mounts/lands on screen
   const heroScale = useRef(new Animated.Value(1.08)).current;
@@ -805,13 +813,13 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
       onPress={onOpen}
       style={({ pressed }) => ({
         width, height: cardH,
-        backgroundColor: `rgb(${Math.round(dr * 0.12)},${Math.round(dg * 0.12)},${Math.round(db * 0.15)})`,
+        backgroundColor: `rgb(${tbr},${tbg},${tbb})`,
         overflow: 'hidden', borderRadius: 16,
         transform: [{ scale: pressed ? 0.985 : 1 }],
       })}
     >
       {/* ── Image section ── */}
-      <View style={{ height: imageH, overflow: 'hidden' }}>
+      <View style={{ height: imageH, overflow: 'hidden', backgroundColor: `rgb(${tbr},${tbg},${tbb})` }}>
         {story.imageUrl ? (
           <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: heroScale }] }]}>
             <Image
@@ -824,15 +832,15 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
         ) : (
           <NoImageFallback dominant={dominant} accent={accent} source={sourceName} url={story.sources?.[0]?.url} />
         )}
-        {/* Bottom of image bleeds into dominant color, matching text section */}
+        {/* Fade image into textBg — identical approach to main feed StoryCard */}
         <LinearGradient
           colors={[
-            'rgba(0,0,0,0.18)',
-            'transparent',
-            `rgba(${dr},${dg},${db},0.45)`,
-            `rgba(${Math.round(dr * 0.12)},${Math.round(dg * 0.12)},${Math.round(db * 0.15)},1)`,
+            `rgba(${tbr},${tbg},${tbb},0)`,
+            `rgba(${tbr},${tbg},${tbb},0.35)`,
+            `rgba(${tbr},${tbg},${tbb},0.85)`,
+            `rgba(${tbr},${tbg},${tbb},1)`,
           ]}
-          locations={[0, 0.3, 0.72, 1]}
+          locations={[0.5, 0.78, 0.95, 1]}
           style={StyleSheet.absoluteFill}
         />
         {hasCached && (
@@ -843,51 +851,42 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
         )}
       </View>
 
-      {/* ── Text section — dynamic color background ── */}
-      <Animated.View style={{ flex: 1, opacity: textOp, transform: [{ translateY: textTy }] }}>
-        <LinearGradient
-          colors={[
-            `rgba(${dr},${dg},${db},0.18)`,
-            `rgba(${Math.round(dr * 0.08)},${Math.round(dg * 0.08)},${Math.round(db * 0.10)},1)`,
-          ]}
-          locations={[0, 1]}
-          style={{ flex: 1, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, gap: 0 }}
-        >
-          {/* Source pill + time */}
-          <View style={[styles.metaRow, { marginBottom: 8 }]}>
-            <View style={{ backgroundColor: `${accent}22`, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 0.5, borderColor: `${accent}55` }}>
-              <Text style={[styles.metaText, { color: accent, fontWeight: '700', letterSpacing: 0.5 }]}>{sourceName.toUpperCase()}</Text>
-            </View>
-            <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.38)', marginLeft: 8 }]}>{timeAgo(story.publishedAt)}</Text>
+      {/* ── Text section — same textBg as image bottom ── */}
+      <Animated.View style={{ flex: 1, backgroundColor: `rgb(${tbr},${tbg},${tbb})`, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, opacity: textOp, transform: [{ translateY: textTy }] }}>
+        {/* Source pill + time */}
+        <View style={[styles.metaRow, { marginBottom: 8 }]}>
+          <View style={{ backgroundColor: `rgba(${ar},${ag},${ab},0.15)`, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 0.5, borderColor: `rgba(${ar},${ag},${ab},0.45)` }}>
+            <Text style={[styles.metaText, { color: accent, fontWeight: '700', letterSpacing: 0.5 }]}>{sourceName.toUpperCase()}</Text>
           </View>
-          <Text style={[styles.cardHeadline, { fontSize: 24, lineHeight: 30, textShadowColor: 'transparent', marginBottom: 10 }]} numberOfLines={3}>
-            {story.headline}
-          </Text>
-          {bullets?.length ? (
-            <View style={{
-              backgroundColor: 'rgba(15,15,22,0.55)',
-              borderRadius: 14,
-              padding: 14,
-              borderWidth: StyleSheet.hairlineWidth,
-              borderColor: 'rgba(255,255,255,0.07)',
-              borderTopWidth: 2,
-              borderTopColor: aiBullets ? accent : `${accent}66`,
-              gap: 6,
-            }}>
-              {bullets.map((bullet, bi) => (
-                <View key={bi} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 9 }}>
-                  <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, backgroundColor: aiBullets ? accent : `${accent}66`, flexShrink: 0 }} />
-                  <Text style={{ color: 'rgba(255,255,255,0.88)', fontSize: 14, lineHeight: 20, flex: 1, letterSpacing: 0.1 }}>{bullet.trim()}</Text>
-                </View>
-              ))}
-            </View>
-          ) : (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Ionicons name="sparkles" size={13} color={VIOLET} />
-              <Text style={{ color: VIOLET, fontSize: 12, fontWeight: '700', letterSpacing: 0.8 }}>TAP FOR AI DEEP DIVE</Text>
-            </View>
-          )}
-        </LinearGradient>
+          <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.45)', marginLeft: 8 }]}>{timeAgo(story.publishedAt)}</Text>
+        </View>
+        <Text style={[styles.cardHeadline, { fontSize: 24, lineHeight: 30, textShadowColor: 'transparent', marginBottom: 10 }]} numberOfLines={3}>
+          {story.headline}
+        </Text>
+        {bullets?.length ? (
+          <View style={{
+            backgroundColor: `rgba(${tbr},${tbg},${tbb},0.6)`,
+            borderRadius: 14,
+            padding: 14,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: 'rgba(255,255,255,0.08)',
+            borderTopWidth: 2,
+            borderTopColor: aiBullets ? `rgba(${ar},${ag},${ab},1)` : `rgba(${ar},${ag},${ab},0.45)`,
+            gap: 6,
+          }}>
+            {bullets.map((bullet, bi) => (
+              <View key={bi} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 9 }}>
+                <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, backgroundColor: aiBullets ? `rgba(${ar},${ag},${ab},1)` : `rgba(${ar},${ag},${ab},0.5)`, flexShrink: 0 }} />
+                <Text style={{ color: 'rgba(255,255,255,0.88)', fontSize: 14, lineHeight: 20, flex: 1, letterSpacing: 0.1 }}>{bullet.trim()}</Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Ionicons name="sparkles" size={13} color={VIOLET} />
+            <Text style={{ color: VIOLET, fontSize: 12, fontWeight: '700', letterSpacing: 0.8 }}>TAP FOR AI DEEP DIVE</Text>
+          </View>
+        )}
       </Animated.View>
 
       <Text style={styles.swipeHint}>↑ SWIPE FOR NEXT</Text>
