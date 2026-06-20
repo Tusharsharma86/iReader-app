@@ -863,10 +863,17 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
           <Text style={[styles.cardHeadline, { fontSize: 24, lineHeight: 30, textShadowColor: 'transparent', marginBottom: 10 }]} numberOfLines={3}>
             {story.headline}
           </Text>
-          {/* 1px accent separator */}
-          <View style={{ height: 1, backgroundColor: `${accent}30`, marginBottom: 10, marginHorizontal: -20 }} />
           {bullets?.length ? (
-            <View style={{ gap: 7 }}>
+            <View style={{
+              backgroundColor: 'rgba(15,15,22,0.55)',
+              borderRadius: 14,
+              padding: 14,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: 'rgba(255,255,255,0.07)',
+              borderTopWidth: 2,
+              borderTopColor: aiBullets ? accent : `${accent}66`,
+              gap: 6,
+            }}>
               {bullets.map((bullet, bi) => (
                 <View key={bi} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 9 }}>
                   <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, backgroundColor: aiBullets ? accent : `${accent}66`, flexShrink: 0 }} />
