@@ -683,7 +683,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
       {/* Text overlay — bottom */}
       <div className="aif-text-bounce" style={{
         position: 'absolute', left: 0, right: 0, bottom: 0,
-        padding: '0 22px 110px',
+        padding: '0 22px 44px',
         display: 'flex', flexDirection: 'column', gap: 12,
         zIndex: 2,
       }}>

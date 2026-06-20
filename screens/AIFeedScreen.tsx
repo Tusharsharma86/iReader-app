@@ -778,7 +778,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
     return () => { cancelled = true; };
   }, [story.id, deepDiveDepth]);
 
-  const imageH = Math.round(cardH * 0.62);
+  const imageH = Math.round(cardH * 0.68);
 
   // Derive raw rgb channels — used for rgba() strings (lighten/darken return rgb(), not hex)
   const dominantRgb = useMemo(() => hexToRgb(dominant), [dominant]);
@@ -852,7 +852,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
       </View>
 
       {/* ── Text section — same textBg as image bottom ── */}
-      <Animated.View style={{ flex: 1, backgroundColor: `rgb(${tbr},${tbg},${tbb})`, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, opacity: textOp, transform: [{ translateY: textTy }] }}>
+      <Animated.View style={{ flex: 1, backgroundColor: `rgb(${tbr},${tbg},${tbb})`, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 40, opacity: textOp, transform: [{ translateY: textTy }] }}>
         {/* Source pill + time */}
         <View style={[styles.metaRow, { marginBottom: 8 }]}>
           <View style={{ backgroundColor: `rgba(${ar},${ag},${ab},0.15)`, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 0.5, borderColor: `rgba(${ar},${ag},${ab},0.45)` }}>
