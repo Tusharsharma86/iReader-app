@@ -364,12 +364,21 @@ function pickClusterRep(articles: Story[], topicTitle: string): Story | undefine
   })[0];
 }
 
+function capToWords(text: string, max: number): string {
+  const words = text.trim().split(/\s+/);
+  return words.length <= max ? text.trim() : words.slice(0, max).join(' ');
+}
+
 function feedToClusterGroups(feed: ApiFeedItem[]): Cluster[] {
   return feed.flatMap((item): Cluster[] => {
     if (item.type === 'cluster') {
-      const label = (item.topicTitle && item.topicTitle.trim().length > 8)
-        ? item.topicTitle
-        : (item.articles[0]?.headline ?? item.topicTitle);
+      // Use topicTitle (AI/server-generated) when non-empty; fall back to
+      // first article headline only when server sent nothing useful.
+      const rawLabel = item.topicTitle?.trim()
+        ? item.topicTitle.trim()
+        : (item.articles[0]?.headline ?? '');
+      // Hard-cap at 6 words client-side as a safety net regardless of server output
+      const label = capToWords(rawLabel, 6) || (item.articles[0]?.headline ?? '');
       const rep = pickClusterRep(item.articles, label) ?? item.articles[0];
       if (!rep) return [];
       return [{
