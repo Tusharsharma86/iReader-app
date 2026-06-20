@@ -379,26 +379,53 @@ export default function AIFeedScreen() {
   useEffect(() => {
     fetch('https://ireader.onrender.com/api/news/sources').catch(() => {});
     loadFollowed().catch(() => {});
+
+    const showItems = (items: FeedItem[], at: number) => {
+      setItems(items);
+      setTopicCursor(0);
+      setActiveIdx(0);
+      setLoading(false);
+      setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: false }), 0);
+      if (Date.now() - at > 10 * 60_000) {
+        setTimeout(() => loadClusterForward('silent'), 400);
+      }
+    };
+
     AsyncStorage.getItem('@aifeed_cache_v3').then(raw => {
-      if (!raw) { loadClusterForward('initial'); return; }
-      try {
-        const c = JSON.parse(raw) as { items: FeedItem[]; topicCursor: number; activeIdx: number; at: number };
-        if (Array.isArray(c.items) && c.items.length > 0) {
-          // Stale-while-revalidate: render cache INSTANTLY at any age (no
-          // skeleton, no wait), then silently refresh in the background if it's
-          // older than 10 min. Makes every open after the first feel instant.
-          setItems(c.items);
-          setTopicCursor(0); // always start at breaking on open
-          setActiveIdx(0);
-          setLoading(false);
-          setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: false }), 0);
-          if (Date.now() - c.at > 10 * 60_000) {
-            setTimeout(() => loadClusterForward('silent'), 400);
+      if (raw) {
+        try {
+          const c = JSON.parse(raw) as { items: FeedItem[]; topicCursor: number; activeIdx: number; at: number };
+          if (Array.isArray(c.items) && c.items.length > 0) {
+            showItems(c.items, c.at);
+            return;
           }
-          return;
+        } catch {}
+      }
+
+      // No processed cache — check if main feed already prefetched raw data
+      AsyncStorage.getItem('@aifeed_prefetch_v1').then(prefetchRaw => {
+        AsyncStorage.removeItem('@aifeed_prefetch_v1').catch(() => {});
+        if (prefetchRaw) {
+          try {
+            const p = JSON.parse(prefetchRaw) as { data: unknown; at: number };
+            const rawItems: ApiItem[] = Array.isArray(p.data) ? p.data : Array.isArray((p.data as { feed?: ApiItem[] })?.feed) ? (p.data as { feed: ApiItem[] }).feed : [];
+            const items = rankFeedItems(
+              parseServerFeed(rawItems)
+                .filter(it => it.primary.headline && it.primary.publishedAt)
+                .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded))
+            );
+            if (items.length > 0) {
+              showItems(items, p.at);
+              // Promote to processed cache so next open is instant too
+              AsyncStorage.setItem('@aifeed_cache_v3', JSON.stringify({
+                items, topicCursor: 0, activeIdx: 0, at: p.at,
+              })).catch(() => {});
+              return;
+            }
+          } catch {}
         }
-      } catch {}
-      loadClusterForward('initial');
+        loadClusterForward('initial');
+      }).catch(() => loadClusterForward('initial'));
     }).catch(() => loadClusterForward('initial'));
   }, [loadTopic, silentRefresh, loadClusterForward]);
 

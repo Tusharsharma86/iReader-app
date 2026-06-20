@@ -467,6 +467,14 @@ export default function FeedScreen() {
   // Load breaking-theme mute set on mount — used to suppress breaking notifs
   // for themes the user has turned off in BreakingThemesScreen.
   useEffect(() => { loadBreakingThemeMutes().catch(() => {}); }, []);
+  // Warm AI feed while user browses main feed — raw response saved for AIFeedScreen
+  // to consume instantly on first open instead of waiting for its own fetch.
+  useEffect(() => {
+    fetch('https://ireader.onrender.com/api/news/feed?topic=breaking')
+      .then(r => r.json())
+      .then(data => AsyncStorage.setItem('@aifeed_prefetch_v1', JSON.stringify({ data, at: Date.now() })))
+      .catch(() => {});
+  }, []);
   useEffect(() => {
     trackVisit()
       .then(() => getUsageStats())
