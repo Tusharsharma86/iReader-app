@@ -853,7 +853,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
             `rgba(${Math.round(dr * 0.08)},${Math.round(dg * 0.08)},${Math.round(db * 0.10)},1)`,
           ]}
           locations={[0, 1]}
-          style={{ flex: 1, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, gap: 0 }}
+          style={{ flex: 1, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 44 }}
         >
           {/* Source pill + time */}
           <View style={[styles.metaRow, { marginBottom: 8 }]}>
@@ -867,9 +867,18 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
           </Text>
           {/* 1px accent separator */}
           <View style={{ height: 1, backgroundColor: `${accent}30`, marginBottom: 10, marginHorizontal: -20 }} />
+          {/* Spacer — expands to fill remaining space, pushing bullets to bottom */}
+          <View style={{ flex: 1 }} />
           {bullets?.length ? (
-            <View style={{ gap: 7 }}>
-              {bullets.map((bullet, bi) => (
+            <View style={{
+              backgroundColor: 'rgba(0,0,0,0.45)',
+              borderRadius: 12,
+              padding: 12,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: 'rgba(255,255,255,0.10)',
+              gap: 7,
+            }}>
+              {bullets.slice(0, 3).map((bullet, bi) => (
                 <View key={bi} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 9 }}>
                   <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, backgroundColor: aiBullets ? accent : `${accent}66`, flexShrink: 0 }} />
                   <Text style={{ color: 'rgba(255,255,255,0.88)', fontSize: 14, lineHeight: 20, flex: 1, letterSpacing: 0.1 }}>{bullet.trim()}</Text>

@@ -683,7 +683,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
       {/* Text overlay — bottom */}
       <div className="aif-text-bounce" style={{
         position: 'absolute', left: 0, right: 0, bottom: 0,
-        padding: '0 22px 110px',
+        padding: '0 22px 44px',
         display: 'flex', flexDirection: 'column', gap: 12,
         zIndex: 2,
       }}>
@@ -702,8 +702,14 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         {(() => {
           const bullets = aiBullets ?? (story.summary ? splitToBullets(story.summary) : null);
           if (bullets?.length) return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
-              {bullets.map((bullet, bi) => (
+            <div style={{
+              background: 'rgba(0,0,0,0.45)',
+              borderRadius: 12,
+              padding: '10px 12px',
+              border: '1px solid rgba(255,255,255,0.09)',
+              display: 'flex', flexDirection: 'column', gap: 6,
+            }}>
+              {bullets.slice(0, 3).map((bullet, bi) => (
                 <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
                   <div style={{ width: 4, height: 4, borderRadius: 2, marginTop: 6, background: aiBullets ? VIOLET : 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
                   <p style={{
