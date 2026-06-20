@@ -702,13 +702,18 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         {(() => {
           const bullets = aiBullets ?? (story.summary ? splitToBullets(story.summary) : null);
           if (bullets?.length) return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+            <div style={{
+              display: 'flex', flexDirection: 'column', gap: 6,
+              background: 'rgba(15,15,22,0.55)',
+              borderRadius: 14, padding: 14,
+              border: '1px solid rgba(255,255,255,0.07)',
+              borderTop: `2px solid ${aiBullets ? accent : accent + '66'}`,
+            }}>
               {bullets.map((bullet, bi) => (
-                <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
-                  <div style={{ width: 4, height: 4, borderRadius: 2, marginTop: 6, background: aiBullets ? VIOLET : 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
+                <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+                  <div style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, background: aiBullets ? accent : accent + '66', flexShrink: 0 }} />
                   <p style={{
-                    margin: 0, color: '#e5e5e5', fontSize: 12, lineHeight: 1.5,
-                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                    margin: 0, color: 'rgba(255,255,255,0.88)', fontSize: 13, lineHeight: 1.55,
                     textShadow: '0 2px 12px rgba(0,0,0,0.55)',
                   }}>{bullet.trim()}</p>
                 </div>
