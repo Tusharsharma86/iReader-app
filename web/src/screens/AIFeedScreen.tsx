@@ -966,7 +966,7 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
 
   useEffect(() => {
     if (stage !== 'generating') { setShowColdHint(false); return; }
-    const t = setTimeout(() => setShowColdHint(true), 5000);
+    const t = setTimeout(() => setShowColdHint(true), 15000);
     return () => clearTimeout(t);
   }, [stage]);
 
@@ -1373,13 +1373,22 @@ function QuestionItem({ question, story, narrative, accent, scale = 1 }: {
   const [answer, setAnswer] = useState<string | null>(() => readAskCache(key));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const ctrlRef = useRef<AbortController | null>(null);
+  const userCancelledRef = useRef(false);
+
+  const cancelAnswer = useCallback(() => {
+    userCancelledRef.current = true;
+    ctrlRef.current?.abort();
+  }, []);
 
   const fetchAnswer = useCallback(async () => {
     if (answer || loading) return;
     setLoading(true);
     setError(null);
+    userCancelledRef.current = false;
     try {
       const ctrl = new AbortController();
+      ctrlRef.current = ctrl;
       const t = setTimeout(() => ctrl.abort(), 20000);
       const r = await fetch(ASK_API, {
         method: 'POST',
@@ -1399,9 +1408,11 @@ function QuestionItem({ question, story, narrative, accent, scale = 1 }: {
       setAnswer(data.answer);
       writeAskCache(key, data.answer);
     } catch (e) {
-      setError(e instanceof Error && e.name === 'AbortError'
-        ? 'Timed out — try again.'
-        : String(e instanceof Error ? e.message : e));
+      if (e instanceof Error && e.name === 'AbortError') {
+        if (!userCancelledRef.current) setError('Timed out — try again.');
+      } else {
+        setError(String(e instanceof Error ? e.message : e));
+      }
     } finally {
       setLoading(false);
     }
@@ -1448,6 +1459,11 @@ function QuestionItem({ question, story, narrative, accent, scale = 1 }: {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#aaa', fontSize: 12 }}>
               <span className="typing-dots"><span /><span /><span /></span>
               Thinking…
+              <button onClick={cancelAnswer} style={{
+                marginLeft: 4, padding: '2px 8px', borderRadius: 999,
+                background: 'transparent', border: '1px solid rgba(255,136,136,0.4)',
+                color: '#ff8888', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+              }}>CANCEL</button>
             </div>
           ) : error ? (
             <div style={{ color: '#ff8888', fontSize: 12 }}>

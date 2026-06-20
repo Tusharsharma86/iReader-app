@@ -555,9 +555,10 @@ export default function AIFeedScreen() {
       width={screenW}
       height={CARD_H}
       topInset={insets.top}
+      isActive={index === activeIdx}
       onOpen={() => setOpenedItem(item)}
     />
-  ), [items.length, screenW, CARD_H, insets.top, setOpenedItem]);
+  ), [items.length, screenW, CARD_H, insets.top, setOpenedItem, activeIdx]);
 
   if (loading && items.length === 0) {
     return (
@@ -733,8 +734,8 @@ function Header({ topInset, counter, currentTopic, onPickTopic }: {
 }
 
 // ── Full-bleed card ─────────────────────────────────────────────────────────
-function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH, topInset, onOpen }: {
-  item: FeedItem; index: number; total: number; width: number; height: number; topInset: number; onOpen: () => void;
+function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH, topInset, isActive, onOpen }: {
+  item: FeedItem; index: number; total: number; width: number; height: number; topInset: number; isActive: boolean; onOpen: () => void;
 }) {
   // Use live width for foldable resize; height comes from prop so it matches
   // the FlatList layout (getItemLayout) and prevents drift on scroll.
@@ -753,6 +754,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
   }, [story.id]);
 
   useEffect(() => {
+    if (!isActive || aiBullets) return;
     let cancelled = false;
     (async () => {
       if (cancelled) return;
@@ -776,7 +778,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
       } catch {}
     })();
     return () => { cancelled = true; };
-  }, [story.id, deepDiveDepth]);
+  }, [story.id, deepDiveDepth, isActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const imageH = Math.round(cardH * 0.62);
 
@@ -1069,7 +1071,7 @@ function dedupeMetrics(items: string[]): string[] {
 
   useEffect(() => {
     if (stage !== 'generating') { setShowColdHint(false); return; }
-    const t = setTimeout(() => setShowColdHint(true), 5000);
+    const t = setTimeout(() => setShowColdHint(true), 15000);
     return () => clearTimeout(t);
   }, [stage]);
 
@@ -1327,6 +1329,8 @@ function QuestionItem({ question, story, narrative, scale = 1 }: {
   const [answer, setAnswer] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const ctrlRef = useRef<AbortController | null>(null);
+  const userCancelledRef = useRef(false);
 
   useEffect(() => {
     AsyncStorage.getItem(ASK_CACHE_PREFIX + cacheKey)
@@ -1339,12 +1343,19 @@ function QuestionItem({ question, story, narrative, scale = 1 }: {
       });
   }, [cacheKey]);
 
+  const cancelAnswer = useCallback(() => {
+    userCancelledRef.current = true;
+    ctrlRef.current?.abort();
+  }, []);
+
   const fetchAnswer = useCallback(async () => {
     if (answer || loading) return;
     setLoading(true);
     setError(null);
+    userCancelledRef.current = false;
     try {
       const ctrl = new AbortController();
+      ctrlRef.current = ctrl;
       const t = setTimeout(() => ctrl.abort(), 25000);
       const r = await fetch(ASK_API, {
         method: 'POST',
@@ -1364,7 +1375,12 @@ function QuestionItem({ question, story, narrative, scale = 1 }: {
       setAnswer(data.answer);
       AsyncStorage.setItem(ASK_CACHE_PREFIX + cacheKey, JSON.stringify({ answer: data.answer, at: Date.now() })).catch(() => {});
     } catch (e) {
-      setError(String(e instanceof Error ? e.message : e));
+      if (e instanceof Error && e.name === 'AbortError') {
+        if (!userCancelledRef.current) setError('Timed out — try again.');
+        // user-cancelled: just stop loading, no error
+      } else {
+        setError(String(e instanceof Error ? e.message : e));
+      }
     } finally {
       setLoading(false);
     }
@@ -1389,6 +1405,9 @@ function QuestionItem({ question, story, narrative, scale = 1 }: {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <TypingDots color={VIOLET} />
               <Text style={{ color: '#aaa', fontSize: 12 }}>Thinking…</Text>
+              <Pressable onPress={cancelAnswer} style={{ marginLeft: 4 }}>
+                <Text style={{ color: '#ff8888', fontSize: 11, fontWeight: '700' }}>CANCEL</Text>
+              </Pressable>
             </View>
           ) : error ? (
             <View>
