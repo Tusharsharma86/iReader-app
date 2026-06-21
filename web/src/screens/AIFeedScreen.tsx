@@ -687,10 +687,8 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         display: 'flex', flexDirection: 'column', gap: 12,
         zIndex: 2,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, color: accent, fontSize: 11, fontWeight: 800, letterSpacing: 1.4 }}>
-          <span>{sourceName.toUpperCase()}</span>
-          <span style={{ color: 'rgba(255,255,255,0.4)' }}>·</span>
-          <span style={{ color: 'rgba(255,255,255,0.65)' }}>{timeAgo(story.publishedAt)}</span>
+        <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: 11, fontWeight: 800, letterSpacing: 1.4 }}>
+          {timeAgo(story.publishedAt)}
         </div>
 
         <h2 style={{
