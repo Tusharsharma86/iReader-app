@@ -855,12 +855,9 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
           locations={[0, 1]}
           style={{ flex: 1, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 44 }}
         >
-          {/* Source pill + time */}
+          {/* Time */}
           <View style={[styles.metaRow, { marginBottom: 8 }]}>
-            <View style={{ backgroundColor: `${accent}22`, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 0.5, borderColor: `${accent}55` }}>
-              <Text style={[styles.metaText, { color: accent, fontWeight: '700', letterSpacing: 0.5 }]}>{sourceName.toUpperCase()}</Text>
-            </View>
-            <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.38)', marginLeft: 8 }]}>{timeAgo(story.publishedAt)}</Text>
+            <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.38)' }]}>{timeAgo(story.publishedAt)}</Text>
           </View>
           <Text style={[styles.cardHeadline, { fontSize: 24, lineHeight: 30, textShadowColor: 'transparent', marginBottom: 14 }]} numberOfLines={3}>
             {story.headline}
