@@ -1060,21 +1060,29 @@ function dedupeMetrics(items: string[]): string[] {
         ];
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 95000);
+        const fetchBody = JSON.stringify({
+          url: story.sources?.[0]?.url ?? '',
+          headline: story.headline,
+          paragraphs,
+          sourceUrls: (item.sources ?? []).map(s => s.url).filter(Boolean),
+          depth: deepDiveDepth,
+          publishedAt: story.publishedAt,
+        });
+        const doFetch = () => fetch(DEEPDIVE_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: fetchBody,
+          signal: ctrl.signal,
+        });
         let dd: Response;
         try {
-          dd = await fetch(DEEPDIVE_API, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              url: story.sources?.[0]?.url ?? '',
-              headline: story.headline,
-              paragraphs,
-              sourceUrls: (item.sources ?? []).map(s => s.url).filter(Boolean),
-              depth: deepDiveDepth,
-              publishedAt: story.publishedAt,
-            }),
-            signal: ctrl.signal,
-          });
+          dd = await doFetch();
+          // Render free-tier cold start returns 502/503 — wait for warmup and retry once
+          if (!dd.ok && (dd.status === 502 || dd.status === 503)) {
+            await new Promise(r => setTimeout(r, 22000));
+            if (cancelled) return;
+            dd = await doFetch();
+          }
         } finally { clearTimeout(t); }
         if (!dd.ok) throw new Error(`Deep Dive ${dd.status}`);
         const json: DeepDiveData = await dd.json();
