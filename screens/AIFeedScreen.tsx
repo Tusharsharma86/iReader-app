@@ -902,7 +902,8 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
 // ── Related story card (EARLIER IN STORY) — pre-fetches AI bullets ─────────
 function RelatedStoryCard({ s, onPress }: { s: Story; onPress: () => void }) {
   const { deepDiveDepth } = useSettings();
-  const [aiBullets, setAiBullets] = useState<string[] | null>(null);
+  const [tldrSections, setTldrSections] = useState<TldrSection[] | null>(null);
+  const [tldrFlat, setTldrFlat] = useState<string[] | null>(null);
   const srcName = s.sources?.[0]?.name ?? 'Source';
 
   useEffect(() => {
@@ -924,13 +925,12 @@ function RelatedStoryCard({ s, onPress }: { s: Story; onPress: () => void }) {
         if (!res.ok || cancelled) return;
         const json: DeepDiveData = await res.json();
         if (cancelled) return;
-        if (json.tldr?.length) setAiBullets(json.tldr.slice(0, 4).map(b => b.replace(/\*\*/g, '')));
+        if (json.tldrSections?.length) setTldrSections(json.tldrSections);
+        else if (json.tldr?.length) setTldrFlat(json.tldr.slice(0, 3).map(b => b.replace(/\*\*/g, '')));
       } catch {}
     })();
     return () => { cancelled = true; };
   }, [s.id, deepDiveDepth]);
-
-  const bullets = aiBullets ?? (s.summary ? splitToBullets(s.summary) : null);
 
   return (
     <Pressable onPress={onPress} style={overlayStyles.relatedCard}>
@@ -942,17 +942,43 @@ function RelatedStoryCard({ s, onPress }: { s: Story; onPress: () => void }) {
       <View style={overlayStyles.relatedCardBody}>
         <Text style={overlayStyles.sourceName}>{srcName.toUpperCase()}</Text>
         <Text numberOfLines={3} style={overlayStyles.relatedCardHeadline}>{s.headline}</Text>
-        {bullets?.length ? bullets.map((bullet, bi) => (
-          <View key={bi} style={{ flexDirection: 'row', gap: 8, marginTop: 6, alignItems: 'flex-start' }}>
-            <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, backgroundColor: aiBullets ? VIOLET : 'rgba(255,255,255,0.4)', flexShrink: 0 }} />
-            <Text style={overlayStyles.relatedSummary}>{bullet.trim()}</Text>
-          </View>
-        )) : !aiBullets ? (
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 6, alignItems: 'center' }}>
-            <Ionicons name="sparkles" size={10} color={VIOLET} />
-            <Text style={[overlayStyles.relatedSummary, { color: VIOLET, opacity: 0.7, fontSize: 10 }]}>Loading AI summary…</Text>
-          </View>
-        ) : null}
+
+        {/* TLDR — styled like deep dive TLDR card */}
+        <View style={{
+          backgroundColor: 'rgba(15,15,22,0.6)',
+          borderRadius: 12, padding: 12, marginTop: 10,
+          borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.07)',
+          borderTopWidth: 2, borderTopColor: VIOLET,
+        }}>
+          {tldrSections ? (
+            tldrSections.slice(0, 2).map((section, si) => (
+              <View key={si} style={{ marginTop: si > 0 ? 10 : 0, paddingTop: si > 0 ? 10 : 0, borderTopWidth: si > 0 ? StyleSheet.hairlineWidth : 0, borderTopColor: 'rgba(255,255,255,0.07)' }}>
+                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '800', letterSpacing: 1.4, marginBottom: 6, textTransform: 'uppercase' }}>
+                  {section.heading}
+                </Text>
+                {section.bullets.slice(0, 2).map((b, i) => (
+                  <View key={i} style={{ flexDirection: 'row', gap: 10, paddingVertical: 3, alignItems: 'flex-start' }}>
+                    <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, backgroundColor: VIOLET, flexShrink: 0 }} />
+                    <Text style={{ flex: 1, color: '#cfcfd8', fontSize: 13, lineHeight: 19 }}>{b.replace(/\*\*/g, '').trim()}</Text>
+                  </View>
+                ))}
+              </View>
+            ))
+          ) : tldrFlat ? (
+            tldrFlat.map((b, i) => (
+              <View key={i} style={{ flexDirection: 'row', gap: 10, paddingVertical: 3, alignItems: 'flex-start' }}>
+                <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, backgroundColor: VIOLET, flexShrink: 0 }} />
+                <Text style={{ flex: 1, color: '#cfcfd8', fontSize: 13, lineHeight: 19 }}>{b.trim()}</Text>
+              </View>
+            ))
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons name="sparkles" size={10} color={VIOLET} />
+              <Text style={{ color: VIOLET, fontSize: 10, opacity: 0.7 }}>Loading AI summary…</Text>
+            </View>
+          )}
+        </View>
+
         <Text style={overlayStyles.relatedCardCta}>DEEP DIVE ›</Text>
       </View>
     </Pressable>
