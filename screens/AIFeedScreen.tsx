@@ -862,13 +862,9 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
             </View>
             <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.38)', marginLeft: 8 }]}>{timeAgo(story.publishedAt)}</Text>
           </View>
-          <Text style={[styles.cardHeadline, { fontSize: 24, lineHeight: 30, textShadowColor: 'transparent', marginBottom: 10 }]} numberOfLines={3}>
+          <Text style={[styles.cardHeadline, { fontSize: 24, lineHeight: 30, textShadowColor: 'transparent', marginBottom: 14 }]} numberOfLines={3}>
             {story.headline}
           </Text>
-          {/* 1px accent separator */}
-          <View style={{ height: 1, backgroundColor: `${accent}30`, marginBottom: 10, marginHorizontal: -20 }} />
-          {/* Spacer — expands to fill remaining space, pushing bullets to bottom */}
-          <View style={{ flex: 1 }} />
           {bullets?.length ? (
             <View style={{
               backgroundColor: 'rgba(0,0,0,0.45)',

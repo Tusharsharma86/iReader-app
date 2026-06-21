@@ -360,7 +360,10 @@ export default function App() {
               const safeIndex = Math.min(s.index ?? 0, cleaned.length - 1);
               return { ...s, routes: cleaned, index: safeIndex };
             };
-            setNavInitState(stripArticle(state));
+            const stripped = stripArticle(state);
+            // Always land on Feed tab on cold start — don't restore previous tab
+            if (stripped) stripped.index = 0;
+            setNavInitState(stripped);
           } catch {}
         }
       })
