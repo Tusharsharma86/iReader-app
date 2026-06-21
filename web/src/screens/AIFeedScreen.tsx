@@ -745,7 +745,8 @@ function FullPreviewCard({ item, index, total, onOpen }: {
 
 function RelatedStoryCard({ s, onPress }: { s: Story; onPress: () => void }) {
   const { deepDiveDepth } = useSettings();
-  const [aiBullets, setAiBullets] = React.useState<string[] | null>(null);
+  const [tldrSections, setTldrSections] = React.useState<TldrSection[] | null>(null);
+  const [tldrFlat, setTldrFlat] = React.useState<string[] | null>(null);
   const srcName = s.sources?.[0]?.name ?? 'Source';
 
   React.useEffect(() => {
@@ -767,13 +768,17 @@ function RelatedStoryCard({ s, onPress }: { s: Story; onPress: () => void }) {
         if (!res.ok || cancelled) return;
         const json = await res.json() as DeepDiveData;
         if (cancelled) return;
-        if (json.tldr?.length) setAiBullets(json.tldr.slice(0, 4).map((b: string) => b.replace(/\*\*/g, '')));
+        if (json.tldrSections?.length) {
+          setTldrSections(json.tldrSections);
+        } else if (json.tldr?.length) {
+          setTldrFlat(json.tldr.slice(0, 3).map((b: string) => b.replace(/\*\*/g, '').trim()));
+        }
       } catch {}
     })();
     return () => { cancelled = true; };
   }, [s.id, deepDiveDepth]);
 
-  const bullets = aiBullets ?? (s.summary ? splitToBullets(s.summary) : null);
+  const hasTldr = tldrSections !== null || tldrFlat !== null;
 
   return (
     <button onClick={onPress} style={{
@@ -793,17 +798,39 @@ function RelatedStoryCard({ s, onPress }: { s: Story; onPress: () => void }) {
       <div style={{ padding: '12px 14px 14px' }}>
         <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10, fontWeight: 800, letterSpacing: 1.2, marginBottom: 6 }}>{srcName.toUpperCase()}</div>
         <div style={{ color: '#f0f0f0', fontSize: 15, fontWeight: 700, lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as const }}>{s.headline}</div>
-        {bullets?.length ? bullets.map((bullet, bi) => (
-          <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 6 }}>
-            <div style={{ width: 5, height: 5, borderRadius: 3, marginTop: 5, background: aiBullets ? VIOLET : 'rgba(255,255,255,0.4)', flexShrink: 0 }} />
-            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, lineHeight: 1.5 }}>{bullet.trim()}</div>
-          </div>
-        )) : !aiBullets ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
-            <span style={{ color: VIOLET, fontSize: 10 }}>✦</span>
-            <span style={{ color: VIOLET, fontSize: 10, opacity: 0.7 }}>Loading AI summary…</span>
-          </div>
-        ) : null}
+        <div style={{
+          background: 'rgba(15,15,22,0.6)', borderRadius: 12, padding: '10px 12px',
+          marginTop: 10,
+          border: '1px solid rgba(255,255,255,0.07)',
+          borderTop: `2px solid ${VIOLET}`,
+          display: 'flex', flexDirection: 'column', gap: 0,
+        }}>
+          {tldrSections ? (
+            tldrSections.slice(0, 2).map((section, si) => (
+              <div key={si} style={{ marginTop: si > 0 ? 10 : 0 }}>
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: 800, letterSpacing: 1.4, marginBottom: 6, textTransform: 'uppercase' as const }}>{section.heading}</div>
+                {section.bullets.slice(0, 2).map((b, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, paddingTop: 3, paddingBottom: 3 }}>
+                    <div style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, background: VIOLET, flexShrink: 0 }} />
+                    <div style={{ color: '#cfcfd8', fontSize: 13, lineHeight: 1.46 }}>{b.replace(/\*\*/g, '').trim()}</div>
+                  </div>
+                ))}
+              </div>
+            ))
+          ) : tldrFlat ? (
+            tldrFlat.map((b, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, paddingTop: 3, paddingBottom: 3 }}>
+                <div style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, background: VIOLET, flexShrink: 0 }} />
+                <div style={{ color: '#cfcfd8', fontSize: 13, lineHeight: 1.46 }}>{b}</div>
+              </div>
+            ))
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ color: VIOLET, fontSize: 10 }}>✦</span>
+              <span style={{ color: VIOLET, fontSize: 10, opacity: 0.7 }}>Loading AI summary…</span>
+            </div>
+          )}
+        </div>
         <div style={{ marginTop: 10, color: VIOLET, fontSize: 10, fontWeight: 800, letterSpacing: 0.8 }}>DEEP DIVE ›</div>
       </div>
     </button>
