@@ -242,21 +242,23 @@ async function buildSnapshot(): Promise<Snapshot> {
     .filter(s => s.stories.length > 0);
 
   // Numbers of the day — scan top headlines for striking figures
+  const LABEL_STOP = new Set(['the','a','an','is','are','was','were','in','on','at','to','of','and','or','by','as','its','it','for','with','has','have','had','this','that','from','after','over','new','says','said','what','when','who','how','why','than','into','amid','after','about','their','its','which','also','just']);
   const numbers: NumberCallout[] = [];
   const seenNumbers = new Set<string>();
   for (const s of allStories.slice(0, 30)) {
     const n = extractNumber(`${s.headline} ${s.summary ?? ''}`);
     if (n && !seenNumbers.has(n)) {
       seenNumbers.add(n);
-      // Generate a label from the headline subject
-      const labelWords = s.headline
+      // Build label: meaningful words from headline excluding the number itself and stop words
+      const numWords = new Set(n.toLowerCase().replace(/[^a-z\s]/g, '').split(/\s+/).filter(Boolean));
+      const meaningful = s.headline
         .split(/\s+/)
-        .filter(w => /^[A-Z]/.test(w) && w.length > 2)
-        .slice(0, 2)
-        .join(' ');
+        .map(w => w.replace(/[^a-zA-Z]/g, ''))
+        .filter(w => w.length > 2 && !LABEL_STOP.has(w.toLowerCase()) && !numWords.has(w.toLowerCase()));
+      const label = meaningful.slice(0, 3).join(' ');
       numbers.push({
         value: n,
-        label: (labelWords || s.sources?.[0]?.name || '').toUpperCase().slice(0, 20),
+        label: (label || s.sources?.[0]?.name || '').toUpperCase().slice(0, 28),
       });
       if (numbers.length >= 3) break;
     }
@@ -547,7 +549,7 @@ export default function DigestScreen() {
               {snapshot.numbers.map((n, i) => (
                 <View key={i} style={styles.numberCell}>
                   <Text style={styles.numberValue}>{n.value}</Text>
-                  <Text style={styles.numberLabel} numberOfLines={1}>{n.label || '—'}</Text>
+                  <Text style={styles.numberLabel} numberOfLines={2}>{n.label || '—'}</Text>
                 </View>
               ))}
             </View>
