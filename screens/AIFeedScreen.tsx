@@ -905,18 +905,21 @@ function RelatedStoryCard({ s, onPress }: { s: Story; onPress: () => void }) {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(DEEPDIVE_API, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            url: s.sources?.[0]?.url ?? '',
-            headline: s.headline,
-            paragraphs: [s.headline + '. ' + (s.summary ?? s.headline)],
-            sourceUrls: [s.sources?.[0]?.url].filter(Boolean) as string[],
-            depth: deepDiveDepth,
-            publishedAt: s.publishedAt,
-          }),
+        const body = JSON.stringify({
+          url: s.sources?.[0]?.url ?? '',
+          headline: s.headline,
+          paragraphs: [s.headline + '. ' + (s.summary ?? s.headline)],
+          sourceUrls: [s.sources?.[0]?.url].filter(Boolean) as string[],
+          depth: deepDiveDepth,
+          publishedAt: s.publishedAt,
         });
+        const doFetch = () => fetch(DEEPDIVE_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+        let res = await doFetch();
+        if (!res.ok && (res.status === 502 || res.status === 503)) {
+          await new Promise(r => setTimeout(r, 22000));
+          if (cancelled) return;
+          res = await doFetch();
+        }
         if (!res.ok || cancelled) return;
         const json: DeepDiveData = await res.json();
         if (cancelled) return;
