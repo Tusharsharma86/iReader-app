@@ -379,72 +379,26 @@ export default function AIFeedScreen() {
   useEffect(() => {
     fetch('https://ireader.onrender.com/api/news/sources').catch(() => {});
     loadFollowed().catch(() => {});
-
-    const MAX_STALE_MS = 2 * 60 * 60_000; // 2 hours — older than this, don't show stale data
-    const SILENT_REFRESH_MS = 10 * 60_000; // 10 min — trigger background refresh
-
-    const processPrefetch = (prefetchRaw: string | null): FeedItem[] | null => {
-      if (!prefetchRaw) return null;
+    AsyncStorage.getItem('@aifeed_cache_v3').then(raw => {
+      if (!raw) { loadClusterForward('initial'); return; }
       try {
-        const p = JSON.parse(prefetchRaw) as { data: unknown; at: number };
-        const rawItems: ApiItem[] = Array.isArray(p.data) ? p.data : Array.isArray((p.data as { feed?: ApiItem[] })?.feed) ? (p.data as { feed: ApiItem[] }).feed : [];
-        const items = rankFeedItems(
-          parseServerFeed(rawItems)
-            .filter(it => it.primary.headline && it.primary.publishedAt)
-            .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded))
-        );
-        return items.length > 0 ? items : null;
-      } catch { return null; }
-    };
-
-    const showItems = (items: FeedItem[], at: number) => {
-      setItems(items);
-      setTopicCursor(0);
-      setActiveIdx(0);
-      setLoading(false);
-      setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: false }), 0);
-      if (Date.now() - at > SILENT_REFRESH_MS) {
-        setTimeout(() => loadClusterForward('silent'), 400);
-      }
-    };
-
-    // Read both caches in parallel — prefer fresher data
-    Promise.all([
-      AsyncStorage.getItem('@aifeed_cache_v3'),
-      AsyncStorage.getItem('@aifeed_prefetch_v1'),
-    ]).then(([cacheRaw, prefetchRaw]) => {
-      AsyncStorage.removeItem('@aifeed_prefetch_v1').catch(() => {});
-
-      let cachedItems: FeedItem[] | null = null;
-      let cacheAt = 0;
-      if (cacheRaw) {
-        try {
-          const c = JSON.parse(cacheRaw) as { items: FeedItem[]; at: number };
-          if (Array.isArray(c.items) && c.items.length > 0) {
-            cachedItems = c.items;
-            cacheAt = c.at;
+        const c = JSON.parse(raw) as { items: FeedItem[]; topicCursor: number; activeIdx: number; at: number };
+        if (Array.isArray(c.items) && c.items.length > 0) {
+          // Stale-while-revalidate: render cache INSTANTLY at any age (no
+          // skeleton, no wait), then silently refresh in the background if it's
+          // older than 10 min. Makes every open after the first feel instant.
+          setItems(c.items);
+          setTopicCursor(0); // always start at breaking on open
+          setActiveIdx(0);
+          setLoading(false);
+          setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: false }), 0);
+          if (Date.now() - c.at > 10 * 60_000) {
+            setTimeout(() => loadClusterForward('silent'), 400);
           }
-        } catch {}
-      }
-
-      // Parse prefetch only if it's newer than cache
-      const prefetchParsed = JSON.parse(prefetchRaw ?? 'null') as { data: unknown; at: number } | null;
-      const prefetchAt = prefetchParsed?.at ?? 0;
-      const prefetchItems = prefetchAt > cacheAt ? processPrefetch(prefetchRaw) : null;
-
-      if (prefetchItems && prefetchAt > cacheAt) {
-        // Prefetch is fresher — use it, promote to cache
-        showItems(prefetchItems, prefetchAt);
-        AsyncStorage.setItem('@aifeed_cache_v3', JSON.stringify({
-          items: prefetchItems, topicCursor: 0, activeIdx: 0, at: prefetchAt,
-        })).catch(() => {});
-      } else if (cachedItems && Date.now() - cacheAt < MAX_STALE_MS) {
-        // Cache is fresh enough — show it
-        showItems(cachedItems, cacheAt);
-      } else {
-        // Cache too stale or missing — fetch fresh
-        loadClusterForward('initial');
-      }
+          return;
+        }
+      } catch {}
+      loadClusterForward('initial');
     }).catch(() => loadClusterForward('initial'));
   }, [loadTopic, silentRefresh, loadClusterForward]);
 
@@ -601,9 +555,10 @@ export default function AIFeedScreen() {
       width={screenW}
       height={CARD_H}
       topInset={insets.top}
+      isActive={index === activeIdx}
       onOpen={() => setOpenedItem(item)}
     />
-  ), [items.length, screenW, CARD_H, insets.top, setOpenedItem]);
+  ), [items.length, screenW, CARD_H, insets.top, setOpenedItem, activeIdx]);
 
   if (loading && items.length === 0) {
     return (
@@ -779,8 +734,8 @@ function Header({ topInset, counter, currentTopic, onPickTopic }: {
 }
 
 // ── Full-bleed card ─────────────────────────────────────────────────────────
-function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH, topInset, onOpen }: {
-  item: FeedItem; index: number; total: number; width: number; height: number; topInset: number; onOpen: () => void;
+function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH, topInset, isActive, onOpen }: {
+  item: FeedItem; index: number; total: number; width: number; height: number; topInset: number; isActive: boolean; onOpen: () => void;
 }) {
   // Use live width for foldable resize; height comes from prop so it matches
   // the FlatList layout (getItemLayout) and prevents drift on scroll.
@@ -799,6 +754,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
   }, [story.id]);
 
   useEffect(() => {
+    if (!isActive || aiBullets) return;
     let cancelled = false;
     (async () => {
       if (cancelled) return;
@@ -822,23 +778,15 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
       } catch {}
     })();
     return () => { cancelled = true; };
-  }, [story.id, deepDiveDepth]);
+  }, [story.id, deepDiveDepth, isActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const imageH = Math.round(cardH * 0.68);
+  const imageH = Math.round(cardH * 0.62);
 
-  // Derive raw rgb channels — used for rgba() strings (lighten/darken return rgb(), not hex)
+  // Derive rgba components from dominant for gradient bleeding
   const dominantRgb = useMemo(() => hexToRgb(dominant), [dominant]);
-  const dr = dominantRgb?.[0] ?? 26;
-  const dg = dominantRgb?.[1] ?? 74;
-  const db = dominantRgb?.[2] ?? 138;
-  // textBg: darken dominant 50% — same formula as main feed StoryCard
-  const tbr = Math.round(dr * 0.5);
-  const tbg = Math.round(dg * 0.5);
-  const tbb = Math.round(db * 0.5);
-  // accent rgb channels (lighten 55%)
-  const ar = Math.round(dr + (255 - dr) * 0.55);
-  const ag = Math.round(dg + (255 - dg) * 0.55);
-  const ab = Math.round(db + (255 - db) * 0.55);
+  const dr = dominantRgb?.[0] ?? 10;
+  const dg = dominantRgb?.[1] ?? 10;
+  const db = dominantRgb?.[2] ?? 15;
 
   // Hero zoom-in when card mounts/lands on screen
   const heroScale = useRef(new Animated.Value(1.08)).current;
@@ -859,13 +807,13 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
       onPress={onOpen}
       style={({ pressed }) => ({
         width, height: cardH,
-        backgroundColor: `rgb(${tbr},${tbg},${tbb})`,
+        backgroundColor: `rgb(${Math.round(dr * 0.12)},${Math.round(dg * 0.12)},${Math.round(db * 0.15)})`,
         overflow: 'hidden', borderRadius: 16,
         transform: [{ scale: pressed ? 0.985 : 1 }],
       })}
     >
       {/* ── Image section ── */}
-      <View style={{ height: imageH, overflow: 'hidden', backgroundColor: `rgb(${tbr},${tbg},${tbb})` }}>
+      <View style={{ height: imageH, overflow: 'hidden' }}>
         {story.imageUrl ? (
           <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: heroScale }] }]}>
             <Image
@@ -878,15 +826,15 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
         ) : (
           <NoImageFallback dominant={dominant} accent={accent} source={sourceName} url={story.sources?.[0]?.url} />
         )}
-        {/* Fade image into textBg — identical approach to main feed StoryCard */}
+        {/* Bottom of image bleeds into dominant color, matching text section */}
         <LinearGradient
           colors={[
-            `rgba(${tbr},${tbg},${tbb},0)`,
-            `rgba(${tbr},${tbg},${tbb},0.35)`,
-            `rgba(${tbr},${tbg},${tbb},0.85)`,
-            `rgba(${tbr},${tbg},${tbb},1)`,
+            'rgba(0,0,0,0.18)',
+            'transparent',
+            `rgba(${dr},${dg},${db},0.45)`,
+            `rgba(${Math.round(dr * 0.12)},${Math.round(dg * 0.12)},${Math.round(db * 0.15)},1)`,
           ]}
-          locations={[0.5, 0.78, 0.95, 1]}
+          locations={[0, 0.3, 0.72, 1]}
           style={StyleSheet.absoluteFill}
         />
         {hasCached && (
@@ -897,42 +845,53 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
         )}
       </View>
 
-      {/* ── Text section — same textBg as image bottom ── */}
-      <Animated.View style={{ flex: 1, backgroundColor: `rgb(${tbr},${tbg},${tbb})`, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 40, opacity: textOp, transform: [{ translateY: textTy }] }}>
-        {/* Source pill + time */}
-        <View style={[styles.metaRow, { marginBottom: 8 }]}>
-          <View style={{ backgroundColor: `rgba(${ar},${ag},${ab},0.15)`, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 0.5, borderColor: `rgba(${ar},${ag},${ab},0.45)` }}>
-            <Text style={[styles.metaText, { color: accent, fontWeight: '700', letterSpacing: 0.5 }]}>{sourceName.toUpperCase()}</Text>
+      {/* ── Text section — dynamic color background ── */}
+      <Animated.View style={{ flex: 1, opacity: textOp, transform: [{ translateY: textTy }] }}>
+        <LinearGradient
+          colors={[
+            `rgba(${dr},${dg},${db},0.18)`,
+            `rgba(${Math.round(dr * 0.08)},${Math.round(dg * 0.08)},${Math.round(db * 0.10)},1)`,
+          ]}
+          locations={[0, 1]}
+          style={{ flex: 1, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 44 }}
+        >
+          {/* Source pill + time */}
+          <View style={[styles.metaRow, { marginBottom: 8 }]}>
+            <View style={{ backgroundColor: `${accent}22`, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 0.5, borderColor: `${accent}55` }}>
+              <Text style={[styles.metaText, { color: accent, fontWeight: '700', letterSpacing: 0.5 }]}>{sourceName.toUpperCase()}</Text>
+            </View>
+            <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.38)', marginLeft: 8 }]}>{timeAgo(story.publishedAt)}</Text>
           </View>
-          <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.45)', marginLeft: 8 }]}>{timeAgo(story.publishedAt)}</Text>
-        </View>
-        <Text style={[styles.cardHeadline, { fontSize: 24, lineHeight: 30, textShadowColor: 'transparent', marginBottom: 10 }]} numberOfLines={3}>
-          {story.headline}
-        </Text>
-        {bullets?.length ? (
-          <View style={{
-            backgroundColor: `rgba(${tbr},${tbg},${tbb},0.6)`,
-            borderRadius: 14,
-            padding: 14,
-            borderWidth: StyleSheet.hairlineWidth,
-            borderColor: 'rgba(255,255,255,0.08)',
-            borderTopWidth: 2,
-            borderTopColor: aiBullets ? `rgba(${ar},${ag},${ab},1)` : `rgba(${ar},${ag},${ab},0.45)`,
-            gap: 6,
-          }}>
-            {bullets.map((bullet, bi) => (
-              <View key={bi} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 9 }}>
-                <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, backgroundColor: aiBullets ? `rgba(${ar},${ag},${ab},1)` : `rgba(${ar},${ag},${ab},0.5)`, flexShrink: 0 }} />
-                <Text style={{ color: 'rgba(255,255,255,0.88)', fontSize: 14, lineHeight: 20, flex: 1, letterSpacing: 0.1 }}>{bullet.trim()}</Text>
-              </View>
-            ))}
-          </View>
-        ) : (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Ionicons name="sparkles" size={13} color={VIOLET} />
-            <Text style={{ color: VIOLET, fontSize: 12, fontWeight: '700', letterSpacing: 0.8 }}>TAP FOR AI DEEP DIVE</Text>
-          </View>
-        )}
+          <Text style={[styles.cardHeadline, { fontSize: 24, lineHeight: 30, textShadowColor: 'transparent', marginBottom: 10 }]} numberOfLines={3}>
+            {story.headline}
+          </Text>
+          {/* 1px accent separator */}
+          <View style={{ height: 1, backgroundColor: `${accent}30`, marginBottom: 10, marginHorizontal: -20 }} />
+          {/* Spacer — expands to fill remaining space, pushing bullets to bottom */}
+          <View style={{ flex: 1 }} />
+          {bullets?.length ? (
+            <View style={{
+              backgroundColor: 'rgba(0,0,0,0.45)',
+              borderRadius: 12,
+              padding: 12,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: 'rgba(255,255,255,0.10)',
+              gap: 7,
+            }}>
+              {bullets.slice(0, 3).map((bullet, bi) => (
+                <View key={bi} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 9 }}>
+                  <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, backgroundColor: aiBullets ? accent : `${accent}66`, flexShrink: 0 }} />
+                  <Text style={{ color: 'rgba(255,255,255,0.88)', fontSize: 14, lineHeight: 20, flex: 1, letterSpacing: 0.1 }}>{bullet.trim()}</Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons name="sparkles" size={13} color={VIOLET} />
+              <Text style={{ color: VIOLET, fontSize: 12, fontWeight: '700', letterSpacing: 0.8 }}>TAP FOR AI DEEP DIVE</Text>
+            </View>
+          )}
+        </LinearGradient>
       </Animated.View>
 
       <Text style={styles.swipeHint}>↑ SWIPE FOR NEXT</Text>
@@ -1121,7 +1080,7 @@ function dedupeMetrics(items: string[]): string[] {
 
   useEffect(() => {
     if (stage !== 'generating') { setShowColdHint(false); return; }
-    const t = setTimeout(() => setShowColdHint(true), 5000);
+    const t = setTimeout(() => setShowColdHint(true), 15000);
     return () => clearTimeout(t);
   }, [stage]);
 
@@ -1379,6 +1338,8 @@ function QuestionItem({ question, story, narrative, scale = 1 }: {
   const [answer, setAnswer] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const ctrlRef = useRef<AbortController | null>(null);
+  const userCancelledRef = useRef(false);
 
   useEffect(() => {
     AsyncStorage.getItem(ASK_CACHE_PREFIX + cacheKey)
@@ -1391,12 +1352,19 @@ function QuestionItem({ question, story, narrative, scale = 1 }: {
       });
   }, [cacheKey]);
 
+  const cancelAnswer = useCallback(() => {
+    userCancelledRef.current = true;
+    ctrlRef.current?.abort();
+  }, []);
+
   const fetchAnswer = useCallback(async () => {
     if (answer || loading) return;
     setLoading(true);
     setError(null);
+    userCancelledRef.current = false;
     try {
       const ctrl = new AbortController();
+      ctrlRef.current = ctrl;
       const t = setTimeout(() => ctrl.abort(), 25000);
       const r = await fetch(ASK_API, {
         method: 'POST',
@@ -1416,7 +1384,12 @@ function QuestionItem({ question, story, narrative, scale = 1 }: {
       setAnswer(data.answer);
       AsyncStorage.setItem(ASK_CACHE_PREFIX + cacheKey, JSON.stringify({ answer: data.answer, at: Date.now() })).catch(() => {});
     } catch (e) {
-      setError(String(e instanceof Error ? e.message : e));
+      if (e instanceof Error && e.name === 'AbortError') {
+        if (!userCancelledRef.current) setError('Timed out — try again.');
+        // user-cancelled: just stop loading, no error
+      } else {
+        setError(String(e instanceof Error ? e.message : e));
+      }
     } finally {
       setLoading(false);
     }
@@ -1441,6 +1414,9 @@ function QuestionItem({ question, story, narrative, scale = 1 }: {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <TypingDots color={VIOLET} />
               <Text style={{ color: '#aaa', fontSize: 12 }}>Thinking…</Text>
+              <Pressable onPress={cancelAnswer} style={{ marginLeft: 4 }}>
+                <Text style={{ color: '#ff8888', fontSize: 11, fontWeight: '700' }}>CANCEL</Text>
+              </Pressable>
             </View>
           ) : error ? (
             <View>

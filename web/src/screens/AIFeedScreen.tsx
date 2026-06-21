@@ -703,17 +703,18 @@ function FullPreviewCard({ item, index, total, onOpen }: {
           const bullets = aiBullets ?? (story.summary ? splitToBullets(story.summary) : null);
           if (bullets?.length) return (
             <div style={{
+              background: 'rgba(0,0,0,0.45)',
+              borderRadius: 12,
+              padding: '10px 12px',
+              border: '1px solid rgba(255,255,255,0.09)',
               display: 'flex', flexDirection: 'column', gap: 6,
-              background: 'rgba(15,15,22,0.55)',
-              borderRadius: 14, padding: 14,
-              border: '1px solid rgba(255,255,255,0.07)',
-              borderTop: `2px solid ${aiBullets ? accent : accent + '66'}`,
             }}>
-              {bullets.map((bullet, bi) => (
-                <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
-                  <div style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, background: aiBullets ? accent : accent + '66', flexShrink: 0 }} />
+              {bullets.slice(0, 3).map((bullet, bi) => (
+                <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
+                  <div style={{ width: 4, height: 4, borderRadius: 2, marginTop: 6, background: aiBullets ? VIOLET : 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
                   <p style={{
-                    margin: 0, color: 'rgba(255,255,255,0.88)', fontSize: 13, lineHeight: 1.55,
+                    margin: 0, color: '#e5e5e5', fontSize: 12, lineHeight: 1.5,
+                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
                     textShadow: '0 2px 12px rgba(0,0,0,0.55)',
                   }}>{bullet.trim()}</p>
                 </div>
@@ -971,7 +972,7 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
 
   useEffect(() => {
     if (stage !== 'generating') { setShowColdHint(false); return; }
-    const t = setTimeout(() => setShowColdHint(true), 5000);
+    const t = setTimeout(() => setShowColdHint(true), 15000);
     return () => clearTimeout(t);
   }, [stage]);
 
@@ -1378,13 +1379,22 @@ function QuestionItem({ question, story, narrative, accent, scale = 1 }: {
   const [answer, setAnswer] = useState<string | null>(() => readAskCache(key));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const ctrlRef = useRef<AbortController | null>(null);
+  const userCancelledRef = useRef(false);
+
+  const cancelAnswer = useCallback(() => {
+    userCancelledRef.current = true;
+    ctrlRef.current?.abort();
+  }, []);
 
   const fetchAnswer = useCallback(async () => {
     if (answer || loading) return;
     setLoading(true);
     setError(null);
+    userCancelledRef.current = false;
     try {
       const ctrl = new AbortController();
+      ctrlRef.current = ctrl;
       const t = setTimeout(() => ctrl.abort(), 20000);
       const r = await fetch(ASK_API, {
         method: 'POST',
@@ -1404,9 +1414,11 @@ function QuestionItem({ question, story, narrative, accent, scale = 1 }: {
       setAnswer(data.answer);
       writeAskCache(key, data.answer);
     } catch (e) {
-      setError(e instanceof Error && e.name === 'AbortError'
-        ? 'Timed out — try again.'
-        : String(e instanceof Error ? e.message : e));
+      if (e instanceof Error && e.name === 'AbortError') {
+        if (!userCancelledRef.current) setError('Timed out — try again.');
+      } else {
+        setError(String(e instanceof Error ? e.message : e));
+      }
     } finally {
       setLoading(false);
     }
@@ -1453,6 +1465,11 @@ function QuestionItem({ question, story, narrative, accent, scale = 1 }: {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#aaa', fontSize: 12 }}>
               <span className="typing-dots"><span /><span /><span /></span>
               Thinking…
+              <button onClick={cancelAnswer} style={{
+                marginLeft: 4, padding: '2px 8px', borderRadius: 999,
+                background: 'transparent', border: '1px solid rgba(255,136,136,0.4)',
+                color: '#ff8888', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+              }}>CANCEL</button>
             </div>
           ) : error ? (
             <div style={{ color: '#ff8888', fontSize: 12 }}>
