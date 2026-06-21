@@ -293,7 +293,7 @@ export default function AIFeedScreen() {
         .filter(it => it.primary.headline && it.primary.publishedAt)
         .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded));
       const existingIds = new Set(itemsRef.current.map(it => it.primary.id));
-      const newOnes = incoming.filter(it => !existingIds.has(it.primary.id));
+      const newOnes = rankFeedItems(incoming.filter(it => !existingIds.has(it.primary.id))).slice(0, 30);
       if (newOnes.length === 0 && !isInitial) {
         // Current topic exhausted — advance cursor to next topic so onEndReached
         // can load the next one. Only mark fully exhausted after all topics done.
@@ -304,7 +304,7 @@ export default function AIFeedScreen() {
         });
         return;
       }
-      setItems(prev => isInitial ? rankFeedItems(newOnes) : [...prev, ...newOnes]);
+      setItems(prev => isInitial ? newOnes : [...prev, ...newOnes].slice(0, 120));
       if (isInitial) setError(null);
     } catch (e) {
       if (isInitial) setError(String(e instanceof Error ? e.message : e));
@@ -387,7 +387,9 @@ export default function AIFeedScreen() {
           // Stale-while-revalidate: render cache INSTANTLY at any age (no
           // skeleton, no wait), then silently refresh in the background if it's
           // older than 10 min. Makes every open after the first feel instant.
-          setItems(c.items);
+          // Cap restore to 50 so label always matches content (prevents showing
+          // 300 multi-topic items under the "BREAKING" label).
+          setItems(c.items.slice(0, 50));
           setTopicCursor(0); // always start at breaking on open
           setActiveIdx(0);
           setLoading(false);
