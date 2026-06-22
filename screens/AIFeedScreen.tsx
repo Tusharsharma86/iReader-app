@@ -691,7 +691,6 @@ function Header({ topInset, counter, currentTopic, onPickTopic }: {
   currentTopic?: string; onPickTopic?: (t: string) => void;
 }) {
   const counterScale = useRef(new Animated.Value(1)).current;
-  const [pickerOpen, setPickerOpen] = useState(false);
   useEffect(() => {
     if (!counter) return;
     Animated.sequence([
@@ -701,36 +700,46 @@ function Header({ topInset, counter, currentTopic, onPickTopic }: {
   }, [counter, counterScale]);
   const topic = currentTopic ?? 'breaking';
   return (
-    <View style={[styles.header, { paddingTop: topInset + 10 }]} pointerEvents="box-none">
-      <Pressable onPress={() => onPickTopic && setPickerOpen(true)} style={styles.pill}>
-        <Ionicons name="sparkles" size={11} color={VIOLET} />
-        <Text style={styles.pillText}>AI FEED · {TOPIC_LABELS_MOBILE[topic] ?? topic.toUpperCase()}</Text>
-        {onPickTopic && <Ionicons name="chevron-down" size={11} color="rgba(255,255,255,0.7)" />}
-      </Pressable>
-      {counter && (
-        <Animated.View style={[styles.pill, { paddingHorizontal: 10, transform: [{ scale: counterScale }] }]}>
-          <Text style={[styles.pillText, { letterSpacing: 0.6, color: '#aaa' }]}>{counter}</Text>
-        </Animated.View>
-      )}
-      <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
-        <Pressable onPress={() => setPickerOpen(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }}>
-          <View style={{ minWidth: 240, padding: 6, borderRadius: 14, backgroundColor: '#0e0e14', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
-            {Object.entries(TOPIC_LABELS_MOBILE).map(([key, label]) => {
-              const active = key === topic;
-              return (
-                <Pressable
-                  key={key}
-                  onPress={() => { setPickerOpen(false); onPickTopic?.(key); }}
-                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, borderRadius: 8, backgroundColor: active ? 'rgba(185,148,255,0.15)' : 'transparent' }}
-                >
-                  <Text style={{ color: active ? VIOLET : '#fff', fontSize: 13, fontWeight: '700', letterSpacing: 1 }}>{label}</Text>
-                  {active && <Ionicons name="checkmark" size={14} color={VIOLET} />}
-                </Pressable>
-              );
-            })}
-          </View>
-        </Pressable>
-      </Modal>
+    <View style={[styles.header, { paddingTop: topInset + 10, flexDirection: 'column', alignItems: 'stretch', paddingHorizontal: 0 }]} pointerEvents="box-none">
+      {/* Top row: label + counter */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 8 }}>
+        <View style={styles.pill}>
+          <Ionicons name="sparkles" size={11} color={VIOLET} />
+          <Text style={styles.pillText}>AI FEED</Text>
+        </View>
+        {counter && (
+          <Animated.View style={[styles.pill, { paddingHorizontal: 10, transform: [{ scale: counterScale }] }]}>
+            <Text style={[styles.pillText, { letterSpacing: 0.6, color: '#aaa' }]}>{counter}</Text>
+          </Animated.View>
+        )}
+      </View>
+      {/* Horizontal topic pills */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 16, gap: 8, flexDirection: 'row', alignItems: 'center' }}
+      >
+        {Object.entries(TOPIC_LABELS_MOBILE).map(([key, label]) => {
+          const active = key === topic;
+          return (
+            <Pressable
+              key={key}
+              onPress={() => onPickTopic?.(key)}
+              style={{
+                flexDirection: 'row', alignItems: 'center',
+                paddingHorizontal: 13, paddingVertical: 7, borderRadius: 20,
+                backgroundColor: active ? VIOLET : 'rgba(20,20,28,0.72)',
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: active ? VIOLET : 'rgba(255,255,255,0.12)',
+              }}
+            >
+              <Text style={{ color: active ? '#fff' : 'rgba(255,255,255,0.65)', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 }}>
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
     </View>
   );
 }
@@ -1784,8 +1793,7 @@ const styles = StyleSheet.create({
 
   header: {
     position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
-    paddingHorizontal: 16, paddingBottom: 12,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingBottom: 12,
   },
   pill: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
