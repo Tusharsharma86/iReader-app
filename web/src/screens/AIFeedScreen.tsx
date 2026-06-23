@@ -3,7 +3,7 @@ import type { Story } from '../types';
 import { useTabBarActions } from '../contexts/TabBarContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useSource } from '../contexts/SourceContext';
-import { darken, lighten, getArticleColor } from '../utils/colors';
+import { darken, lighten, getArticleColor, hexToRgb } from '../utils/colors';
 import { FALLBACK_IMG } from '../utils/fallback';
 import { trackDeepDive } from '../utils/personalization';
 import { toggleFollow, isFollowing } from '../utils/followStore';
@@ -545,6 +545,11 @@ function FullPreviewCard({ item, index, total, onOpen }: {
   const story = item.primary;
   const dominant = useMemo(() => getArticleColor(story.id || story.headline), [story.id, story.headline]);
   const accent = useMemo(() => lighten(dominant, 0.55), [dominant]);
+  const dominantRgb = useMemo(() => hexToRgb(dominant), [dominant]);
+  const dr = dominantRgb?.[0] ?? 10;
+  const dg = dominantRgb?.[1] ?? 10;
+  const db = dominantRgb?.[2] ?? 15;
+  const darkBg = `rgb(${Math.round(dr * 0.08)},${Math.round(dg * 0.08)},${Math.round(db * 0.10)})`;
   const sourceName = item.sources[0]?.name ?? story.sources?.[0]?.name ?? 'Unknown';
   const extraSources = Math.max(0, item.sources.length - 1);
   const { deepDiveDepth } = useSettings();
@@ -623,7 +628,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         position: 'relative',
         overflow: 'hidden',
         borderRadius: 16,
-        background: dominant,
+        background: darkBg,
         cursor: 'pointer',
         userSelect: 'none',
         WebkitTapHighlightColor: 'transparent',
@@ -652,10 +657,18 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         </div>
       )}
 
-      {/* Scrim — dark at top + heavier at bottom for text readability */}
+      {/* Top scrim */}
       <div style={{
-        position: 'absolute', inset: 0,
-        background: 'linear-gradient(180deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.1) 25%, rgba(0,0,0,0.15) 50%, rgba(5,5,7,0.75) 80%, rgba(5,5,7,0.95) 100%)',
+        position: 'absolute', top: 0, left: 0, right: 0, height: '50%',
+        background: 'linear-gradient(180deg, rgba(0,0,0,0.3) 0%, transparent 50%)',
+        pointerEvents: 'none',
+      }} />
+      {/* Bleed gradient — starts at image midpoint, fades dominant → dark */}
+      <div style={{
+        position: 'absolute', left: 0, right: 0, bottom: 0,
+        top: '20%',
+        background: `linear-gradient(180deg, transparent 0%, rgba(${dr},${dg},${db},0.55) 42%, ${darkBg} 72%)`,
+        pointerEvents: 'none',
       }} />
 
       {/* Counter pill — solid rgba so we skip backdrop-filter cost while scrolling */}
