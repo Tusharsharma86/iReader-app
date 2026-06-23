@@ -845,15 +845,10 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
         ) : (
           <NoImageFallback dominant={dominant} accent={accent} source={sourceName} url={story.sources?.[0]?.url} />
         )}
-        {/* Bottom of image bleeds into dominant color, matching text section */}
+        {/* Top scrim only — no bottom gradient here (bleed gradient lives at card level) */}
         <LinearGradient
-          colors={[
-            'rgba(0,0,0,0.18)',
-            'transparent',
-            `rgba(${dr},${dg},${db},0.45)`,
-            `rgba(${Math.round(dr * 0.12)},${Math.round(dg * 0.12)},${Math.round(db * 0.15)},1)`,
-          ]}
-          locations={[0, 0.3, 0.72, 1]}
+          colors={['rgba(0,0,0,0.28)', 'transparent']}
+          locations={[0, 0.4]}
           style={StyleSheet.absoluteFill}
         />
         {hasCached && (
@@ -864,16 +859,26 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
         )}
       </View>
 
-      {/* ── Text section — dynamic color background ── */}
+      {/* ── Bleed gradient — card-level, spans image/text boundary ── */}
+      <LinearGradient
+        colors={[
+          'transparent',
+          `rgba(${dr},${dg},${db},0.55)`,
+          `rgba(${Math.round(dr * 0.08)},${Math.round(dg * 0.08)},${Math.round(db * 0.10)},1)`,
+        ]}
+        locations={[0, 0.28, 0.58]}
+        style={{
+          position: 'absolute',
+          left: 0, right: 0,
+          top: Math.round(imageH * 0.38),
+          bottom: 0,
+        }}
+        pointerEvents="none"
+      />
+
+      {/* ── Text section ── */}
       <Animated.View style={{ flex: 1, opacity: textOp, transform: [{ translateY: textTy }] }}>
-        <LinearGradient
-          colors={[
-            `rgba(${dr},${dg},${db},0.18)`,
-            `rgba(${Math.round(dr * 0.08)},${Math.round(dg * 0.08)},${Math.round(db * 0.10)},1)`,
-          ]}
-          locations={[0, 1]}
-          style={{ flex: 1, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 44 }}
-        >
+        <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 44 }}>
           {/* Time · Source */}
           <View style={[styles.metaRow, { marginBottom: 8, gap: 8 }]}>
             <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.38)' }]}>{timeAgo(story.publishedAt)}</Text>
@@ -906,7 +911,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
               <Text style={{ color: VIOLET, fontSize: 12, fontWeight: '700', letterSpacing: 0.8 }}>TAP FOR AI DEEP DIVE</Text>
             </View>
           )}
-        </LinearGradient>
+        </View>
       </Animated.View>
 
       <Text style={styles.swipeHint}>↑ SWIPE FOR NEXT</Text>
