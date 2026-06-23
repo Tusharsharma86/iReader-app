@@ -24,6 +24,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { type Story, getSourceDomain, domainFromUrl } from '../components/StoryCard';
 import { useSettings } from '../contexts/SettingsContext';
+import { useSource } from '../contexts/SourceContext';
 import { tabBarTranslateY, useTabBarAutoHide } from '../utils/tabBarAnim';
 import { trackAiUsage, trackArticleRead } from '../utils/usageTracker';
 import { trackDeepDive } from '../utils/personalization';
@@ -267,6 +268,7 @@ export default function AIFeedScreen() {
       AsyncStorage.setItem('@aifeed_open_item', JSON.stringify({ closed: true, at: Date.now() })).catch(() => {});
     }
   }, []);
+  const { activeSources } = useSource();
   const [topicCursor, setTopicCursor] = useState(0);
   const [exhausted, setExhausted] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -281,6 +283,9 @@ export default function AIFeedScreen() {
     return () => { restoreTabBar(); };
   }, [restoreTabBar]));
 
+  const isSourceActive = useCallback((s?: { sources?: { name?: string }[] }) =>
+    activeSources[s?.sources?.[0]?.name ?? ''] !== false, [activeSources]);
+
   const loadTopic = useCallback(async (topicIdx: number, isInitial: boolean) => {
     const topic = TOPIC_QUEUE[topicIdx % TOPIC_QUEUE.length];
     if (isInitial) setLoading(true); else setLoadingMore(true);
@@ -291,7 +296,8 @@ export default function AIFeedScreen() {
       const rawItems: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
       const incoming = parseServerFeed(rawItems)
         .filter(it => it.primary.headline && it.primary.publishedAt)
-        .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded));
+        .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded))
+        .filter(it => isSourceActive(it.primary));
       const existingIds = new Set(itemsRef.current.map(it => it.primary.id));
       const newOnes = rankFeedItems(incoming.filter(it => !existingIds.has(it.primary.id))).slice(0, 30);
       if (newOnes.length === 0 && !isInitial) {
@@ -311,7 +317,7 @@ export default function AIFeedScreen() {
     } finally {
       if (isInitial) setLoading(false); else setLoadingMore(false);
     }
-  }, []);
+  }, [isSourceActive]);
 
   // Silent background refresh for stale-while-revalidate: fetch the current
   // topic and REPLACE items without any loading/skeleton flicker. Only swaps
@@ -328,6 +334,7 @@ export default function AIFeedScreen() {
         parseServerFeed(rawItems)
           .filter(it => it.primary.headline && it.primary.publishedAt)
           .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded))
+          .filter(it => isSourceActive(it.primary))
       );
       if (fresh.length > 0) {
         setItems(fresh);
@@ -336,7 +343,7 @@ export default function AIFeedScreen() {
         setError(null);
       }
     } catch { /* keep showing cached items */ }
-  }, []);
+  }, [isSourceActive]);
 
   // Default loader — trusts server clusters, ranks by freshness + importance.
   // Fetches the current topic (breaking by default) and applies rankFeedItems.
@@ -353,6 +360,7 @@ export default function AIFeedScreen() {
         parseServerFeed(rawItems)
           .filter(it => it.primary.headline && it.primary.publishedAt)
           .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded))
+          .filter(it => isSourceActive(it.primary))
       );
       if (next.length > 0) {
         setItems(next);
@@ -791,7 +799,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
     return () => { cancelled = true; };
   }, [story.id, deepDiveDepth, isActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const imageH = Math.round(cardH * 0.62);
+  const imageH = Math.round(cardH * 0.46);
 
   // Derive rgba components from dominant for gradient bleeding
   const dominantRgb = useMemo(() => hexToRgb(dominant), [dominant]);
@@ -866,9 +874,12 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
           locations={[0, 1]}
           style={{ flex: 1, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 44 }}
         >
-          {/* Time */}
-          <View style={[styles.metaRow, { marginBottom: 8 }]}>
+          {/* Time · Source */}
+          <View style={[styles.metaRow, { marginBottom: 8, gap: 8 }]}>
             <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.38)' }]}>{timeAgo(story.publishedAt)}</Text>
+            <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.22)' }]}>·</Text>
+            <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.38)' }]} numberOfLines={1}>{sourceName}</Text>
+            {extraSources > 0 && <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.28)' }]}>+{extraSources}</Text>}
           </View>
           <Text style={[styles.cardHeadline, { fontSize: 24, lineHeight: 30, textShadowColor: 'transparent', marginBottom: 14 }]} numberOfLines={3}>
             {story.headline}
