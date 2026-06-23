@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Story } from '../types';
 import { useTabBarActions } from '../contexts/TabBarContext';
 import { useSettings } from '../contexts/SettingsContext';
+import { useSource } from '../contexts/SourceContext';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 import { FALLBACK_IMG } from '../utils/fallback';
 import { trackDeepDive } from '../utils/personalization';
@@ -225,6 +226,7 @@ function dedupeSources(arr: { name: string; url: string }[]): { name: string; ur
 }
 
 export default function AIFeedScreen() {
+  const { activeSources } = useSource();
   const [items, setItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -273,7 +275,8 @@ export default function AIFeedScreen() {
       const incoming = parseServerFeed(rawItems)
         .filter(it => !it.collection) // theme collections live on the main feed only
         .filter(it => it.primary.headline && it.primary.publishedAt)
-        .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded));
+        .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded))
+        .filter(it => activeSources[it.primary.sources?.[0]?.name ?? ''] !== false);
 
       const existingIds = new Set(itemsRef.current.map(it => it.primary.id));
       const newOnes = incoming.filter(it => !existingIds.has(it.primary.id));
@@ -290,7 +293,7 @@ export default function AIFeedScreen() {
     } finally {
       if (isInitial) setLoading(false); else setLoadingMore(false);
     }
-  }, []);
+  }, [activeSources]);
 
   useEffect(() => {
     // Pre-warm Render
@@ -626,7 +629,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         WebkitTapHighlightColor: 'transparent',
       }}
     >
-      {/* Full-bleed image (or gradient fallback) */}
+      {/* Top image section — constrained height, not full bleed */}
       {story.imageUrl ? (
         <img
           src={story.imageUrl}
@@ -635,13 +638,13 @@ function FullPreviewCard({ item, index, total, onOpen }: {
           decoding="async"
           style={{
             position: 'absolute', inset: 0,
-            width: '100%', height: '100%', objectFit: 'cover',
+            width: '100%', height: '50%', objectFit: 'cover',
           }}
         />
       ) : (
-        <div style={{ position: 'absolute', inset: 0, background: '#05060c' }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '50%', background: '#05060c' }}>
           <img src={FALLBACK_IMG} alt="" loading={index < 2 ? 'eager' : 'lazy'} decoding="async"
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           <div style={{
             position: 'absolute', inset: 0,
             background: `linear-gradient(135deg, ${dominant}33 0%, transparent 45%, ${accent}1f 100%)`,
@@ -687,8 +690,10 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         display: 'flex', flexDirection: 'column', gap: 12,
         zIndex: 2,
       }}>
-        <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: 11, fontWeight: 800, letterSpacing: 1.4 }}>
-          {timeAgo(story.publishedAt)}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: 800, letterSpacing: 1.4 }}>
+          <span>{timeAgo(story.publishedAt)}</span>
+          <span style={{ opacity: 0.5 }}>·</span>
+          <span>{sourceName}{extraSources > 0 ? ` +${extraSources}` : ''}</span>
         </div>
 
         <h2 style={{
