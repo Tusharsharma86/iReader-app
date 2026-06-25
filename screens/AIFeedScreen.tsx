@@ -799,8 +799,6 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
     return () => { cancelled = true; };
   }, [story.id, deepDiveDepth, isActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const imageH = Math.round(cardH * 0.46);
-
   // Derive rgba components from dominant for gradient bleeding
   const dominantRgb = useMemo(() => hexToRgb(dominant), [dominant]);
   const dr = dominantRgb?.[0] ?? 10;
@@ -821,97 +819,86 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
 
   const bullets = aiBullets ?? (story.summary ? splitToBullets(story.summary) : null);
 
+  const dark = `rgb(${Math.round(dr * 0.08)},${Math.round(dg * 0.08)},${Math.round(db * 0.10)})`;
+
   return (
     <Pressable
       onPress={onOpen}
       style={({ pressed }) => ({
         width, height: cardH,
-        backgroundColor: `rgb(${Math.round(dr * 0.12)},${Math.round(dg * 0.12)},${Math.round(db * 0.15)})`,
+        backgroundColor: dark,
         overflow: 'hidden', borderRadius: 16,
         transform: [{ scale: pressed ? 0.985 : 1 }],
       })}
     >
-      {/* ── Image section ── */}
-      <View style={{ height: imageH, overflow: 'hidden' }}>
-        {story.imageUrl ? (
-          <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: heroScale }] }]}>
-            <Image
-              source={{ uri: story.imageUrl }}
-              style={StyleSheet.absoluteFill}
-              contentFit="cover"
-              transition={0}
-            />
-          </Animated.View>
-        ) : (
-          <NoImageFallback dominant={dominant} accent={accent} source={sourceName} url={story.sources?.[0]?.url} />
-        )}
-        {/* Top scrim only — no bottom gradient here (bleed gradient lives at card level) */}
-        <LinearGradient
-          colors={['rgba(0,0,0,0.28)', 'transparent']}
-          locations={[0, 0.4]}
-          style={StyleSheet.absoluteFill}
-        />
-        {hasCached && (
-          <View style={[styles.readyBadge, { top: 12 }]}>
-            <Ionicons name="sparkles" size={9} color="#86efac" />
-            <Text style={styles.readyText}>READY</Text>
-          </View>
-        )}
-      </View>
+      {/* ── Full-bleed image ── */}
+      {story.imageUrl ? (
+        <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: heroScale }] }]}>
+          <Image source={{ uri: story.imageUrl }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
+        </Animated.View>
+      ) : (
+        <NoImageFallback dominant={dominant} accent={accent} source={sourceName} url={story.sources?.[0]?.url} />
+      )}
 
-      {/* ── Bleed gradient — card-level, spans image/text boundary ── */}
+      {/* ── Bleed gradient — transparent top → dominant mid → opaque dark at bottom ── */}
       <LinearGradient
         colors={[
+          'rgba(0,0,0,0.18)',
           'transparent',
-          `rgba(${dr},${dg},${db},0.55)`,
+          `rgba(${dr},${dg},${db},0.5)`,
+          `rgba(${Math.round(dr * 0.08)},${Math.round(dg * 0.08)},${Math.round(db * 0.10)},0.93)`,
           `rgba(${Math.round(dr * 0.08)},${Math.round(dg * 0.08)},${Math.round(db * 0.10)},1)`,
         ]}
-        locations={[0, 0.28, 0.58]}
-        style={{
-          position: 'absolute',
-          left: 0, right: 0,
-          top: Math.round(imageH * 0.38),
-          bottom: 0,
-        }}
+        locations={[0, 0.22, 0.52, 0.74, 1]}
+        style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
 
-      {/* ── Text section ── */}
-      <Animated.View style={{ flex: 1, opacity: textOp, transform: [{ translateY: textTy }] }}>
-        <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 44 }}>
-          {/* Time · Source */}
-          <View style={[styles.metaRow, { marginBottom: 8, gap: 8 }]}>
-            <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.38)' }]}>{timeAgo(story.publishedAt)}</Text>
-            <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.22)' }]}>·</Text>
-            <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.38)' }]} numberOfLines={1}>{sourceName}</Text>
-            {extraSources > 0 && <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.28)' }]}>+{extraSources}</Text>}
-          </View>
-          <Text style={[styles.cardHeadline, { fontSize: 24, lineHeight: 30, textShadowColor: 'transparent', marginBottom: 14 }]} numberOfLines={3}>
-            {story.headline}
-          </Text>
-          {bullets?.length ? (
-            <View style={{
-              backgroundColor: 'rgba(0,0,0,0.45)',
-              borderRadius: 12,
-              padding: 12,
-              borderWidth: StyleSheet.hairlineWidth,
-              borderColor: 'rgba(255,255,255,0.10)',
-              gap: 7,
-            }}>
-              {bullets.slice(0, 3).map((bullet, bi) => (
-                <View key={bi} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 9 }}>
-                  <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, backgroundColor: aiBullets ? accent : `${accent}66`, flexShrink: 0 }} />
-                  <Text style={{ color: 'rgba(255,255,255,0.88)', fontSize: 14, lineHeight: 20, flex: 1, letterSpacing: 0.1 }}>{bullet.trim()}</Text>
-                </View>
-              ))}
-            </View>
-          ) : (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Ionicons name="sparkles" size={13} color={VIOLET} />
-              <Text style={{ color: VIOLET, fontSize: 12, fontWeight: '700', letterSpacing: 0.8 }}>TAP FOR AI DEEP DIVE</Text>
-            </View>
-          )}
+      {hasCached && (
+        <View style={[styles.readyBadge, { top: 12 }]}>
+          <Ionicons name="sparkles" size={9} color="#86efac" />
+          <Text style={styles.readyText}>READY</Text>
         </View>
+      )}
+
+      {/* ── Text section — absolutely at bottom, floats over gradient dark zone ── */}
+      <Animated.View
+        style={{
+          position: 'absolute', left: 0, right: 0, bottom: 0,
+          paddingHorizontal: 20, paddingBottom: 44, paddingTop: 16,
+          opacity: textOp, transform: [{ translateY: textTy }],
+        }}
+      >
+        {/* Time · Source */}
+        <View style={[styles.metaRow, { marginBottom: 8, gap: 8 }]}>
+          <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.5)' }]}>{timeAgo(story.publishedAt)}</Text>
+          <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.3)' }]}>·</Text>
+          <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.5)' }]} numberOfLines={1}>{sourceName}</Text>
+          {extraSources > 0 && <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.35)' }]}>+{extraSources}</Text>}
+        </View>
+        <Text style={[styles.cardHeadline, { fontSize: 24, lineHeight: 30, marginBottom: 14 }]} numberOfLines={3}>
+          {story.headline}
+        </Text>
+        {bullets?.length ? (
+          <View style={{
+            backgroundColor: 'rgba(0,0,0,0.38)',
+            borderRadius: 12, padding: 12,
+            borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.10)',
+            gap: 7,
+          }}>
+            {bullets.slice(0, 3).map((bullet, bi) => (
+              <View key={bi} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 9 }}>
+                <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, backgroundColor: aiBullets ? accent : `${accent}66`, flexShrink: 0 }} />
+                <Text style={{ color: 'rgba(255,255,255,0.88)', fontSize: 14, lineHeight: 20, flex: 1, letterSpacing: 0.1 }}>{bullet.trim()}</Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Ionicons name="sparkles" size={13} color={VIOLET} />
+            <Text style={{ color: VIOLET, fontSize: 12, fontWeight: '700', letterSpacing: 0.8 }}>TAP FOR AI DEEP DIVE</Text>
+          </View>
+        )}
       </Animated.View>
 
       <Text style={styles.swipeHint}>↑ SWIPE FOR NEXT</Text>
