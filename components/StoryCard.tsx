@@ -288,9 +288,13 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight:
         {/* Reading-time + difficulty REMOVED — card estimate (from summary) disagreed
             with article-screen estimate (from full body). Article screen still shows it. */}
 
-        {!compact && showClusterSummary && (
-          <Text style={styles.summary} numberOfLines={2}>{story.aiSummary || story.summary}</Text>
-        )}
+        {!compact && showClusterSummary && (() => {
+          const raw = story.aiSummary || story.summary;
+          if (!raw) return null;
+          const words = raw.split(/\s+/);
+          const text = words.length > 25 ? words.slice(0, 25).join(' ') + '…' : raw;
+          return <Text style={styles.summary}>{text}</Text>;
+        })()}
       </View>
     </Pressable>
   );

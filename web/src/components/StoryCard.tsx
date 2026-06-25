@@ -247,11 +247,13 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
 
         {/* Summary (non-compact) — prefer the 25-word AI summary when present.
             Hidden when Customize → showClusterSummary is off. */}
-        {!compact && showClusterSummary && (story.aiSummary || story.summary) && (
-          <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: 10.5, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-            {story.aiSummary || story.summary}
-          </div>
-        )}
+        {!compact && showClusterSummary && (() => {
+          const raw = story.aiSummary || story.summary;
+          if (!raw) return null;
+          const words = raw.split(/\s+/);
+          const text = words.length > 25 ? words.slice(0, 25).join(' ') + '…' : raw;
+          return <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: 10.5, lineHeight: 1.5 }}>{text}</div>;
+        })()}
       </div>
     </div>
   );
