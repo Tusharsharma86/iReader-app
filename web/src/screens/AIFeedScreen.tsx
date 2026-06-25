@@ -634,7 +634,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         WebkitTapHighlightColor: 'transparent',
       }}
     >
-      {/* Top image section — constrained height, not full bleed */}
+      {/* Full-bleed image — gradient does the fade, not height constraint */}
       {story.imageUrl ? (
         <img
           src={story.imageUrl}
@@ -643,13 +643,13 @@ function FullPreviewCard({ item, index, total, onOpen }: {
           decoding="async"
           style={{
             position: 'absolute', inset: 0,
-            width: '100%', height: '50%', objectFit: 'cover',
+            width: '100%', height: '100%', objectFit: 'cover',
           }}
         />
       ) : (
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '50%', background: '#05060c' }}>
+        <div style={{ position: 'absolute', inset: 0, background: '#05060c' }}>
           <img src={FALLBACK_IMG} alt="" loading={index < 2 ? 'eager' : 'lazy'} decoding="async"
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
           <div style={{
             position: 'absolute', inset: 0,
             background: `linear-gradient(135deg, ${dominant}33 0%, transparent 45%, ${accent}1f 100%)`,
@@ -659,15 +659,14 @@ function FullPreviewCard({ item, index, total, onOpen }: {
 
       {/* Top scrim */}
       <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0, height: '50%',
-        background: 'linear-gradient(180deg, rgba(0,0,0,0.3) 0%, transparent 50%)',
+        position: 'absolute', top: 0, left: 0, right: 0, height: '40%',
+        background: 'linear-gradient(180deg, rgba(0,0,0,0.32) 0%, transparent 100%)',
         pointerEvents: 'none',
       }} />
-      {/* Bleed gradient — starts at image midpoint, fades dominant → dark */}
+      {/* Bleed gradient — fades image into dominant color then into dark */}
       <div style={{
-        position: 'absolute', left: 0, right: 0, bottom: 0,
-        top: '20%',
-        background: `linear-gradient(180deg, transparent 0%, rgba(${dr},${dg},${db},0.55) 42%, ${darkBg} 72%)`,
+        position: 'absolute', inset: 0,
+        background: `linear-gradient(180deg, transparent 28%, rgba(${dr},${dg},${db},0.5) 50%, rgba(${Math.round(dr*0.08)},${Math.round(dg*0.08)},${Math.round(db*0.10)},0.92) 68%, ${darkBg} 82%)`,
         pointerEvents: 'none',
       }} />
 
