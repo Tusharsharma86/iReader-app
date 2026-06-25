@@ -1305,6 +1305,21 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
                 {data.topics && data.topics.length > 0 && (
                   <EntityBlock label="TOPICS" items={data.topics} accent={VIOLET} dominant={dominant} subtle />
                 )}
+                {/* Follow Story button */}
+                <button
+                  onClick={() => setFollowing(toggleFollow({ id: story.id, headline: story.headline, imageUrl: story.imageUrl }))}
+                  style={{
+                    marginTop: 14, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    padding: '11px 0', borderRadius: 12, cursor: 'pointer', border: 'none',
+                    background: following ? `${accent}22` : 'rgba(185,148,255,0.12)',
+                    outline: `1px solid ${following ? accent : `${VIOLET}55`}`,
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill={following ? accent : 'none'} stroke={following ? accent : VIOLET} strokeWidth="2.5"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4-6.3-4.6L5.7 21 8 14 2 9.4h7.6z"/></svg>
+                  <span style={{ color: following ? accent : VIOLET, fontSize: 11, fontWeight: 800, letterSpacing: 0.8 }}>
+                    {following ? 'FOLLOWING · IN FOR YOU TAB' : 'FOLLOW STORY'}
+                  </span>
+                </button>
               </div>
             ) : null}
 

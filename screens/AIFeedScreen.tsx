@@ -1287,6 +1287,22 @@ function dedupeMetrics(items: string[]): string[] {
                       {!!data.keyPeople?.length && <EntityBlock label="KEY PEOPLE" items={data.keyPeople} />}
                       {!!data.keyCompanies?.length && <EntityBlock label="KEY ORGANIZATIONS" items={data.keyCompanies} />}
                       {!!data.topics?.length && <EntityBlock label="TOPICS" items={data.topics} subtle />}
+                      {/* Follow button */}
+                      <Pressable
+                        onPress={() => setFollowing(toggleFollow({ id: story.id, headline: story.headline, imageUrl: story.imageUrl }))}
+                        style={{
+                          marginTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                          paddingVertical: 11, borderRadius: 12,
+                          backgroundColor: following ? `${accent}22` : 'rgba(185,148,255,0.12)',
+                          borderWidth: 1,
+                          borderColor: following ? accent : `${VIOLET}55`,
+                        }}
+                      >
+                        <Ionicons name={following ? 'star' : 'star-outline'} size={15} color={following ? accent : VIOLET} />
+                        <Text style={{ color: following ? accent : VIOLET, fontSize: 12, fontWeight: '800', letterSpacing: 0.8 }}>
+                          {following ? 'FOLLOWING · IN FOR YOU TAB' : 'FOLLOW STORY'}
+                        </Text>
+                      </Pressable>
                     </View></Stagger>
                   ) : null}
 
