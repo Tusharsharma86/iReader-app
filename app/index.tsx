@@ -462,6 +462,7 @@ export default function FeedScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [techSourceFilter, setTechSourceFilter] = useState<string | null>(null);
+  const [filterModalOpen, setFilterModalOpen] = useState(false);
   const [streak, setStreak] = useState(0);
   const [milestone, setMilestone] = useState<number | null>(null);
   // Load breaking-theme mute set on mount — used to suppress breaking notifs
@@ -982,13 +983,14 @@ export default function FeedScreen() {
         </View>
       </View>
 
-      {/* Category tabs — also scrolls with feed */}
-      <View style={{ height: 48, marginBottom: 8 }}>
+      {/* Category tabs + filter button */}
+      <View style={{ height: 48, marginBottom: 8, flexDirection: 'row', alignItems: 'center' }}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{
-            paddingHorizontal: 16,
+            paddingLeft: 16,
+            paddingRight: 8,
             flexDirection: 'row',
             alignItems: 'center',
             height: 48,
@@ -1010,11 +1012,7 @@ export default function FeedScreen() {
                   borderColor: active ? 'transparent' : 'rgba(255,255,255,0.12)',
                 }}
               >
-                <Ionicons
-                  name={cat.icon}
-                  size={13}
-                  color={active ? '#000000' : 'rgba(255,255,255,0.45)'}
-                />
+                <Ionicons name={cat.icon} size={13} color={active ? '#000000' : 'rgba(255,255,255,0.45)'} />
                 <Text style={{ color: active ? '#000000' : 'rgba(255,255,255,0.55)', fontSize: 13, fontWeight: '700', letterSpacing: 0.2 }}>
                   {cat.label}
                 </Text>
@@ -1022,49 +1020,79 @@ export default function FeedScreen() {
             );
           })}
         </ScrollView>
+        {/* Filter button — only shown on technology tab */}
+        {activeTopic === 'technology' && techSources.length > 1 && (
+          <Pressable
+            onPress={() => setFilterModalOpen(true)}
+            style={{
+              width: 36, height: 36, borderRadius: 18, marginRight: 12,
+              alignItems: 'center', justifyContent: 'center',
+              backgroundColor: techSourceFilter ? 'rgba(74,144,217,0.18)' : 'rgba(255,255,255,0.07)',
+              borderWidth: 1,
+              borderColor: techSourceFilter ? '#4A90D9' : 'rgba(255,255,255,0.12)',
+            }}
+          >
+            <Ionicons name="options-outline" size={18} color={techSourceFilter ? '#4A90D9' : '#888'} />
+            {techSourceFilter && (
+              <View style={{ position: 'absolute', top: 4, right: 4, width: 7, height: 7, borderRadius: 4, backgroundColor: '#4A90D9' }} />
+            )}
+          </Pressable>
+        )}
       </View>
 
-      {/* Tech source filter — only on Technology tab */}
-      {activeTopic === 'technology' && techSources.length > 1 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 16, gap: 16, paddingTop: 4, paddingBottom: 12, flexDirection: 'row' }}
-          style={{ marginBottom: 4 }}
-        >
-          {/* All chip */}
-          <Pressable onPress={() => setTechSourceFilter(null)} style={styles.srcChip}>
-            <View style={[styles.srcCircle, !techSourceFilter && styles.srcCircleActive]}>
-              <Ionicons name="apps-outline" size={18} color={!techSourceFilter ? '#4A90D9' : '#666'} />
-            </View>
-            <Text style={[styles.srcChipLabel, !techSourceFilter && styles.srcChipLabelActive]}>All</Text>
-          </Pressable>
-
-          {techSources.map(srcName => {
-            const domain = SOURCE_DOMAINS[srcName];
-            const isActive = techSourceFilter === srcName;
-            const shortName = srcName.replace(/^The /, '').replace(/ Tech$/, '').replace(/^9to5/, '').split(' ')[0];
-            return (
-              <Pressable key={srcName} onPress={() => setTechSourceFilter(srcName)} style={styles.srcChip}>
-                <View style={[styles.srcCircle, isActive && styles.srcCircleActive]}>
-                  {domain ? (
-                    <Image
-                      source={{ uri: `https://www.google.com/s2/favicons?domain=${domain}&sz=64` }}
-                      style={{ width: 24, height: 24, borderRadius: 6 }}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <Text style={{ color: '#888', fontSize: 11, fontWeight: '700' }}>{shortName.slice(0, 2).toUpperCase()}</Text>
+      {/* Source filter modal */}
+      <Modal visible={filterModalOpen} transparent animationType="slide" onRequestClose={() => setFilterModalOpen(false)}>
+        <Pressable style={{ flex: 1 }} onPress={() => setFilterModalOpen(false)}>
+          <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+            <Pressable onPress={e => e.stopPropagation()}>
+              <View style={{
+                backgroundColor: '#0e0e14', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+                padding: 20, paddingBottom: 36,
+                borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800', letterSpacing: 0.8 }}>FILTER BY SOURCE</Text>
+                  {techSourceFilter && (
+                    <Pressable onPress={() => { setTechSourceFilter(null); setFilterModalOpen(false); }}>
+                      <Text style={{ color: '#4A90D9', fontSize: 12, fontWeight: '700' }}>Clear</Text>
+                    </Pressable>
                   )}
                 </View>
-                <Text style={[styles.srcChipLabel, isActive && styles.srcChipLabelActive]} numberOfLines={1}>
-                  {shortName}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      )}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                  {/* All */}
+                  <Pressable onPress={() => { setTechSourceFilter(null); setFilterModalOpen(false); }} style={styles.srcChip}>
+                    <View style={[styles.srcCircle, !techSourceFilter && styles.srcCircleActive]}>
+                      <Ionicons name="apps-outline" size={18} color={!techSourceFilter ? '#4A90D9' : '#666'} />
+                    </View>
+                    <Text style={[styles.srcChipLabel, !techSourceFilter && styles.srcChipLabelActive]}>All</Text>
+                  </Pressable>
+                  {techSources.map(srcName => {
+                    const domain = SOURCE_DOMAINS[srcName];
+                    const isActive = techSourceFilter === srcName;
+                    const shortName = srcName.replace(/^The /, '').replace(/ Tech$/, '').replace(/^9to5/, '').split(' ')[0];
+                    return (
+                      <Pressable key={srcName} onPress={() => { setTechSourceFilter(srcName); setFilterModalOpen(false); }} style={styles.srcChip}>
+                        <View style={[styles.srcCircle, isActive && styles.srcCircleActive]}>
+                          {domain ? (
+                            <Image
+                              source={{ uri: `https://www.google.com/s2/favicons?domain=${domain}&sz=64` }}
+                              style={{ width: 24, height: 24, borderRadius: 6 }}
+                              contentFit="cover"
+                            />
+                          ) : (
+                            <Text style={{ color: '#888', fontSize: 11, fontWeight: '700' }}>{shortName.slice(0, 2).toUpperCase()}</Text>
+                          )}
+                        </View>
+                        <Text style={[styles.srcChipLabel, isActive && styles.srcChipLabelActive]} numberOfLines={1}>{shortName}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
 
       {/* Following strip (For You only) */}
       {activeTopic === 'myspace' && (() => {
