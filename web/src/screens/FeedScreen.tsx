@@ -107,7 +107,17 @@ interface StoryCluster {
   isBreaking: boolean;
   collection?: boolean; // theme collection (different stories, same subject) vs same-event cluster
   biasBreakdown?: { left: number; center: number; right: number; unknown: number; diversity: boolean };
+  _category?: string;
 }
+
+const TOPIC_META_WEB: Record<string, { label: string; color: string }> = {
+  'breaking':       { label: 'Breaking', color: '#FF5555' },
+  'technology':     { label: 'Tech',     color: '#4A90D9' },
+  'india-politics': { label: 'India',    color: '#FF9500' },
+  'geopolitics':    { label: 'World',    color: '#4ECDC4' },
+  'markets':        { label: 'Markets',  color: '#22C55E' },
+  'business':       { label: 'Business', color: '#A29BFE' },
+};
 
 function generateTopicLabel(headline: string): string {
   const words = headline.split(/[\s,;:–—\-]+/);
@@ -260,10 +270,52 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
   );
 }
 
+// ── MySpace Topic Zone ────────────────────────────────────────────────────────
+function MyspaceTopicZone({ clusters, category, cardWidth, allStories }: {
+  clusters: StoryCluster[]; category: string; cardWidth: number; allStories: Story[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const meta = TOPIC_META_WEB[category] ?? { label: category || 'News', color: '#888888' };
+  const PREVIEW = 3;
+  const visible = expanded ? clusters : clusters.slice(0, PREVIEW);
+  const remaining = clusters.length - PREVIEW;
+
+  return (
+    <div>
+      <div onClick={() => setExpanded(e => !e)} style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '14px 20px', cursor: 'pointer', marginTop: 12,
+        WebkitTapHighlightColor: 'transparent',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 3, height: 18, borderRadius: 2, background: meta.color, flexShrink: 0 }} />
+          <span style={{ color: '#fff', fontSize: 13, fontWeight: 800, letterSpacing: 0.8 }}>{meta.label.toUpperCase()}</span>
+          <span style={{ color: '#666', fontSize: 11, fontWeight: 600, background: 'rgba(255,255,255,0.07)', padding: '2px 7px', borderRadius: 10 }}>{clusters.length}</span>
+        </div>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          {expanded ? <polyline points="18 15 12 9 6 15" /> : <polyline points="6 9 12 15 18 9" />}
+        </svg>
+      </div>
+      {visible.map(cluster => (
+        <ClusterSection key={cluster.id} cluster={cluster} soloCardWidth={cardWidth} allStories={allStories} />
+      ))}
+      {!expanded && remaining > 0 && (
+        <div onClick={() => setExpanded(true)} style={{
+          margin: '4px 20px 12px', padding: '11px 0', borderRadius: 12,
+          background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+          textAlign: 'center', cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+        }}>
+          <span style={{ color: '#888', fontSize: 12, fontWeight: 600 }}>Show {remaining} more</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Feed Screen ───────────────────────────────────────────────────────────
 // Server feed item types (from /api/news/feed?topic=X)
 type ServerFeedItem =
-  | { type: 'cluster'; topicTitle: string; topicSummary: string; articles: Story[]; collection?: boolean }
+  | { type: 'cluster'; topicTitle: string; topicSummary: string; articles: Story[]; collection?: boolean; _category?: string }
   | (Story & { type: 'article' });
 
 // Module-level cache — survives FeedScreen unmount/remount (navigation)
@@ -279,7 +331,7 @@ function parseServerFeed(raw: unknown[]): ServerFeedItem[] {
       const articles = Array.isArray(item.articles)
         ? (item.articles as Array<Record<string, unknown>>).map(normalizeStory)
         : [];
-      return { type: 'cluster' as const, topicTitle: String(item.topicTitle ?? ''), topicSummary: String(item.topicSummary ?? ''), articles, collection: Boolean(item.collection) };
+      return { type: 'cluster' as const, topicTitle: String(item.topicTitle ?? ''), topicSummary: String(item.topicSummary ?? ''), articles, collection: Boolean(item.collection), _category: item._category as string | undefined };
     }
     return { ...normalizeStory(item), type: 'article' as const };
   });
@@ -307,6 +359,7 @@ function serverItemToCluster(item: ServerFeedItem): StoryCluster | null {
       id: `cluster-${item.articles[0].id}`,
       topicLabel: label,
       subtitle: rawSummary ? capToWords(rawSummary, 25) : '',
+      _category: item._category,
       stories: item.articles,
       isBreaking: !item.collection && item.articles.some(storyIsBreaking),
       collection: item.collection,
@@ -843,7 +896,18 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
               </div>
             );
           })()}
-          {rankedClusters.map(cluster => (
+          {activeTopic === 'myspace' ? (() => {
+            const groups = new Map<string, StoryCluster[]>();
+            const catOrder: string[] = [];
+            for (const c of rankedClusters) {
+              const cat = c._category ?? 'other';
+              if (!groups.has(cat)) { groups.set(cat, []); catOrder.push(cat); }
+              groups.get(cat)!.push(c);
+            }
+            return catOrder.map(cat => (
+              <MyspaceTopicZone key={cat} clusters={groups.get(cat)!} category={cat} cardWidth={cardWidth} allStories={visibleStories} />
+            ));
+          })() : rankedClusters.map(cluster => (
             <ClusterSection key={cluster.id} cluster={cluster} soloCardWidth={cardWidth} allStories={visibleStories} />
           ))}
           <div style={{ height: 40 }} />
