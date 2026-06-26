@@ -13,6 +13,7 @@ export type KeyPointsCount = 3 | 5 | 7;
 export type Eli5Tone = 'kid' | 'casual' | 'plain';
 export type DeepDiveDepth = 'quick' | 'standard' | 'deep';
 export type BreakingSensitivity = 'all' | 'important' | 'critical';
+export type TimeFormat = 'relative' | 'absolute';
 
 export const ALL_TOPICS = ['breaking', 'technology', 'india-politics', 'geopolitics', 'markets', 'business'] as const;
 export type TopicKey = typeof ALL_TOPICS[number];
@@ -81,6 +82,11 @@ interface SettingsContextType {
   showDeepDiveEntities: boolean; setShowDeepDiveEntities: (v: boolean) => void;
   showDeepDiveCurious: boolean; setShowDeepDiveCurious: (v: boolean) => void;
 
+  // ── Customize: Appearance / Behavior ──────────────────────────────────────
+  timeFormat: TimeFormat; setTimeFormat: (v: TimeFormat) => void;
+  autoMarkRead: boolean; setAutoMarkRead: (v: boolean) => void;
+  showQuoteHighlights: boolean; setShowQuoteHighlights: (v: boolean) => void;
+
   resetCustomize: () => void;
 }
 
@@ -117,6 +123,9 @@ const DEFAULTS = {
   deepDiveDepth: 'standard' as DeepDiveDepth,
   showDeepDiveEntities: true,
   showDeepDiveCurious: true,
+  timeFormat: 'relative' as TimeFormat,
+  autoMarkRead: false,
+  showQuoteHighlights: true,
 };
 
 const SettingsContext = createContext<SettingsContextType>({
@@ -151,6 +160,9 @@ const SettingsContext = createContext<SettingsContextType>({
   setSummaryLength: () => {}, setKeyPointsCount: () => {}, setShowKeyPoints: () => {},
   setEli5Tone: () => {}, setDeepDiveDepth: () => {},
   setShowDeepDiveEntities: () => {}, setShowDeepDiveCurious: () => {},
+  timeFormat: 'relative' as TimeFormat, setTimeFormat: () => {},
+  autoMarkRead: false, setAutoMarkRead: () => {},
+  showQuoteHighlights: true, setShowQuoteHighlights: () => {},
   resetCustomize: () => {},
 });
 
@@ -189,6 +201,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [deepDiveDepth, setDeepDiveDepth] = useState<DeepDiveDepth>(DEFAULTS.deepDiveDepth);
   const [showDeepDiveEntities, setShowDeepDiveEntities] = useState(DEFAULTS.showDeepDiveEntities);
   const [showDeepDiveCurious, setShowDeepDiveCurious] = useState(DEFAULTS.showDeepDiveCurious);
+  const [timeFormat, setTimeFormat] = useState<TimeFormat>(DEFAULTS.timeFormat);
+  const [autoMarkRead, setAutoMarkRead] = useState(DEFAULTS.autoMarkRead);
+  const [showQuoteHighlights, setShowQuoteHighlights] = useState(DEFAULTS.showQuoteHighlights);
 
   const [loaded, setLoaded] = useState(false);
 
@@ -235,6 +250,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           if (['quick','standard','deep'].includes(saved.deepDiveDepth)) setDeepDiveDepth(saved.deepDiveDepth);
           if (typeof saved.showDeepDiveEntities === 'boolean') setShowDeepDiveEntities(saved.showDeepDiveEntities);
           if (typeof saved.showDeepDiveCurious === 'boolean') setShowDeepDiveCurious(saved.showDeepDiveCurious);
+          if (['relative','absolute'].includes(saved.timeFormat)) setTimeFormat(saved.timeFormat);
+          if (typeof saved.autoMarkRead === 'boolean') setAutoMarkRead(saved.autoMarkRead);
+          if (typeof saved.showQuoteHighlights === 'boolean') setShowQuoteHighlights(saved.showQuoteHighlights);
         } catch {}
       }
     }).finally(() => setLoaded(true));
@@ -253,8 +271,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       showEntityHighlights, showReadingDifficulty,
       summaryLength, keyPointsCount, showKeyPoints,
       eli5Tone, deepDiveDepth, showDeepDiveEntities, showDeepDiveCurious,
+      timeFormat, autoMarkRead, showQuoteHighlights,
     })).catch(() => {});
-  }, [loaded, fontSize, notifBreaking, breakingSensitivity, notifTech, notifDigest, notifAiFeed, notifSources, activeTopics, activeSubTopics, favSources, favTopics, topicInterests, showSports, showEntertainment, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showVerifyDedup, showReferencedSources, showEntityHighlights, showReadingDifficulty, summaryLength, keyPointsCount, showKeyPoints, eli5Tone, deepDiveDepth, showDeepDiveEntities, showDeepDiveCurious]);
+  }, [loaded, fontSize, notifBreaking, breakingSensitivity, notifTech, notifDigest, notifAiFeed, notifSources, activeTopics, activeSubTopics, favSources, favTopics, topicInterests, showSports, showEntertainment, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showVerifyDedup, showReferencedSources, showEntityHighlights, showReadingDifficulty, summaryLength, keyPointsCount, showKeyPoints, eli5Tone, deepDiveDepth, showDeepDiveEntities, showDeepDiveCurious, timeFormat, autoMarkRead, showQuoteHighlights]);
 
   // Reconcile backend notification prefs with the toggles shown locally —
   // ONCE per launch, after settings load. Fixes the fresh-install / new-token
@@ -368,6 +387,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setDeepDiveDepth(DEFAULTS.deepDiveDepth);
     setShowDeepDiveEntities(DEFAULTS.showDeepDiveEntities);
     setShowDeepDiveCurious(DEFAULTS.showDeepDiveCurious);
+    setTimeFormat(DEFAULTS.timeFormat);
+    setAutoMarkRead(DEFAULTS.autoMarkRead);
+    setShowQuoteHighlights(DEFAULTS.showQuoteHighlights);
   }, []);
 
   const value = useMemo(() => ({
@@ -405,8 +427,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     deepDiveDepth, setDeepDiveDepth,
     showDeepDiveEntities, setShowDeepDiveEntities,
     showDeepDiveCurious, setShowDeepDiveCurious,
+    timeFormat, setTimeFormat,
+    autoMarkRead, setAutoMarkRead,
+    showQuoteHighlights, setShowQuoteHighlights,
     resetCustomize,
-  }), [fontSize, notifBreaking, breakingSensitivity, notifTech, notifDigest, notifAiFeed, notifSources, showSports, showEntertainment, favSources, favTopics, topicInterests, activeTopics, activeSubTopics, setFontSize, setNotifBreaking, setBreakingSensitivity, setNotifTech, setNotifDigest, setNotifAiFeed, setNotifSources, setShowSports, setShowEntertainment, toggleFavSource, toggleFavTopic, toggleTopic, toggleSubTopic, setTopicInterest, resetSettings, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showVerifyDedup, showReferencedSources, showEntityHighlights, showReadingDifficulty, summaryLength, keyPointsCount, showKeyPoints, eli5Tone, deepDiveDepth, showDeepDiveEntities, showDeepDiveCurious, resetCustomize]);
+  }), [fontSize, notifBreaking, breakingSensitivity, notifTech, notifDigest, notifAiFeed, notifSources, showSports, showEntertainment, favSources, favTopics, topicInterests, activeTopics, activeSubTopics, setFontSize, setNotifBreaking, setBreakingSensitivity, setNotifTech, setNotifDigest, setNotifAiFeed, setNotifSources, setShowSports, setShowEntertainment, toggleFavSource, toggleFavTopic, toggleTopic, toggleSubTopic, setTopicInterest, resetSettings, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showVerifyDedup, showReferencedSources, showEntityHighlights, showReadingDifficulty, summaryLength, keyPointsCount, showKeyPoints, eli5Tone, deepDiveDepth, showDeepDiveEntities, showDeepDiveCurious, timeFormat, autoMarkRead, showQuoteHighlights, resetCustomize]);
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }

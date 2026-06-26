@@ -98,6 +98,10 @@ function timeAgo(iso: string): string {
   if (hrs < 24) return `${hrs}HR AGO`;
   return `${Math.floor(hrs / 24)}D AGO`;
 }
+function timeAbs(iso: string): string {
+  try { return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
+  catch { return ''; }
+}
 
 function HeadlineWithEntities({ text, accentColor }: { text: string; accentColor: string }) {
   const words = text.split(' ');
@@ -151,7 +155,7 @@ interface Props {
 function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight: imageHeightProp, allStories }: Props) {
   // Customize options — gate UI elements per user preference.
   const {
-    showClusterSummary, showBiasDots, showCardImages, cardDensity,
+    showClusterSummary, showBiasDots, showCardImages, cardDensity, timeFormat,
   } = useSettings();
   const { width: hookWidth } = useWindowDimensions();
   const [dimWidth, setDimWidth] = useState(() => Dimensions.get('window').width);
@@ -276,7 +280,7 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight:
       <View style={[styles.textSection, { backgroundColor: textBg }]}>
         {/* Article count · time · badges */}
         <View style={styles.metaRow}>
-          <Text style={styles.metaLabel}>{source.toUpperCase()}  ·  {timeAgo(story.publishedAt)}</Text>
+          <Text style={styles.metaLabel}>{source.toUpperCase()}  ·  {timeFormat === 'absolute' ? timeAbs(story.publishedAt) : timeAgo(story.publishedAt)}</Text>
           {showBiasDots && <BiasDot bias={story.sourceBias} size={6} />}
           {isBreakingBadge && <Text style={styles.breakingText}>·  BREAKING</Text>}
           {isTrending && !isBreakingBadge && <Text style={styles.badge}>🔥</Text>}

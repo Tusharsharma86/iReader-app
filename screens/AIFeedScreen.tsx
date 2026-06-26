@@ -195,6 +195,10 @@ function timeAgo(iso: string): string {
   if (hrs < 24) return `${hrs}H AGO`;
   return `${Math.round(hrs / 24)}D AGO`;
 }
+function timeAbs(iso: string): string {
+  try { return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
+  catch { return ''; }
+}
 
 // ── Cache helpers ───────────────────────────────────────────────────────────
 async function readDeepDiveCache(id: string, depth = 'standard'): Promise<DeepDiveData | null> {
@@ -765,7 +769,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
   const accent = useMemo(() => lighten(dominant, 0.55), [dominant]);
   const sourceName = item.sources[0]?.name ?? story.sources?.[0]?.name ?? 'Unknown';
   const extraSources = Math.max(0, item.sources.length - 1);
-  const { deepDiveDepth } = useSettings();
+  const { deepDiveDepth, timeFormat } = useSettings();
   const [hasCached, setHasCached] = useState(false);
   const [aiBullets, setAiBullets] = useState<string[] | null>(null);
 
@@ -872,7 +876,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
       >
         {/* Time · Source */}
         <View style={[styles.metaRow, { marginBottom: 8, gap: 8 }]}>
-          <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.5)' }]}>{timeAgo(story.publishedAt)}</Text>
+          <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.5)' }]}>{timeFormat === 'absolute' ? timeAbs(story.publishedAt) : timeAgo(story.publishedAt)}</Text>
           <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.3)' }]}>·</Text>
           <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.5)' }]} numberOfLines={1}>{sourceName}</Text>
           {extraSources > 0 && <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.35)' }]}>+{extraSources}</Text>}
