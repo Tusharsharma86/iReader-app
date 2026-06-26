@@ -149,9 +149,14 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
   }, [snapInterval, cluster.stories.length]);
 
   if (cluster.stories.length === 1) {
+    const clusterStory = {
+      ...cluster.stories[0],
+      headline: cluster.topicLabel || cluster.stories[0].headline,
+      summary: cluster.subtitle || cluster.stories[0].summary,
+    };
     return (
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: clusterGap }}>
-        <StoryCard story={cluster.stories[0]} cardWidth={soloCardWidth} allStories={allStories} />
+        <StoryCard story={clusterStory} cardWidth={soloCardWidth} allStories={allStories} />
       </div>
     );
   }
@@ -284,6 +289,11 @@ function storyIsBreaking(s: Story): boolean {
   return s.isBreaking ?? false;
 }
 
+function capToWords(text: string, max: number): string {
+  const words = text.trim().split(/\s+/);
+  return words.length <= max ? text.trim() : words.slice(0, max).join(' ') + '…';
+}
+
 function serverItemToCluster(item: ServerFeedItem): StoryCluster | null {
   if (item.type === 'cluster') {
     if (item.articles.length === 0) return null;
@@ -292,10 +302,11 @@ function serverItemToCluster(item: ServerFeedItem): StoryCluster | null {
     const label = (item.topicTitle && item.topicTitle.trim().length > 8)
       ? item.topicTitle
       : (item.articles[0].headline ?? item.topicTitle);
+    const rawSummary = item.topicSummary || (item.articles[0].summary ?? '');
     return {
       id: `cluster-${item.articles[0].id}`,
       topicLabel: label,
-      subtitle: item.topicSummary || (item.articles[0].summary ?? ''),
+      subtitle: rawSummary ? capToWords(rawSummary, 25) : '',
       stories: item.articles,
       isBreaking: !item.collection && item.articles.some(storyIsBreaking),
       collection: item.collection,
