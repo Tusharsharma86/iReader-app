@@ -1,4 +1,5 @@
 import type { Story } from '../types';
+import { entityBoostScore } from './entityFollowStore';
 
 const PROFILE_KEY = '@ireader_profile';
 
@@ -115,11 +116,14 @@ export function rankStories(stories: Story[]): Story[] {
       const novelty = personalScore === 0 ? 4 : 0;
       const exploration = Math.random() * 4 + novelty;
 
+      const entityBoost = entityBoostScore(story.headline ?? '', (story as any).aiSummary ?? story.summary ?? '');
+
       const finalScore = affinityScore * freshnessMult
         + velocityScore
         + freshBonus
         + interestBonus * 0.4
-        + exploration;
+        + exploration
+        + entityBoost;
       return { ...story, _score: finalScore } as any;
     })
     .sort((a: any, b: any) => b._score - a._score);
@@ -143,9 +147,12 @@ export function rankStoriesStandard(stories: Story[]): Story[] {
 
       const freshBonus = Math.max(0, (6 - hoursOld) / 6) * 6;
 
+      const entityBoost = entityBoostScore(story.headline ?? '', (story as any).aiSummary ?? story.summary ?? '');
+
       const standardScore = (importanceScore + breakingBonus + trendingBonus) * freshnessMult
         + velocityScore
-        + freshBonus;
+        + freshBonus
+        + entityBoost;
 
       return { ...story, _score: standardScore } as any;
     })

@@ -6,7 +6,7 @@ import { useTabBar } from '../contexts/TabBarContext';
 import type { FontSize, TopicKey } from '../types';
 import { INTEREST_CATEGORIES, INTEREST_TOPICS, type InterestTopic } from '../utils/interestTopics';
 import { TOPIC_SUBTOPICS } from '../utils/topics';
-import { getFollowedEntities, toggleFollowEntity } from '../utils/entityFollowStore';
+import { getFollowedEntities, toggleFollowEntity, clearFollowedEntities } from '../utils/entityFollowStore';
 
 const FONT_SIZES: FontSize[] = ['Small', 'Medium', 'Large', 'XLarge'];
 const BLUE = '#4A90D9';
@@ -135,21 +135,32 @@ function InlineFollowedEntities() {
     return <div style={{ color: '#555', fontSize: 12, padding: '8px 0' }}>No followed people, companies, or topics yet. Tap pills in Deep Dive to follow.</div>;
   }
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, paddingTop: 4 }}>
-      {entities.map((name, i) => (
-        <span key={i} onClick={() => {
-          toggleFollowEntity(name);
-          setEntities(prev => prev.filter(e => e !== name));
-        }} style={{
-          display: 'inline-flex', alignItems: 'center', gap: 5,
-          padding: '5px 10px 5px 12px', borderRadius: 999, cursor: 'pointer',
-          background: 'rgba(52,199,89,0.15)', border: '1px solid #34C759',
-          color: '#34C759', fontSize: 12, fontWeight: 700,
-        }}>
-          {name}
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#34C759" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </span>
-      ))}
+    <div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, paddingTop: 4 }}>
+        {entities.map((name, i) => (
+          <span key={i} onClick={() => {
+            toggleFollowEntity(name);
+            setEntities(prev => prev.filter(e => e !== name));
+          }} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            padding: '5px 10px 5px 12px', borderRadius: 999, cursor: 'pointer',
+            background: 'rgba(52,199,89,0.15)', border: '1px solid #34C759',
+            color: '#34C759', fontSize: 12, fontWeight: 700,
+          }}>
+            {name}
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#34C759" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </span>
+        ))}
+      </div>
+      <div onClick={() => { clearFollowedEntities(); setEntities([]); }} style={{
+        marginTop: 12, display: 'inline-flex', alignItems: 'center', gap: 6,
+        padding: '6px 12px', borderRadius: 8, cursor: 'pointer',
+        background: 'rgba(255,59,48,0.1)', border: '1px solid rgba(255,59,48,0.3)',
+        color: '#FF3B30', fontSize: 12, fontWeight: 700,
+      }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FF3B30" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6m4-6v6"/><path d="M9 6V4h6v2"/></svg>
+        Reset all follows
+      </div>
     </div>
   );
 }

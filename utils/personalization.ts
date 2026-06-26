@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { entityBoostScore } from './entityFollowStore';
 
 const PROFILE_KEY = '@ireader_profile';
 
@@ -137,11 +138,14 @@ export function rankStories(stories: any[]): any[] {
 
       // Interest bonus partially survives freshness decay so a 5★ topic stays
       // pinned high even when older than learned affinity would tolerate.
+      const entityBoost = entityBoostScore(story.headline ?? '', story.aiSummary ?? story.summary ?? '');
+
       const finalScore = affinityScore * freshnessMult
         + velocityScore
         + freshBonus
         + interestBonus * 0.4
-        + exploration;
+        + exploration
+        + entityBoost;
 
       return { ...story, _score: finalScore };
     })
@@ -165,9 +169,12 @@ export function rankStoriesStandard(stories: any[]): any[] {
 
       const freshBonus = Math.max(0, (6 - hoursOld) / 6) * 6;
 
+      const entityBoost = entityBoostScore(story.headline ?? '', story.aiSummary ?? story.summary ?? '');
+
       const standardScore = (importanceScore + breakingBonus + trendingBonus) * freshnessMult
         + velocityScore
-        + freshBonus;
+        + freshBonus
+        + entityBoost;
 
       return { ...story, _score: standardScore };
     })

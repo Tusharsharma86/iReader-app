@@ -27,7 +27,7 @@ import { requestNotificationPermission, fireTestNotif, registerForPush, updatePu
 import { useTabBarAutoHide } from '../utils/tabBarAnim';
 import { INTEREST_CATEGORIES, INTEREST_TOPICS, type InterestTopic } from '../utils/interestTopics';
 import { TOPIC_SUBTOPICS } from '../utils/topics';
-import { getFollowedEntities, toggleFollowEntity } from '../utils/entityFollowStore';
+import { getFollowedEntities, toggleFollowEntity, clearFollowedEntities } from '../utils/entityFollowStore';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -180,20 +180,29 @@ function InlineFollowedEntities() {
     return <Text style={[styles.miniHint, { paddingVertical: 8 }]}>No followed people, companies, or topics yet. Tap pills in Deep Dive to follow.</Text>;
   }
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 4 }}>
-      {entities.map((name, i) => (
-        <Pressable key={i} onPress={() => {
-          toggleFollowEntity(name);
-          setEntities(prev => prev.filter(e => e !== name));
-        }} style={{
-          flexDirection: 'row', alignItems: 'center', gap: 5,
-          paddingHorizontal: 11, paddingVertical: 6, borderRadius: 999,
-          backgroundColor: 'rgba(52,199,89,0.15)', borderWidth: 1, borderColor: '#34C759',
-        }}>
-          <Text style={{ color: '#34C759', fontSize: 12, fontWeight: '700' }}>{name}</Text>
-          <Ionicons name="close" size={12} color="#34C759" />
-        </Pressable>
-      ))}
+    <View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 4 }}>
+        {entities.map((name, i) => (
+          <Pressable key={i} onPress={() => {
+            toggleFollowEntity(name);
+            setEntities(prev => prev.filter(e => e !== name));
+          }} style={{
+            flexDirection: 'row', alignItems: 'center', gap: 5,
+            paddingHorizontal: 11, paddingVertical: 6, borderRadius: 999,
+            backgroundColor: 'rgba(52,199,89,0.15)', borderWidth: 1, borderColor: '#34C759',
+          }}>
+            <Text style={{ color: '#34C759', fontSize: 12, fontWeight: '700' }}>{name}</Text>
+            <Ionicons name="close" size={12} color="#34C759" />
+          </Pressable>
+        ))}
+      </View>
+      <Pressable onPress={() => {
+        clearFollowedEntities();
+        setEntities([]);
+      }} style={{ marginTop: 12, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: 'rgba(255,59,48,0.1)', borderWidth: 1, borderColor: 'rgba(255,59,48,0.3)' }}>
+        <Ionicons name="trash-outline" size={13} color="#FF3B30" />
+        <Text style={{ color: '#FF3B30', fontSize: 12, fontWeight: '700' }}>Reset all follows</Text>
+      </Pressable>
     </View>
   );
 }
