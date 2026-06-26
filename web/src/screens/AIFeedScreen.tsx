@@ -7,6 +7,7 @@ import { darken, lighten, getArticleColor, hexToRgb } from '../utils/colors';
 import { FALLBACK_IMG } from '../utils/fallback';
 import { trackDeepDive } from '../utils/personalization';
 import { toggleFollow, isFollowing } from '../utils/followStore';
+import { toggleFollowEntity, getFollowedEntities } from '../utils/entityFollowStore';
 
 const FEED_API_BASE = 'https://ireader.onrender.com/api/news/feed';
 // Topic rotation for infinite scroll — once we run low on cards we pull the
@@ -1305,21 +1306,6 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
                 {data.topics && data.topics.length > 0 && (
                   <EntityBlock label="TOPICS" items={data.topics} accent={VIOLET} dominant={dominant} subtle />
                 )}
-                {/* Follow Story button */}
-                <button
-                  onClick={() => setFollowing(toggleFollow({ id: story.id, headline: story.headline, imageUrl: story.imageUrl }))}
-                  style={{
-                    marginTop: 14, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    padding: '11px 0', borderRadius: 12, cursor: 'pointer', border: 'none',
-                    background: following ? `${accent}22` : 'rgba(185,148,255,0.12)',
-                    outline: `1px solid ${following ? accent : `${VIOLET}55`}`,
-                  }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill={following ? accent : 'none'} stroke={following ? accent : VIOLET} strokeWidth="2.5"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4-6.3-4.6L5.7 21 8 14 2 9.4h7.6z"/></svg>
-                  <span style={{ color: following ? accent : VIOLET, fontSize: 11, fontWeight: 800, letterSpacing: 0.8 }}>
-                    {following ? 'FOLLOWING · IN FOR YOU TAB' : 'FOLLOW STORY'}
-                  </span>
-                </button>
               </div>
             ) : null}
 
@@ -1556,6 +1542,7 @@ function QuestionItem({ question, story, narrative, accent, scale = 1 }: {
 function EntityBlock({ label, items, accent, dominant, subtle }: {
   label: string; items: string[]; accent: string; dominant: string; subtle?: boolean;
 }) {
+  const [followed, setFollowed] = React.useState<Set<string>>(() => new Set(getFollowedEntities()));
   return (
     <div style={{
       marginBottom: 12,
@@ -1568,18 +1555,27 @@ function EntityBlock({ label, items, accent, dominant, subtle }: {
         {label}
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {items.map((it, i) => (
-          <span key={i} style={{
-            padding: '5px 11px', borderRadius: 999,
-            background: subtle ? `${accent}1a` : 'rgba(255,255,255,0.05)',
-            border: subtle
-              ? `1px solid ${accent}33`
-              : '1px solid rgba(255,255,255,0.1)',
-            color: subtle ? accent : '#e8e8e8',
-            fontSize: 11.5, fontWeight: subtle ? 700 : 500,
-            letterSpacing: subtle ? 0.3 : 0,
-          }}>{it}</span>
-        ))}
+        {items.map((it, i) => {
+          const isOn = followed.has(it.toLowerCase());
+          return (
+            <span key={i} onClick={() => {
+              const on = toggleFollowEntity(it);
+              setFollowed(prev => { const s = new Set(prev); on ? s.add(it.toLowerCase()) : s.delete(it.toLowerCase()); return s; });
+            }} style={{
+              padding: '5px 11px', borderRadius: 999, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              background: isOn ? 'rgba(52,199,89,0.18)' : subtle ? `${accent}1a` : 'rgba(255,255,255,0.05)',
+              border: isOn ? '1px solid #34C759' : subtle ? `1px solid ${accent}33` : '1px solid rgba(255,255,255,0.1)',
+              color: isOn ? '#34C759' : subtle ? accent : '#e8e8e8',
+              fontSize: 11.5, fontWeight: isOn || subtle ? 700 : 500,
+              letterSpacing: subtle ? 0.3 : 0,
+              transition: 'background 0.18s, border-color 0.18s, color 0.18s',
+            }}>
+              {isOn && <span style={{ fontSize: 10 }}>✓</span>}
+              {it}
+            </span>
+          );
+        })}
       </div>
     </div>
   );

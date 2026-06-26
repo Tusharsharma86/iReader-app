@@ -29,6 +29,7 @@ import { tabBarTranslateY, useTabBarAutoHide } from '../utils/tabBarAnim';
 import { trackAiUsage, trackArticleRead } from '../utils/usageTracker';
 import { trackDeepDive } from '../utils/personalization';
 import { toggleFollow, isFollowing, loadFollowed } from '../utils/followStore';
+import { toggleFollowEntity, getFollowedEntities } from '../utils/entityFollowStore';
 import { FALLBACK_IMG } from '../utils/fallback';
 import { darken, lighten, getArticleColor, hexToRgb } from '../utils/colors';
 
@@ -1287,22 +1288,6 @@ function dedupeMetrics(items: string[]): string[] {
                       {!!data.keyPeople?.length && <EntityBlock label="KEY PEOPLE" items={data.keyPeople} />}
                       {!!data.keyCompanies?.length && <EntityBlock label="KEY ORGANIZATIONS" items={data.keyCompanies} />}
                       {!!data.topics?.length && <EntityBlock label="TOPICS" items={data.topics} subtle />}
-                      {/* Follow button */}
-                      <Pressable
-                        onPress={() => setFollowing(toggleFollow({ id: story.id, headline: story.headline, imageUrl: story.imageUrl }))}
-                        style={{
-                          marginTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-                          paddingVertical: 11, borderRadius: 12,
-                          backgroundColor: following ? `${accent}22` : 'rgba(185,148,255,0.12)',
-                          borderWidth: 1,
-                          borderColor: following ? accent : `${VIOLET}55`,
-                        }}
-                      >
-                        <Ionicons name={following ? 'star' : 'star-outline'} size={15} color={following ? accent : VIOLET} />
-                        <Text style={{ color: following ? accent : VIOLET, fontSize: 12, fontWeight: '800', letterSpacing: 0.8 }}>
-                          {following ? 'FOLLOWING · IN FOR YOU TAB' : 'FOLLOW STORY'}
-                        </Text>
-                      </Pressable>
                     </View></Stagger>
                   ) : null}
 
@@ -1495,21 +1480,31 @@ function QuestionItem({ question, story, narrative, scale = 1 }: {
 }
 
 function EntityBlock({ label, items, subtle }: { label: string; items: string[]; subtle?: boolean }) {
+  const [followed, setFollowed] = React.useState<Set<string>>(() => new Set(getFollowedEntities()));
   return (
     <View style={overlayStyles.entityBlock}>
       <Text style={overlayStyles.entityLabel}>{label}</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-        {items.map((it, i) => (
-          <View key={i} style={[
-            overlayStyles.entityChip,
-            subtle && { backgroundColor: `${VIOLET}1a`, borderColor: `${VIOLET}33` },
-          ]}>
-            <Text style={[
-              overlayStyles.entityChipText,
-              subtle && { color: VIOLET, fontWeight: '700' },
-            ]}>{it}</Text>
-          </View>
-        ))}
+        {items.map((it, i) => {
+          const isOn = followed.has(it.toLowerCase());
+          return (
+            <Pressable key={i} onPress={() => {
+              const on = toggleFollowEntity(it);
+              setFollowed(prev => { const s = new Set(prev); on ? s.add(it.toLowerCase()) : s.delete(it.toLowerCase()); return s; });
+            }} style={[
+              overlayStyles.entityChip,
+              isOn && { backgroundColor: 'rgba(52,199,89,0.18)', borderColor: '#34C759' },
+              !isOn && subtle && { backgroundColor: `${VIOLET}1a`, borderColor: `${VIOLET}33` },
+            ]}>
+              {isOn && <Ionicons name="checkmark" size={10} color="#34C759" style={{ marginRight: 3 }} />}
+              <Text style={[
+                overlayStyles.entityChipText,
+                isOn && { color: '#34C759', fontWeight: '700' },
+                !isOn && subtle && { color: VIOLET, fontWeight: '700' },
+              ]}>{it}</Text>
+            </Pressable>
+          );
+        })}
       </View>
     </View>
   );
@@ -1931,6 +1926,7 @@ const overlayStyles = StyleSheet.create({
     paddingHorizontal: 11, paddingVertical: 5, borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.1)',
+    flexDirection: 'row', alignItems: 'center',
   },
   entityChipText: { color: '#e8e8e8', fontSize: 11.5, fontWeight: '500' },
 
