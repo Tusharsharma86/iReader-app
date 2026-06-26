@@ -377,15 +377,14 @@ function feedToClusterGroups(feed: ApiFeedItem[]): Cluster[] {
       const rawLabel = item.topicTitle?.trim()
         ? item.topicTitle.trim()
         : (item.articles[0]?.headline ?? '');
-      // Hard-cap at 6 words client-side as a safety net regardless of server output
-      const label = capToWords(rawLabel, 6) || (item.articles[0]?.headline ?? '');
+      const label = rawLabel || (item.articles[0]?.headline ?? '');
       const rep = pickClusterRep(item.articles, label) ?? item.articles[0];
       if (!rep) return [];
       return [{
         id: `cluster-${rep.id}`,
         headline: label,
         topicLabel: label,
-        summary: item.topicSummary || rep.summary,
+        summary: item.topicSummary ? capToWords(item.topicSummary, 25) : (rep.summary ?? ''),
         imageUrl: rep.imageUrl ?? '',
         publishedAt: rep.publishedAt,
         stories: item.articles,
