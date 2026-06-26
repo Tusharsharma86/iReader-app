@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   useSettings,
   type CardDensity, type ArticleTab, type SummaryLength,
-  type KeyPointsCount, type Eli5Tone, type DeepDiveDepth,
+  type KeyPointsCount, type Eli5Tone, type DeepDiveDepth, type TimeFormat,
 } from '../contexts/SettingsContext';
 
 const VIOLET = '#b994ff';
@@ -89,6 +89,9 @@ const ELI5: SegmentedOption<Eli5Tone>[] = [
 const DEPTH: SegmentedOption<DeepDiveDepth>[] = [
   { label: 'Quick', value: 'quick' }, { label: 'Standard', value: 'standard' }, { label: 'Deep', value: 'deep' },
 ];
+const TIME_FMT: SegmentedOption<TimeFormat>[] = [
+  { label: 'Relative', value: 'relative' }, { label: 'Absolute', value: 'absolute' },
+];
 
 export default function CustomizeScreen() {
   const navigation = useNavigation();
@@ -149,6 +152,8 @@ export default function CustomizeScreen() {
             value={s.showCardImages} onChange={s.setShowCardImages} />
           <RowSegmented border label="Card density" sub="Vertical spacing between cards."
             options={DENSITY} value={s.cardDensity} onChange={s.setCardDensity} />
+          <RowSegmented border label="Time format" sub="Relative (2h ago) vs absolute (10:42 AM)."
+            options={TIME_FMT} value={s.timeFormat} onChange={s.setTimeFormat} />
         </View>
 
         {/* ARTICLE */}
@@ -166,6 +171,15 @@ export default function CustomizeScreen() {
             value={s.showEntityHighlights} onChange={s.setShowEntityHighlights} />
           <RowToggle border label="Reading difficulty" sub="Show the Hard/Medium/Easy pill."
             value={s.showReadingDifficulty} onChange={s.setShowReadingDifficulty} />
+          <RowToggle border label="Quote highlights" sub="Highlight quoted passages in article body."
+            value={s.showQuoteHighlights} onChange={s.setShowQuoteHighlights} />
+        </View>
+
+        {/* BEHAVIOR */}
+        <Text style={styles.sectionHeader}>BEHAVIOR</Text>
+        <View style={styles.card}>
+          <RowToggle label="Auto mark-as-read" sub="Stories scrolled past 80% are marked read automatically."
+            value={s.autoMarkRead} onChange={s.setAutoMarkRead} />
         </View>
 
         {/* AI */}
