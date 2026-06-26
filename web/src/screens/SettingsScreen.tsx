@@ -6,6 +6,7 @@ import { useTabBar } from '../contexts/TabBarContext';
 import type { FontSize, TopicKey } from '../types';
 import { INTEREST_CATEGORIES, INTEREST_TOPICS, type InterestTopic } from '../utils/interestTopics';
 import { TOPIC_SUBTOPICS } from '../utils/topics';
+import { getFollowedEntities, toggleFollowEntity } from '../utils/entityFollowStore';
 
 const FONT_SIZES: FontSize[] = ['Small', 'Medium', 'Large', 'XLarge'];
 const BLUE = '#4A90D9';
@@ -127,6 +128,32 @@ function InlineFavorites() {
   );
 }
 
+// ── Inline: Followed Entities ────────────────────────────────────────────────
+function InlineFollowedEntities() {
+  const [entities, setEntities] = React.useState<string[]>(() => getFollowedEntities());
+  if (!entities.length) {
+    return <div style={{ color: '#555', fontSize: 12, padding: '8px 0' }}>No followed people, companies, or topics yet. Tap pills in Deep Dive to follow.</div>;
+  }
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, paddingTop: 4 }}>
+      {entities.map((name, i) => (
+        <span key={i} onClick={() => {
+          toggleFollowEntity(name);
+          setEntities(prev => prev.filter(e => e !== name));
+        }} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+          padding: '5px 10px 5px 12px', borderRadius: 999, cursor: 'pointer',
+          background: 'rgba(52,199,89,0.15)', border: '1px solid #34C759',
+          color: '#34C759', fontSize: 12, fontWeight: 700,
+        }}>
+          {name}
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#34C759" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 // ── Inline: Active Topics (+ sub-topic pills) ────────────────────────────────
 function InlineActiveTopics() {
   const { activeTopics, toggleTopic, activeSubTopics, toggleSubTopic, showSports, setShowSports, showEntertainment, setShowEntertainment } = useSettings();
@@ -198,6 +225,7 @@ export default function SettingsScreen() {
 
   const enabledTopicsCount = Object.values(activeTopics).filter(Boolean).length;
   const anyNotifOn = notifBreaking || notifAiFeed || notifTech || notifDigest;
+  const [followedEntityCount, setFollowedEntityCount] = React.useState(() => getFollowedEntities().length);
 
   return (
     <div onScroll={e => reportScroll((e.target as HTMLDivElement).scrollTop)} style={{ height: '100%', overflowY: 'auto', background: '#000', WebkitOverflowScrolling: 'touch' }}>
@@ -266,6 +294,9 @@ export default function SettingsScreen() {
       </Collapsible>
       <Collapsible icon="📰" title="Sources" subtitle="Enable / disable individual publications">
         <InlineSources />
+      </Collapsible>
+      <Collapsible icon="⭐" title="Followed in Deep Dive" subtitle={followedEntityCount > 0 ? `${followedEntityCount} people, companies & topics` : 'None yet'}>
+        <InlineFollowedEntities />
       </Collapsible>
 
       {/* STATS */}

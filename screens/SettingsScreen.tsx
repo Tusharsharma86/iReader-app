@@ -27,6 +27,7 @@ import { requestNotificationPermission, fireTestNotif, registerForPush, updatePu
 import { useTabBarAutoHide } from '../utils/tabBarAnim';
 import { INTEREST_CATEGORIES, INTEREST_TOPICS, type InterestTopic } from '../utils/interestTopics';
 import { TOPIC_SUBTOPICS } from '../utils/topics';
+import { getFollowedEntities, toggleFollowEntity } from '../utils/entityFollowStore';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -166,6 +167,32 @@ export function InlineFavorites() {
             })}
           </View>
         </View>
+      ))}
+    </View>
+  );
+}
+
+// ── Inline Followed Entities ────────────────────────────────────────────────
+function InlineFollowedEntities() {
+  const [entities, setEntities] = React.useState<string[]>([]);
+  useFocusEffect(useCallback(() => { setEntities(getFollowedEntities()); }, []));
+  if (!entities.length) {
+    return <Text style={[styles.miniHint, { paddingVertical: 8 }]}>No followed people, companies, or topics yet. Tap pills in Deep Dive to follow.</Text>;
+  }
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 4 }}>
+      {entities.map((name, i) => (
+        <Pressable key={i} onPress={() => {
+          toggleFollowEntity(name);
+          setEntities(prev => prev.filter(e => e !== name));
+        }} style={{
+          flexDirection: 'row', alignItems: 'center', gap: 5,
+          paddingHorizontal: 11, paddingVertical: 6, borderRadius: 999,
+          backgroundColor: 'rgba(52,199,89,0.15)', borderWidth: 1, borderColor: '#34C759',
+        }}>
+          <Text style={{ color: '#34C759', fontSize: 12, fontWeight: '700' }}>{name}</Text>
+          <Ionicons name="close" size={12} color="#34C759" />
+        </Pressable>
       ))}
     </View>
   );
@@ -360,6 +387,8 @@ export default function SettingsScreen() {
 
   const starredCount = Object.values(topicInterests).filter(v => v > 0).length;
   const enabledTopicsCount = Object.values(activeTopics).filter(Boolean).length;
+  const [followedEntityCount, setFollowedEntityCount] = useState(() => getFollowedEntities().length);
+  useFocusEffect(useCallback(() => { setFollowedEntityCount(getFollowedEntities().length); }, []));
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -437,6 +466,9 @@ export default function SettingsScreen() {
         </Collapsible>
         <Collapsible icon="newspaper" title="Sources" subtitle="Enable / disable individual publications">
           <InlineSources />
+        </Collapsible>
+        <Collapsible icon="star" title="Followed in Deep Dive" subtitle={followedEntityCount > 0 ? `${followedEntityCount} people, companies & topics` : 'None yet'}>
+          <InlineFollowedEntities />
         </Collapsible>
 
         {/* STATS */}
