@@ -18,3 +18,17 @@ export function toggleFollowEntity(name: string): boolean {
 }
 
 export function getFollowedEntities(): string[] { return [...cache]; }
+
+export function clearFollowedEntities(): void { cache.clear(); persist(); }
+
+// Returns a score boost based on how many followed entities appear in the text.
+// Each match adds 12 points; capped at 3 matches (36) to avoid dominating ranking.
+export function entityBoostScore(headline: string, summary?: string): number {
+  if (cache.size === 0) return 0;
+  const text = `${headline} ${summary ?? ''}`.toLowerCase();
+  let matches = 0;
+  for (const entity of cache) {
+    if (text.includes(entity)) { matches++; if (matches >= 3) break; }
+  }
+  return matches * 12;
+}

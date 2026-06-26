@@ -7,7 +7,7 @@ import { darken, lighten, getArticleColor, hexToRgb } from '../utils/colors';
 import { FALLBACK_IMG } from '../utils/fallback';
 import { trackDeepDive } from '../utils/personalization';
 import { toggleFollow, isFollowing } from '../utils/followStore';
-import { toggleFollowEntity, getFollowedEntities } from '../utils/entityFollowStore';
+import { toggleFollowEntity, getFollowedEntities, clearFollowedEntities, entityBoostScore } from '../utils/entityFollowStore';
 
 const FEED_API_BASE = 'https://ireader.onrender.com/api/news/feed';
 // Topic rotation for infinite scroll — once we run low on cards we pull the
@@ -193,8 +193,9 @@ function rankFeedItems(items: FeedItem[]): FeedItem[] {
         ? Math.exp(-hoursOld * Math.LN2 / 12)
         : Math.exp(-24 * Math.LN2 / 12) * Math.exp(-(hoursOld - 24) * Math.LN2 / 6);
       const freshBonus = Math.max(0, (6 - hoursOld) / 6) * 6;
+      const entityBoost = entityBoostScore(it.primary.headline ?? '', it.primary.aiSummary ?? it.primary.summary ?? '');
       const score = (importanceScore + breakingBonus + clusterBonus) * freshnessMult
-        + velocityScore + freshBonus;
+        + velocityScore + freshBonus + entityBoost;
       return { item: it, score };
     })
     .sort((a, b) => b.score - a.score)

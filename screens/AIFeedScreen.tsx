@@ -29,7 +29,7 @@ import { tabBarTranslateY, useTabBarAutoHide } from '../utils/tabBarAnim';
 import { trackAiUsage, trackArticleRead } from '../utils/usageTracker';
 import { trackDeepDive } from '../utils/personalization';
 import { toggleFollow, isFollowing, loadFollowed } from '../utils/followStore';
-import { toggleFollowEntity, getFollowedEntities } from '../utils/entityFollowStore';
+import { toggleFollowEntity, getFollowedEntities, clearFollowedEntities, entityBoostScore } from '../utils/entityFollowStore';
 import { FALLBACK_IMG } from '../utils/fallback';
 import { darken, lighten, getArticleColor, hexToRgb } from '../utils/colors';
 
@@ -179,8 +179,9 @@ function rankFeedItems(items: FeedItem[]): FeedItem[] {
         ? Math.exp(-hoursOld * Math.LN2 / 12)
         : Math.exp(-24 * Math.LN2 / 12) * Math.exp(-(hoursOld - 24) * Math.LN2 / 6);
       const freshBonus = Math.max(0, (6 - hoursOld) / 6) * 6;
+      const entityBoost = entityBoostScore(it.primary.headline ?? '', it.primary.aiSummary ?? it.primary.summary ?? '');
       const score = (importanceScore + breakingBonus + clusterBonus) * freshnessMult
-        + velocityScore + freshBonus;
+        + velocityScore + freshBonus + entityBoost;
       return { item: it, score };
     })
     .sort((a, b) => b.score - a.score)
