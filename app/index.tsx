@@ -1417,8 +1417,15 @@ const TopicSection = React.memo(function TopicSection({
 
   if (count === 1) {
     return (
-      <View style={[styles.section, { alignItems: 'center' }]}>
-        <StoryCard story={cluster.stories[0]} cardWidth={cardWidth} allStories={allStories} />
+      <View style={styles.section}>
+        {showMetaPill && isBreaking && (
+          <View style={{ paddingHorizontal: 16, marginBottom: 6 }}>
+            <Text style={styles.breakingText}>BREAKING</Text>
+          </View>
+        )}
+        <View style={{ alignItems: 'center' }}>
+          <StoryCard story={cluster.stories[0]} cardWidth={cardWidth} allStories={allStories} />
+        </View>
       </View>
     );
   }

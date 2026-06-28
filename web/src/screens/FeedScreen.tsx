@@ -165,8 +165,15 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
       summary: cluster.subtitle || cluster.stories[0].summary,
     };
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: clusterGap }}>
-        <StoryCard story={clusterStory} cardWidth={soloCardWidth} allStories={allStories} />
+      <div style={{ marginBottom: clusterGap }}>
+        {showMetaPill && isBreaking && (
+          <div style={{ padding: '0 20px', marginBottom: 6 }}>
+            <span style={{ color: '#FF3B30', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>BREAKING</span>
+          </div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <StoryCard story={clusterStory} cardWidth={soloCardWidth} allStories={allStories} />
+        </div>
       </div>
     );
   }
@@ -255,7 +262,7 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
         style={{ display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', paddingLeft: sideMargin, paddingRight: sideMargin, gap: CARD_GAP, scrollbarWidth: 'none' }}>
         {cluster.stories.map((story, idx) => (
           <div key={story.id} style={{ scrollSnapAlign: 'start', flexShrink: 0 }}>
-            <StoryCard story={story} cardWidth={clusterCardWidth} allStories={allStories} suppressBreaking={isBreaking} clusterCard={idx === 0} />
+            <StoryCard story={story} cardWidth={clusterCardWidth} allStories={allStories} clusterCard={idx === 0} />
           </div>
         ))}
       </div>
