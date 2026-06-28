@@ -688,9 +688,13 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   const storyClusters = useMemo((): StoryCluster[] => {
     return filteredFeed.flatMap(item => {
       const cluster = serverItemToCluster(item);
-      return cluster ? [cluster] : [];
+      if (!cluster) return [];
+      if (activeTopic === 'breaking') {
+        return [{ ...cluster, isBreaking: true, stories: cluster.stories.map(s => ({ ...s, isBreaking: true })) }];
+      }
+      return [cluster];
     });
-  }, [filteredFeed]);
+  }, [filteredFeed, activeTopic]);
 
   const filteredClusters = useMemo(() => {
     if (activeTopic !== 'technology' || techSourceFilter.size === 0) return storyClusters;
