@@ -1,4 +1,13 @@
 import React, { useState } from 'react';
+
+function breakingTier(publishedAt: string | undefined, isBreaking: boolean): 'live' | 'breaking' | 'developing' | null {
+  if (!isBreaking || !publishedAt) return null;
+  const ageMin = (Date.now() - new Date(publishedAt).getTime()) / 60000;
+  if (ageMin < 30) return 'live';
+  if (ageMin < 120) return 'breaking';
+  if (ageMin < 360) return 'developing';
+  return null;
+}
 import type { Story, ArticleParams, BiasRating } from '../types';
 import { BIAS_CONFIG } from '../types';
 import { getArticleColor, lighten, darken } from '../utils/colors';
@@ -217,12 +226,13 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
           )}
           <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>·</span>
           <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: 600 }}>{timeFormat === 'absolute' ? timeAbs(story.publishedAt) : timeAgo(story.publishedAt)}</span>
-          {isBreakingBadge && !suppressBreaking && (
-            <>
-              <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>·</span>
-              <span style={{ color: '#FF3B30', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>BREAKING</span>
-            </>
-          )}
+          {isBreakingBadge && !suppressBreaking && (() => {
+            const tier = breakingTier(story.publishedAt, true);
+            const dot = <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>·</span>;
+            if (tier === 'live') return <><span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>·</span><span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#FF3B30', display: 'inline-block' }} /><span style={{ color: '#FF3B30', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>LIVE</span></span></>;
+            if (tier === 'developing') return <>{dot}<span style={{ color: '#FF9500', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>DEVELOPING</span></>;
+            return <>{dot}<span style={{ color: '#FF3B30', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>BREAKING</span></>;
+          })()}
           {isTrending && !isBreakingBadge && <span style={{ fontSize: 12 }}>🔥</span>}
           {isOngoing && <span style={{ fontSize: 12 }}>📍</span>}
           <div style={{ flex: 1 }} />

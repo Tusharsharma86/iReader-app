@@ -107,7 +107,17 @@ interface StoryCluster {
   isBreaking: boolean;
   collection?: boolean; // theme collection (different stories, same subject) vs same-event cluster
   biasBreakdown?: { left: number; center: number; right: number; unknown: number; diversity: boolean };
+  _category?: string;
 }
+
+const TOPIC_META_WEB: Record<string, { label: string; color: string }> = {
+  'breaking':       { label: 'Breaking', color: '#FF5555' },
+  'technology':     { label: 'Tech',     color: '#4A90D9' },
+  'india-politics': { label: 'India',    color: '#FF9500' },
+  'geopolitics':    { label: 'World',    color: '#4ECDC4' },
+  'markets':        { label: 'Markets',  color: '#22C55E' },
+  'business':       { label: 'Business', color: '#A29BFE' },
+};
 
 function generateTopicLabel(headline: string): string {
   const words = headline.split(/[\s,;:–—\-]+/);
@@ -149,9 +159,28 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
   }, [snapInterval, cluster.stories.length]);
 
   if (cluster.stories.length === 1) {
+    const clusterStory = {
+      ...cluster.stories[0],
+      headline: cluster.topicLabel || cluster.stories[0].headline,
+      summary: cluster.subtitle || cluster.stories[0].summary,
+    };
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: clusterGap }}>
-        <StoryCard story={cluster.stories[0]} cardWidth={soloCardWidth} allStories={allStories} />
+      <div style={{ marginBottom: clusterGap }}>
+        {showMetaPill && (() => {
+          const tier = breakingTier(cluster.stories[0]?.publishedAt, isBreaking);
+          if (!tier) return null;
+          return (
+            <div style={{ padding: '0 20px', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              {tier === 'live' && <span className="live-dot" style={{ width: 7, height: 7, borderRadius: '50%', background: '#FF3B30', display: 'inline-block', flexShrink: 0 }} />}
+              <span style={{ color: tier === 'developing' ? '#FF9500' : '#FF3B30', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>
+                {tier === 'live' ? 'LIVE' : tier === 'developing' ? 'DEVELOPING' : 'BREAKING'}
+              </span>
+            </div>
+          );
+        })()}
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <StoryCard story={clusterStory} cardWidth={soloCardWidth} allStories={allStories} />
+        </div>
       </div>
     );
   }
@@ -173,13 +202,22 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
                 background: 'rgba(185,148,255,0.12)', border: '1px solid rgba(185,148,255,0.28)',
               }}>TREND</span>
             )}
-            {isBreaking && (
-              <span style={{
-                color: '#FF3B30', fontSize: 9, fontWeight: 800, letterSpacing: 1,
-                padding: '2px 7px', borderRadius: 999,
-                background: 'rgba(255,59,48,0.12)', border: '1px solid rgba(255,59,48,0.3)',
-              }}>BREAKING</span>
-            )}
+            {isBreaking && (() => {
+              const tier = breakingTier(cluster.stories[0]?.publishedAt, isBreaking);
+              if (tier === 'live') return (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span className="live-dot" style={{ width: 7, height: 7, borderRadius: '50%', background: '#FF3B30', display: 'inline-block', flexShrink: 0 }} />
+                  <span style={{ color: '#FF3B30', fontSize: 9, fontWeight: 800, letterSpacing: 1 }}>LIVE</span>
+                </span>
+              );
+              if (tier === 'developing') return (
+                <span style={{ color: '#FF9500', fontSize: 9, fontWeight: 800, letterSpacing: 1, padding: '2px 7px', borderRadius: 999, background: 'rgba(255,149,0,0.12)', border: '1px solid rgba(255,149,0,0.3)' }}>DEVELOPING</span>
+              );
+              if (tier === 'breaking') return (
+                <span style={{ color: '#FF3B30', fontSize: 9, fontWeight: 800, letterSpacing: 1, padding: '2px 7px', borderRadius: 999, background: 'rgba(255,59,48,0.12)', border: '1px solid rgba(255,59,48,0.3)' }}>BREAKING</span>
+              );
+              return null;
+            })()}
           </div>
         )}
         {/* Headline row: clock prefix + text + stories pill inline */}
@@ -240,7 +278,7 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
         style={{ display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', paddingLeft: sideMargin, paddingRight: sideMargin, gap: CARD_GAP, scrollbarWidth: 'none' }}>
         {cluster.stories.map((story, idx) => (
           <div key={story.id} style={{ scrollSnapAlign: 'start', flexShrink: 0 }}>
-            <StoryCard story={story} cardWidth={clusterCardWidth} allStories={allStories} suppressBreaking={isBreaking} clusterCard={idx === 0} />
+            <StoryCard story={story} cardWidth={clusterCardWidth} allStories={allStories} clusterCard={idx === 0} />
           </div>
         ))}
       </div>
@@ -255,10 +293,61 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
   );
 }
 
+function breakingTier(publishedAt: string | undefined, isBreaking: boolean): 'live' | 'breaking' | 'developing' | null {
+  if (!isBreaking || !publishedAt) return null;
+  const ageMin = (Date.now() - new Date(publishedAt).getTime()) / 60000;
+  if (ageMin < 30) return 'live';
+  if (ageMin < 120) return 'breaking';
+  if (ageMin < 360) return 'developing';
+  return null;
+}
+
+// ── MySpace Topic Zone ────────────────────────────────────────────────────────
+function MyspaceTopicZone({ clusters, category, cardWidth, allStories }: {
+  clusters: StoryCluster[]; category: string; cardWidth: number; allStories: Story[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const meta = TOPIC_META_WEB[category] ?? { label: category || 'News', color: '#888888' };
+  const PREVIEW = 3;
+  const visible = expanded ? clusters : clusters.slice(0, PREVIEW);
+  const remaining = clusters.length - PREVIEW;
+
+  return (
+    <div>
+      <div onClick={() => setExpanded(e => !e)} style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '14px 20px', cursor: 'pointer', marginTop: 12,
+        WebkitTapHighlightColor: 'transparent',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 3, height: 18, borderRadius: 2, background: meta.color, flexShrink: 0 }} />
+          <span style={{ color: '#fff', fontSize: 13, fontWeight: 800, letterSpacing: 0.8 }}>{meta.label.toUpperCase()}</span>
+          <span style={{ color: '#666', fontSize: 11, fontWeight: 600, background: 'rgba(255,255,255,0.07)', padding: '2px 7px', borderRadius: 10 }}>{clusters.length}</span>
+        </div>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          {expanded ? <polyline points="18 15 12 9 6 15" /> : <polyline points="6 9 12 15 18 9" />}
+        </svg>
+      </div>
+      {visible.map(cluster => (
+        <ClusterSection key={cluster.id} cluster={cluster} soloCardWidth={cardWidth} allStories={allStories} />
+      ))}
+      {!expanded && remaining > 0 && (
+        <div onClick={() => setExpanded(true)} style={{
+          margin: '4px 20px 12px', padding: '11px 0', borderRadius: 12,
+          background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+          textAlign: 'center', cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+        }}>
+          <span style={{ color: '#888', fontSize: 12, fontWeight: 600 }}>Show {remaining} more</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Feed Screen ───────────────────────────────────────────────────────────
 // Server feed item types (from /api/news/feed?topic=X)
 type ServerFeedItem =
-  | { type: 'cluster'; topicTitle: string; topicSummary: string; articles: Story[]; collection?: boolean }
+  | { type: 'cluster'; topicTitle: string; topicSummary: string; articles: Story[]; collection?: boolean; _category?: string }
   | (Story & { type: 'article' });
 
 // Module-level cache — survives FeedScreen unmount/remount (navigation)
@@ -274,7 +363,7 @@ function parseServerFeed(raw: unknown[]): ServerFeedItem[] {
       const articles = Array.isArray(item.articles)
         ? (item.articles as Array<Record<string, unknown>>).map(normalizeStory)
         : [];
-      return { type: 'cluster' as const, topicTitle: String(item.topicTitle ?? ''), topicSummary: String(item.topicSummary ?? ''), articles, collection: Boolean(item.collection) };
+      return { type: 'cluster' as const, topicTitle: String(item.topicTitle ?? ''), topicSummary: String(item.topicSummary ?? ''), articles, collection: Boolean(item.collection), _category: item._category as string | undefined };
     }
     return { ...normalizeStory(item), type: 'article' as const };
   });
@@ -282,6 +371,11 @@ function parseServerFeed(raw: unknown[]): ServerFeedItem[] {
 
 function storyIsBreaking(s: Story): boolean {
   return s.isBreaking ?? false;
+}
+
+function capToWords(text: string, max: number): string {
+  const words = text.trim().split(/\s+/);
+  return words.length <= max ? text.trim() : words.slice(0, max).join(' ') + '…';
 }
 
 function serverItemToCluster(item: ServerFeedItem): StoryCluster | null {
@@ -292,10 +386,12 @@ function serverItemToCluster(item: ServerFeedItem): StoryCluster | null {
     const label = (item.topicTitle && item.topicTitle.trim().length > 8)
       ? item.topicTitle
       : (item.articles[0].headline ?? item.topicTitle);
+    const rawSummary = item.topicSummary || (item.articles[0].summary ?? '');
     return {
       id: `cluster-${item.articles[0].id}`,
       topicLabel: label,
-      subtitle: item.topicSummary || (item.articles[0].summary ?? ''),
+      subtitle: rawSummary ? capToWords(rawSummary, 25) : '',
+      _category: item._category,
       stories: item.articles,
       isBreaking: !item.collection && item.articles.some(storyIsBreaking),
       collection: item.collection,
@@ -832,7 +928,18 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
               </div>
             );
           })()}
-          {rankedClusters.map(cluster => (
+          {activeTopic === 'myspace' ? (() => {
+            const groups = new Map<string, StoryCluster[]>();
+            const catOrder: string[] = [];
+            for (const c of rankedClusters) {
+              const cat = c._category ?? 'other';
+              if (!groups.has(cat)) { groups.set(cat, []); catOrder.push(cat); }
+              groups.get(cat)!.push(c);
+            }
+            return catOrder.map(cat => (
+              <MyspaceTopicZone key={cat} clusters={groups.get(cat)!} category={cat} cardWidth={cardWidth} allStories={visibleStories} />
+            ));
+          })() : rankedClusters.map(cluster => (
             <ClusterSection key={cluster.id} cluster={cluster} soloCardWidth={cardWidth} allStories={visibleStories} />
           ))}
           <div style={{ height: 40 }} />
@@ -840,7 +947,9 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
       )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }`}</style>
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        @keyframes livepulse { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
+        .live-dot { animation: livepulse 1.2s ease-in-out infinite; }`}</style>
     </div>
   );
 }

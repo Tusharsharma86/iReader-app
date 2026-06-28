@@ -236,6 +236,11 @@ interface Cluster {
   biasBreakdown?: BiasBreakdown;
 }
 
+type MyspaceItem =
+  | { type: 'zone-header'; id: string; category: string; label: string; color: string; icon: string; total: number; expanded: boolean }
+  | { type: 'zone-cluster'; id: string; cluster: Cluster }
+  | { type: 'zone-more'; id: string; category: string; remaining: number };
+
 interface TermData { terms: Set<string>; entities: Set<string> }
 
 // ── Clustering helpers ────────────────────────────────────────────────────────
@@ -377,15 +382,14 @@ function feedToClusterGroups(feed: ApiFeedItem[]): Cluster[] {
       const rawLabel = item.topicTitle?.trim()
         ? item.topicTitle.trim()
         : (item.articles[0]?.headline ?? '');
-      // Hard-cap at 6 words client-side as a safety net regardless of server output
-      const label = capToWords(rawLabel, 6) || (item.articles[0]?.headline ?? '');
+      const label = rawLabel || (item.articles[0]?.headline ?? '');
       const rep = pickClusterRep(item.articles, label) ?? item.articles[0];
       if (!rep) return [];
       return [{
         id: `cluster-${rep.id}`,
         headline: label,
         topicLabel: label,
-        summary: item.topicSummary || rep.summary,
+        summary: item.topicSummary ? capToWords(item.topicSummary, 25) : (rep.summary ?? ''),
         imageUrl: rep.imageUrl ?? '',
         publishedAt: rep.publishedAt,
         stories: item.articles,
@@ -491,6 +495,7 @@ export default function FeedScreen() {
   }, []);
   const [followV, setFollowV] = useState(0);
   useEffect(() => { loadFollowed().then(() => setFollowV(v => v + 1)).catch(() => {}); }, []);
+  const [expandedTopics, setExpandedTopics] = useState<string[]>([]);
   const listRef = useRef<FlatList>(null);
   // useScrollToTop tries scrollToIndex first (crashes when item 0 is off-screen).
   // Wrapping in a ref that only exposes scrollToTop forces it down the safe path.
@@ -905,6 +910,30 @@ export default function FeedScreen() {
     return (rankStoriesStandard(proxies as any) as any[]).map((p: any) => clusterGroups[p._i]);
   }, [clusterGroups, activeTopic, favTopics, topicInterests]);
 
+  const myspaceFlatItems = useMemo((): MyspaceItem[] => {
+    if (activeTopic !== 'myspace') return [];
+    const PREVIEW = 3;
+    const catMeta = Object.fromEntries(CATEGORIES.map(c => [c.topic, { label: c.label, color: c.color, icon: c.icon }]));
+    const groups = new Map<string, Cluster[]>();
+    const catOrder: string[] = [];
+    for (const c of rankedClusterGroups) {
+      const cat = c._category ?? 'other';
+      if (!groups.has(cat)) { groups.set(cat, []); catOrder.push(cat); }
+      groups.get(cat)!.push(c);
+    }
+    const items: MyspaceItem[] = [];
+    for (const cat of catOrder) {
+      const clusters = groups.get(cat)!;
+      const meta = catMeta[cat] ?? { label: 'News', color: '#888888', icon: 'newspaper-outline' };
+      const isExpanded = expandedTopics.includes(cat);
+      items.push({ type: 'zone-header', id: `header-${cat}`, category: cat, label: meta.label, color: meta.color, icon: meta.icon, total: clusters.length, expanded: isExpanded });
+      const visible = isExpanded ? clusters : clusters.slice(0, PREVIEW);
+      for (const cluster of visible) items.push({ type: 'zone-cluster', id: `zc-${cluster.id}`, cluster });
+      if (!isExpanded && clusters.length > PREVIEW) items.push({ type: 'zone-more', id: `more-${cat}`, category: cat, remaining: clusters.length - PREVIEW });
+    }
+    return items;
+  }, [activeTopic, rankedClusterGroups, expandedTopics]);
+
   // Restore scroll position after Activity recreation (fold/unfold).
   // Tracks the last data-length we restored for, so it fires again if data reloads
   // from scratch (Activity recreated) but not on normal incremental renders.
@@ -1144,22 +1173,50 @@ export default function FeedScreen() {
     <Animated.View style={{ flex: 1, opacity: feedOpacity }}>
       <FlatList
         ref={listRef}
-        data={rankedClusterGroups}
-        keyExtractor={c => c.id}
-        extraData={activeTopic}
+        data={(activeTopic === 'myspace' ? myspaceFlatItems : rankedClusterGroups) as any[]}
+        keyExtractor={(item: any) => item.id}
+        extraData={[activeTopic, expandedTopics]}
         onScroll={handleFeedScroll}
         scrollEventThrottle={16}
-        renderItem={({ item }) => (
-          <TopicSection
-            cluster={item}
-            isBreaking={item.isBreaking ?? false}
-            catColor={activeCat.color}
-            cardWidth={cardWidth}
-            allStories={allArticles}
-            onCarouselRef={ref => { carouselRefs.current[item.id] = ref; }}
-            onCarouselScroll={x => { carouselOffsets.current[item.id] = x; }}
-          />
-        )}
+        renderItem={({ item }: { item: any }) => {
+          if (item.type === 'zone-header') {
+            return (
+              <Pressable onPress={() => setExpandedTopics(prev =>
+                prev.includes(item.category) ? prev.filter((c: string) => c !== item.category) : [...prev, item.category]
+              )} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, marginTop: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={{ width: 3, height: 18, borderRadius: 2, backgroundColor: item.color }} />
+                  <Ionicons name={item.icon} size={16} color={item.color} />
+                  <Text style={{ color: '#fff', fontSize: 13, fontWeight: '800', letterSpacing: 0.8 }}>{item.label.toUpperCase()}</Text>
+                  <View style={{ backgroundColor: 'rgba(255,255,255,0.07)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}>
+                    <Text style={{ color: '#666', fontSize: 11, fontWeight: '600' }}>{item.total}</Text>
+                  </View>
+                </View>
+                <Ionicons name={item.expanded ? 'chevron-up' : 'chevron-down'} size={14} color="#555" />
+              </Pressable>
+            );
+          }
+          if (item.type === 'zone-more') {
+            return (
+              <Pressable onPress={() => setExpandedTopics(prev => [...prev, item.category])}
+                style={{ marginHorizontal: 20, marginBottom: 12, paddingVertical: 11, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.04)', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
+                <Text style={{ color: '#888', fontSize: 12, fontWeight: '600' }}>Show {item.remaining} more</Text>
+              </Pressable>
+            );
+          }
+          const cluster: Cluster = item.type === 'zone-cluster' ? item.cluster : item;
+          return (
+            <TopicSection
+              cluster={cluster}
+              isBreaking={cluster.isBreaking ?? false}
+              catColor={activeCat.color}
+              cardWidth={cardWidth}
+              allStories={allArticles}
+              onCarouselRef={ref => { carouselRefs.current[cluster.id] = ref; }}
+              onCarouselScroll={x => { carouselOffsets.current[cluster.id] = x; }}
+            />
+          );
+        }}
         onScrollToIndexFailed={(info) => {
           // Item not yet rendered — scroll close via offset, then retry once
           listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
@@ -1331,6 +1388,33 @@ const CarouselSection = React.memo(function CarouselSection({
   );
 });
 
+function breakingTier(publishedAt: string, isBreaking: boolean): 'live' | 'breaking' | 'developing' | null {
+  if (!isBreaking) return null;
+  const ageMin = (Date.now() - new Date(publishedAt).getTime()) / 60000;
+  if (ageMin < 30) return 'live';
+  if (ageMin < 120) return 'breaking';
+  if (ageMin < 360) return 'developing';
+  return null;
+}
+
+const LivePulse = React.memo(function LivePulse() {
+  const pulseOpacity = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseOpacity, { toValue: 0.2, duration: 600, useNativeDriver: true }),
+        Animated.timing(pulseOpacity, { toValue: 1, duration: 600, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [pulseOpacity]);
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+      <Animated.View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#FF3B30', opacity: pulseOpacity }} />
+      <Text style={{ color: '#FF3B30', fontSize: 9, fontWeight: '800', letterSpacing: 1 }}>LIVE</Text>
+    </View>
+  );
+});
+
 // ── Topic Section — Particle-style cluster with AI-grouped stories ────────────
 const TopicSection = React.memo(function TopicSection({
   cluster,
@@ -1367,9 +1451,19 @@ const TopicSection = React.memo(function TopicSection({
   }, [snapInterval, count]);
 
   if (count === 1) {
+    const tier1 = breakingTier(cluster.publishedAt, isBreaking);
     return (
-      <View style={[styles.section, { alignItems: 'center' }]}>
-        <StoryCard story={cluster.stories[0]} cardWidth={cardWidth} allStories={allStories} />
+      <View style={styles.section}>
+        {showMetaPill && tier1 && (
+          <View style={{ paddingHorizontal: 16, marginBottom: 6 }}>
+            {tier1 === 'live' && <LivePulse />}
+            {tier1 === 'breaking' && <Text style={styles.breakingText}>BREAKING</Text>}
+            {tier1 === 'developing' && <Text style={{ color: '#FF9500', fontSize: 9, fontWeight: '800', letterSpacing: 1 }}>DEVELOPING</Text>}
+          </View>
+        )}
+        <View style={{ alignItems: 'center' }}>
+          <StoryCard story={cluster.stories[0]} cardWidth={cardWidth} allStories={allStories} />
+        </View>
       </View>
     );
   }
@@ -1389,7 +1483,13 @@ const TopicSection = React.memo(function TopicSection({
               {cluster.collection && (
                 <Text style={{ color: '#b994ff', fontSize: 9, fontWeight: '800', letterSpacing: 1, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, overflow: 'hidden', backgroundColor: 'rgba(185,148,255,0.12)' }}>TREND</Text>
               )}
-              {isBreaking && <Text style={styles.breakingText}>BREAKING</Text>}
+              {isBreaking && (() => {
+                const tier = breakingTier(cluster.publishedAt, isBreaking);
+                if (tier === 'live') return <LivePulse />;
+                if (tier === 'breaking') return <Text style={styles.breakingText}>BREAKING</Text>;
+                if (tier === 'developing') return <Text style={{ color: '#FF9500', fontSize: 9, fontWeight: '800', letterSpacing: 1, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, overflow: 'hidden', backgroundColor: 'rgba(255,149,0,0.12)' }}>DEVELOPING</Text>;
+                return null;
+              })()}
             </View>
           )}
           {/* Headline row — clock prefix + headline + stories pill inline */}
