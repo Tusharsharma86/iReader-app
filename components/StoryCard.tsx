@@ -10,6 +10,15 @@ import { useSettings } from '../contexts/SettingsContext';
 import { trackArticleOpen } from '../utils/personalization';
 import { FALLBACK_IMG } from '../utils/fallback';
 
+function breakingTier(publishedAt: string, isBreaking: boolean): 'live' | 'breaking' | 'developing' | null {
+  if (!isBreaking) return null;
+  const ageMin = (Date.now() - new Date(publishedAt).getTime()) / 60000;
+  if (ageMin < 30) return 'live';
+  if (ageMin < 120) return 'breaking';
+  if (ageMin < 360) return 'developing';
+  return null;
+}
+
 export type BiasRating = 'left' | 'lean-left' | 'center' | 'lean-right' | 'right' | 'unknown';
 
 export const BIAS_CONFIG: Record<BiasRating, { color: string; label: string }> = {
@@ -282,7 +291,18 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight:
         <View style={styles.metaRow}>
           <Text style={styles.metaLabel}>{source.toUpperCase()}  ·  {timeFormat === 'absolute' ? timeAbs(story.publishedAt) : timeAgo(story.publishedAt)}</Text>
           {showBiasDots && <BiasDot bias={story.sourceBias} size={6} />}
-          {isBreakingBadge && <Text style={styles.breakingText}>·  BREAKING</Text>}
+          {isBreakingBadge && (() => {
+              const tier = breakingTier(story.publishedAt, true);
+              if (tier === 'live') return (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                  <Text style={styles.metaLabel}>· </Text>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FF3B30' }} />
+                  <Text style={styles.breakingText}> LIVE</Text>
+                </View>
+              );
+              if (tier === 'developing') return <Text style={{ color: '#FF9500', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 }}>·  DEVELOPING</Text>;
+              return <Text style={styles.breakingText}>·  BREAKING</Text>;
+            })()}
           {isTrending && !isBreakingBadge && <Text style={styles.badge}>🔥</Text>}
           {isOngoing && <Text style={styles.badge}>📍</Text>}
         </View>

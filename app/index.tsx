@@ -1380,6 +1380,33 @@ const CarouselSection = React.memo(function CarouselSection({
   );
 });
 
+function breakingTier(publishedAt: string, isBreaking: boolean): 'live' | 'breaking' | 'developing' | null {
+  if (!isBreaking) return null;
+  const ageMin = (Date.now() - new Date(publishedAt).getTime()) / 60000;
+  if (ageMin < 30) return 'live';
+  if (ageMin < 120) return 'breaking';
+  if (ageMin < 360) return 'developing';
+  return null;
+}
+
+const LivePulse = React.memo(function LivePulse() {
+  const pulseOpacity = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseOpacity, { toValue: 0.2, duration: 600, useNativeDriver: true }),
+        Animated.timing(pulseOpacity, { toValue: 1, duration: 600, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [pulseOpacity]);
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+      <Animated.View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#FF3B30', opacity: pulseOpacity }} />
+      <Text style={{ color: '#FF3B30', fontSize: 9, fontWeight: '800', letterSpacing: 1 }}>LIVE</Text>
+    </View>
+  );
+});
+
 // ── Topic Section — Particle-style cluster with AI-grouped stories ────────────
 const TopicSection = React.memo(function TopicSection({
   cluster,
@@ -1416,11 +1443,14 @@ const TopicSection = React.memo(function TopicSection({
   }, [snapInterval, count]);
 
   if (count === 1) {
+    const tier1 = breakingTier(cluster.publishedAt, isBreaking);
     return (
       <View style={styles.section}>
-        {showMetaPill && isBreaking && (
+        {showMetaPill && tier1 && (
           <View style={{ paddingHorizontal: 16, marginBottom: 6 }}>
-            <Text style={styles.breakingText}>BREAKING</Text>
+            {tier1 === 'live' && <LivePulse />}
+            {tier1 === 'breaking' && <Text style={styles.breakingText}>BREAKING</Text>}
+            {tier1 === 'developing' && <Text style={{ color: '#FF9500', fontSize: 9, fontWeight: '800', letterSpacing: 1 }}>DEVELOPING</Text>}
           </View>
         )}
         <View style={{ alignItems: 'center' }}>
@@ -1445,7 +1475,13 @@ const TopicSection = React.memo(function TopicSection({
               {cluster.collection && (
                 <Text style={{ color: '#b994ff', fontSize: 9, fontWeight: '800', letterSpacing: 1, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, overflow: 'hidden', backgroundColor: 'rgba(185,148,255,0.12)' }}>TREND</Text>
               )}
-              {isBreaking && <Text style={styles.breakingText}>BREAKING</Text>}
+              {isBreaking && (() => {
+                const tier = breakingTier(cluster.publishedAt, isBreaking);
+                if (tier === 'live') return <LivePulse />;
+                if (tier === 'breaking') return <Text style={styles.breakingText}>BREAKING</Text>;
+                if (tier === 'developing') return <Text style={{ color: '#FF9500', fontSize: 9, fontWeight: '800', letterSpacing: 1, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, overflow: 'hidden', backgroundColor: 'rgba(255,149,0,0.12)' }}>DEVELOPING</Text>;
+                return null;
+              })()}
             </View>
           )}
           {/* Headline row — clock prefix + headline + stories pill inline */}

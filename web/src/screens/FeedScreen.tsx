@@ -166,11 +166,18 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
     };
     return (
       <div style={{ marginBottom: clusterGap }}>
-        {showMetaPill && isBreaking && (
-          <div style={{ padding: '0 20px', marginBottom: 6 }}>
-            <span style={{ color: '#FF3B30', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>BREAKING</span>
-          </div>
-        )}
+        {showMetaPill && (() => {
+          const tier = breakingTier(cluster.stories[0]?.publishedAt, isBreaking);
+          if (!tier) return null;
+          return (
+            <div style={{ padding: '0 20px', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              {tier === 'live' && <span className="live-dot" style={{ width: 7, height: 7, borderRadius: '50%', background: '#FF3B30', display: 'inline-block', flexShrink: 0 }} />}
+              <span style={{ color: tier === 'developing' ? '#FF9500' : '#FF3B30', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>
+                {tier === 'live' ? 'LIVE' : tier === 'developing' ? 'DEVELOPING' : 'BREAKING'}
+              </span>
+            </div>
+          );
+        })()}
         <div style={{ display: 'flex', justifyContent: 'center' }}>
           <StoryCard story={clusterStory} cardWidth={soloCardWidth} allStories={allStories} />
         </div>
@@ -195,13 +202,22 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
                 background: 'rgba(185,148,255,0.12)', border: '1px solid rgba(185,148,255,0.28)',
               }}>TREND</span>
             )}
-            {isBreaking && (
-              <span style={{
-                color: '#FF3B30', fontSize: 9, fontWeight: 800, letterSpacing: 1,
-                padding: '2px 7px', borderRadius: 999,
-                background: 'rgba(255,59,48,0.12)', border: '1px solid rgba(255,59,48,0.3)',
-              }}>BREAKING</span>
-            )}
+            {isBreaking && (() => {
+              const tier = breakingTier(cluster.stories[0]?.publishedAt, isBreaking);
+              if (tier === 'live') return (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span className="live-dot" style={{ width: 7, height: 7, borderRadius: '50%', background: '#FF3B30', display: 'inline-block', flexShrink: 0 }} />
+                  <span style={{ color: '#FF3B30', fontSize: 9, fontWeight: 800, letterSpacing: 1 }}>LIVE</span>
+                </span>
+              );
+              if (tier === 'developing') return (
+                <span style={{ color: '#FF9500', fontSize: 9, fontWeight: 800, letterSpacing: 1, padding: '2px 7px', borderRadius: 999, background: 'rgba(255,149,0,0.12)', border: '1px solid rgba(255,149,0,0.3)' }}>DEVELOPING</span>
+              );
+              if (tier === 'breaking') return (
+                <span style={{ color: '#FF3B30', fontSize: 9, fontWeight: 800, letterSpacing: 1, padding: '2px 7px', borderRadius: 999, background: 'rgba(255,59,48,0.12)', border: '1px solid rgba(255,59,48,0.3)' }}>BREAKING</span>
+              );
+              return null;
+            })()}
           </div>
         )}
         {/* Headline row: clock prefix + text + stories pill inline */}
@@ -275,6 +291,15 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
       </div>
     </div>
   );
+}
+
+function breakingTier(publishedAt: string | undefined, isBreaking: boolean): 'live' | 'breaking' | 'developing' | null {
+  if (!isBreaking || !publishedAt) return null;
+  const ageMin = (Date.now() - new Date(publishedAt).getTime()) / 60000;
+  if (ageMin < 30) return 'live';
+  if (ageMin < 120) return 'breaking';
+  if (ageMin < 360) return 'developing';
+  return null;
 }
 
 // ── MySpace Topic Zone ────────────────────────────────────────────────────────
@@ -922,7 +947,9 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
       )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }`}</style>
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        @keyframes livepulse { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
+        .live-dot { animation: livepulse 1.2s ease-in-out infinite; }`}</style>
     </div>
   );
 }
