@@ -40,6 +40,7 @@ import { loadBreakingThemeMutes, matchesMutedBreakingTheme } from '../utils/brea
 import { pushNotifHistory } from '../utils/notifHistory';
 import { getArticleColor } from '../utils/colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getCached, setCached, TTL } from '../utils/cache';
 
 const CARD_GAP = 12;
 
@@ -453,7 +454,7 @@ function FeedSkeleton() {
 
 export default function FeedScreen() {
   const { activeSources } = useSource();
-  const { notifBreaking, breakingSensitivity, notifSources, favSources, favTopics, showSports, showEntertainment, activeSubTopics, topicInterests } = useSettings();
+  const { notifBreaking, breakingSensitivity, notifSources, favSources, favTopics, showSports, showEntertainment, activeSubTopics, topicInterests, summaryLength, keyPointsCount, eli5Tone } = useSettings();
   const layout = useLayout();
   const insets = useSafeAreaInsets();
   const rootNav = useNavigation<NativeStackNavigationProp<FeedStackParamList>>();
@@ -801,6 +802,51 @@ export default function FeedScreen() {
     setNewCount(0);
     listRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, [pendingFeed]);
+
+  // Pre-warm AI summaries for top 40 articles — stored in AsyncStorage so they
+  // survive app restarts. ArticleScreen checks AsyncStorage on cache miss.
+  const prewarmQueuedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (allFeed.length === 0) return;
+    const lengthMap: Record<string, number> = { short: 150, medium: 250, long: 400 };
+    const maxWords = lengthMap[summaryLength] ?? 250;
+    const API = 'https://ireader.onrender.com/api/news';
+    const targets = rankedClusterGroups.slice(0, 40).flatMap(c => {
+      const story = c.stories[0];
+      if (!story) return [];
+      const url = story.sources?.[0]?.url ?? '';
+      if (!url) return [];
+      const id = story.id;
+      const cacheKey = `summary_v5_${id ?? url}_summary_${maxWords}_${keyPointsCount}_${eli5Tone}`;
+      if (getCached(cacheKey, TTL.AI_SUMMARY) || prewarmQueuedRef.current.has(cacheKey)) return [];
+      return [{ url, cacheKey }];
+    });
+    if (targets.length === 0) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      for (const { url, cacheKey } of targets) {
+        if (cancelled) break;
+        prewarmQueuedRef.current.add(cacheKey);
+        try {
+          const articleRes = await fetch(`${API}/article?url=${encodeURIComponent(url)}`);
+          if (!articleRes.ok || cancelled) break;
+          const articleData = await articleRes.json() as { paragraphs?: string[] };
+          const paragraphs = (articleData.paragraphs ?? []).slice(0, 15);
+          if (paragraphs.length < 2) continue;
+          const summaryRes = await fetch(`${API}/ai-summary`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, paragraphs, type: 'summary', maxWords, keyPoints: keyPointsCount, eli5Tone }),
+          });
+          if (!summaryRes.ok || cancelled) continue;
+          setCached(cacheKey, await summaryRes.json());
+        } catch { /* ignore individual failures */ }
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    }, 5000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allFeed]);
 
 
   // Filter by blocked content, active sources, and disabled subtopics

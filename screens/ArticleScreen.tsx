@@ -27,7 +27,7 @@ import { BiasDot, BIAS_CONFIG, type BiasRating } from '../components/StoryCard';
 import { RootStackParamList } from '../types/navigation';
 import { useSettings } from '../contexts/SettingsContext';
 import { useSaved } from '../contexts/SavedContext';
-import { getCached, setCached, TTL } from '../utils/cache';
+import { getCached, setCached, hydrateCached, TTL } from '../utils/cache';
 import { trackArticleRead, trackAiUsage } from '../utils/usageTracker';
 import { FALLBACK_IMG } from '../utils/fallback';
 
@@ -670,16 +670,11 @@ export default function ArticleScreen() {
   useEffect(() => {
     const aiType = TAB_AI_TYPE[activeTab];
     if (!aiType) return;
-    // Gate: don't start AI until user has read for 5 seconds
     if (!hasBeenRead) return;
-    // Session-level tab cache hit
     if (aiCache.current[activeTab]) { setAiResult(aiCache.current[activeTab]!); return; }
     if (paragraphsLoading) return;
     if (paragraphs.length === 0) { setAiError('No article text available to summarize.'); return; }
 
-    // Persistent memory cache (24-hour TTL — never recompute same article).
-    // v5 — cache key includes maxWords / keyPoints / eli5Tone so Customize
-    // changes invalidate stale responses.
     const lengthMap: Record<typeof summaryLength, number> = { short: 150, medium: 250, long: 400 };
     const maxWordsForType = activeTab === 'ELI5' ? 100 : lengthMap[summaryLength];
     const cacheKey = `summary_v5_${params.id ?? params.url}_${aiType}_${maxWordsForType}_${keyPointsCount}_${eli5Tone}`;
@@ -690,41 +685,58 @@ export default function ArticleScreen() {
       return;
     }
 
-    setAiLoading(true);
-    setAiError(null);
-    setAiResult(null);
-    trackAiUsage(aiType as 'summary' | 'fiveWs' | 'eli5').catch(() => {});
-
-    // Render free-tier cold-starts can briefly 502/503 via the proxy. One retry
-    // after 2s covers >95% of those without showing the user an error.
-    const body = JSON.stringify({
-      url: params.url,
-      paragraphs: paragraphs.slice(0, 15),
-      type: TAB_AI_TYPE[activeTab],
-      maxWords: maxWordsForType,
-      keyPoints: keyPointsCount,
-      eli5Tone,
-    });
-    const doFetch = (): Promise<Response> => fetch(`${API}/ai-summary`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
-    });
-    const fetchWithRetry = async (): Promise<unknown> => {
-      let r = await doFetch();
-      if (!r.ok && r.status >= 500 && r.status < 600) {
-        await new Promise(res => setTimeout(res, 2000));
-        r = await doFetch();
+    let cancelled = false;
+    const run = async () => {
+      setAiLoading(true);
+      // Check AsyncStorage — survives app restarts and pre-warm from FeedScreen
+      const persisted = await hydrateCached(cacheKey, TTL.AI_SUMMARY);
+      if (persisted && !cancelled) {
+        aiCache.current[activeTab] = persisted;
+        setAiResult(persisted);
+        setAiLoading(false);
+        return;
       }
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      return r.json();
+      if (cancelled) return;
+
+      setAiError(null);
+      setAiResult(null);
+      trackAiUsage(aiType as 'summary' | 'fiveWs' | 'eli5').catch(() => {});
+
+      const body = JSON.stringify({
+        url: params.url,
+        paragraphs: paragraphs.slice(0, 15),
+        type: TAB_AI_TYPE[activeTab],
+        maxWords: maxWordsForType,
+        keyPoints: keyPointsCount,
+        eli5Tone,
+      });
+      const doFetch = (): Promise<Response> => fetch(`${API}/ai-summary`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
+      });
+      const fetchWithRetry = async (): Promise<unknown> => {
+        let r = await doFetch();
+        if (!r.ok && r.status >= 500 && r.status < 600) {
+          await new Promise(res => setTimeout(res, 2000));
+          r = await doFetch();
+        }
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      };
+      try {
+        const data = await fetchWithRetry();
+        if (!cancelled) {
+          aiCache.current[activeTab] = data as AiResult;
+          setCached(cacheKey, data as AiResult);
+          setAiResult(data as AiResult);
+        }
+      } catch (e) {
+        if (!cancelled) setAiError(String(e instanceof Error ? e.message : e));
+      } finally {
+        if (!cancelled) setAiLoading(false);
+      }
     };
-    fetchWithRetry()
-      .then(data => {
-        aiCache.current[activeTab] = data as AiResult;
-        setCached(cacheKey, data as AiResult);
-        setAiResult(data as AiResult);
-      })
-      .catch(e => setAiError(String(e instanceof Error ? e.message : e)))
-      .finally(() => setAiLoading(false));
+    run();
+    return () => { cancelled = true; };
   }, [activeTab, paragraphsLoading, hasBeenRead, paragraphs]);
 
   function renderTabContent() {
