@@ -10,6 +10,7 @@ import { scoreClusterInterest } from '../utils/interestTopics';
 import { trackVisit } from '../utils/usageTracker';
 import { annotateUpdates, unfollow, markSeen } from '../utils/followStore';
 import { TOPIC_SUBTOPICS, storyMatchesSubTopic } from '../utils/topics';
+import { getCached, setCached, TTL } from '../utils/cache';
 
 const API_BASE = 'https://ireader.onrender.com/api/news/feed';
 const CARD_GAP = 12;
@@ -413,6 +414,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
     activeTopics, activeSubTopics, showSports, showEntertainment, topicInterests,
     showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity,
     defaultTopic, pullToRefresh, hiddenTopics,
+    summaryLength, keyPointsCount, eli5Tone,
   } = useSettings();
   const { navigate } = useRouter();
   const { reportScroll } = useTabBar();
@@ -676,6 +678,50 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
     setPendingFeed(null); setNewCount(0);
     containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   }, [pendingFeed, activeTopic]);
+
+  // Pre-warm AI summaries for top 40 articles so ArticleScreen loads instantly
+  const prewarmQueuedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (allFeed.length === 0) return;
+    const lengthMap: Record<string, number> = { short: 150, medium: 250, long: 400 };
+    const maxWords = lengthMap[summaryLength] ?? 250;
+    const API = 'https://ireader.onrender.com/api/news';
+    const targets = rankedClusters.slice(0, 40).flatMap(c => {
+      const story = c.stories[0];
+      if (!story) return [];
+      const url = story.sources?.[0]?.url ?? '';
+      if (!url) return [];
+      const id = story.id;
+      const cacheKey = `summary_v5_${id ?? url}_summary_${maxWords}_${keyPointsCount}_${eli5Tone}`;
+      if (getCached(cacheKey, TTL.AI_SUMMARY) || prewarmQueuedRef.current.has(cacheKey)) return [];
+      return [{ url, cacheKey }];
+    });
+    if (targets.length === 0) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      for (const { url, cacheKey } of targets) {
+        if (cancelled) break;
+        prewarmQueuedRef.current.add(cacheKey);
+        try {
+          const articleRes = await fetch(`${API}/article?url=${encodeURIComponent(url)}`);
+          if (!articleRes.ok || cancelled) break;
+          const articleData = await articleRes.json() as { paragraphs?: string[] };
+          const paragraphs = (articleData.paragraphs ?? []).slice(0, 15);
+          if (paragraphs.length < 2) continue;
+          const summaryRes = await fetch(`${API}/ai-summary`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, paragraphs, type: 'summary', maxWords, keyPoints: keyPointsCount, eli5Tone }),
+          });
+          if (!summaryRes.ok || cancelled) continue;
+          setCached(cacheKey, await summaryRes.json());
+        } catch { /* ignore individual failures */ }
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    }, 5000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allFeed]);
 
   const filteredFeed = useMemo(
     () => filterFeedItems(allFeed, activeTopic),
