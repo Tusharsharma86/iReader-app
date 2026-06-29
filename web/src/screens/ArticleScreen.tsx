@@ -8,6 +8,7 @@ import { useTabBar } from '../contexts/TabBarContext';
 import { getCached, setCached, TTL } from '../utils/cache';
 import { trackArticleRead, trackAiUsage } from '../utils/usageTracker';
 import { FALLBACK_IMG } from '../utils/fallback';
+import { toggleFollowEntity, getFollowedEntities } from '../utils/entityFollowStore';
 
 const API = 'https://ireader.onrender.com/api/news';
 const TABS = ['Long Form', 'Summary', '5 Ws', 'ELI5'] as const;
@@ -16,7 +17,7 @@ type AiType = 'summary' | 'fiveWs' | 'eli5';
 const TAB_AI_TYPE: Partial<Record<Tab, AiType>> = { Summary: 'summary', '5 Ws': 'fiveWs', ELI5: 'eli5' };
 const FONT_SIZE_MAP: Record<string, number> = { Small: 14, Medium: 17, Large: 19, XLarge: 21 };
 
-interface AiResult { bullets?: string[]; summary?: string; fiveWs?: string[]; eli5?: string; }
+interface AiResult { bullets?: string[]; summary?: string; fiveWs?: string[]; eli5?: string; keyPeople?: string[]; keyCompanies?: string[]; }
 interface SourceEntry { name: string; url: string; imageUrl?: string; publishedAt: string; }
 
 // Render a paragraph with two-tier highlights:
@@ -66,19 +67,43 @@ function renderEntities(text: string, entities: string[]): React.ReactNode {
     : <React.Fragment key={i}>{p}</React.Fragment>);
 }
 
+const SKIP_NAME_WORDS = new Set([
+  'January','February','March','April','May','June','July','August','September','October','November','December',
+  'The','This','That','These','Those','Their','Its','His','Her','Our','Your',
+  'Said','Also','After','Before','During','While','When','Where','Who','What','How','Why',
+  'Spokesperson','Official','Representative','Director','Secretary','General','Deputy','Chairman',
+  'New','Old','Former','Senior','Junior','Acting','Current','Late',
+  'North','South','East','West','Central',
+]);
+const SKIP_ORG_CODES = new Set([
+  'US','UK','EU','UAE','KSA','AU','NZ','IS','DE','FR','JP','CA','MX','BR','AR','ZA','EG',
+  'SA','IR','IQ','SY','TR','PK','AF','BD','LK','MM','TH','VN','PH','ID','MY',
+]);
+
 function extractEntities(text: string) {
-  const people: string[] = []; const companies: string[] = [];
+  const people: string[] = [];
+  const companies: string[] = [];
   const words = text.split(/\s+/);
   words.forEach((word, i) => {
     const clean = word.replace(/[^a-zA-Z]/g, '');
     if (!clean || clean.length < 2) return;
-    if (/^[A-Z]{2,}$/.test(clean) && !companies.includes(clean)) companies.push(clean);
-    if (i > 0 && /^[A-Z][a-z]+$/.test(clean) && /^[A-Z][a-z]+$/.test(words[i-1]?.replace(/[^a-zA-Z]/g,''))) {
-      const person = words[i-1].replace(/[^a-zA-Z]/g,'') + ' ' + clean;
-      if (!people.includes(person)) people.push(person);
+    // Orgs/companies: all-caps 3-10 chars, not a country code
+    if (/^[A-Z]{3,10}$/.test(clean) && !SKIP_ORG_CODES.has(clean) && !companies.includes(clean)) {
+      companies.push(clean);
+    }
+    // People: two consecutive TitleCase words (≥3 chars each), not skip/filler words
+    if (i > 0) {
+      const prevClean = words[i - 1]?.replace(/[^a-zA-Z]/g, '') ?? '';
+      if (
+        /^[A-Z][a-z]{2,}$/.test(clean) && /^[A-Z][a-z]{2,}$/.test(prevClean) &&
+        !SKIP_NAME_WORDS.has(clean) && !SKIP_NAME_WORDS.has(prevClean)
+      ) {
+        const person = prevClean + ' ' + clean;
+        if (!people.includes(person)) people.push(person);
+      }
     }
   });
-  return { people: people.slice(0,5), companies: companies.slice(0,5) };
+  return { people: people.slice(0, 5), companies: companies.slice(0, 5) };
 }
 
 function faviconFromUrl(url: string): string {
@@ -190,6 +215,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
   const [difficulty, setDifficulty] = useState<string | null>(null);
   const [biasModalVisible, setBiasModalVisible] = useState(false);
   const [entities, setEntities] = useState<{ people: string[]; companies: string[] }>({ people: [], companies: [] });
+  const [followedEntities, setFollowedEntities] = useState<Set<string>>(() => new Set(getFollowedEntities()));
   const [hasBeenRead, setHasBeenRead] = useState(blockLongform);
   const [aiResult, setAiResult] = useState<AiResult | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -292,6 +318,15 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
       .catch(e => setAiError(String(e instanceof Error ? e.message : e))).finally(() => setAiLoading(false));
   // Customize: re-fetch when length / key-points / ELI5 tone changes.
   }, [activeTab, paragraphsLoading, hasBeenRead, summaryLength, keyPointsCount, eli5Tone]);
+
+  // When AI summary loads, upgrade entities with AI-extracted keyPeople/keyCompanies
+  // (much higher quality than client-side regex extraction).
+  useEffect(() => {
+    if (!aiResult) return;
+    const people = aiResult.keyPeople?.filter(Boolean) ?? [];
+    const companies = aiResult.keyCompanies?.filter(Boolean) ?? [];
+    if (people.length > 0 || companies.length > 0) setEntities({ people, companies });
+  }, [aiResult]);
 
   const gradient = `linear-gradient(to bottom, ${dominant}, ${darken(dominant, 0.4)} 30%, ${darken(dominant, 0.85)} 100%)`;
 
@@ -734,22 +769,60 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
         </div>
       )}
 
-      {/* Entities */}
+      {/* Entities — tappable follow pills */}
       {(entities.people.length > 0 || entities.companies.length > 0) && (
-        <div style={{ margin: '20px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ margin: '20px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
           {entities.people.length > 0 && (
-            <div>
-              <div style={{ color: accent, fontSize: 10, fontWeight: 800, letterSpacing: 1.5, marginBottom: 10 }}>KEY PEOPLE</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {entities.people.map(p => <span key={p} style={{ padding: '7px 12px', borderRadius: 20, border: `1px solid ${accent}55`, background: 'rgba(255,255,255,0.06)', color: '#DDD', fontSize: 13, fontWeight: 500 }}>👤 {p}</span>)}
+            <div style={{ padding: '14px 16px', borderRadius: 14, background: 'rgba(15,15,22,0.5)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ color: '#666', fontSize: 9, fontWeight: 800, letterSpacing: 1.4, marginBottom: 10 }}>KEY PEOPLE</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {entities.people.map(p => {
+                  const isOn = followedEntities.has(p.toLowerCase());
+                  return (
+                    <span key={p} onClick={() => {
+                      const on = toggleFollowEntity(p);
+                      setFollowedEntities(prev => { const s = new Set(prev); on ? s.add(p.toLowerCase()) : s.delete(p.toLowerCase()); return s; });
+                    }} style={{
+                      padding: '5px 11px', borderRadius: 999, cursor: 'pointer',
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      background: isOn ? 'rgba(52,199,89,0.18)' : 'rgba(255,255,255,0.05)',
+                      border: isOn ? '1px solid #34C759' : '1px solid rgba(255,255,255,0.1)',
+                      color: isOn ? '#34C759' : '#e8e8e8',
+                      fontSize: 11.5, fontWeight: isOn ? 700 : 500,
+                      transition: 'background 0.18s, border-color 0.18s, color 0.18s',
+                    }}>
+                      {isOn && <span style={{ fontSize: 10 }}>✓</span>}
+                      👤 {p}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           )}
           {entities.companies.length > 0 && (
-            <div>
-              <div style={{ color: accent, fontSize: 10, fontWeight: 800, letterSpacing: 1.5, marginBottom: 10 }}>KEY COMPANIES</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {entities.companies.map(c => <span key={c} style={{ padding: '7px 12px', borderRadius: 20, border: `1px solid ${accent}55`, background: 'rgba(255,255,255,0.06)', color: '#DDD', fontSize: 13, fontWeight: 500 }}>🏢 {c}</span>)}
+            <div style={{ padding: '14px 16px', borderRadius: 14, background: 'rgba(15,15,22,0.5)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ color: '#666', fontSize: 9, fontWeight: 800, letterSpacing: 1.4, marginBottom: 10 }}>KEY ORGANIZATIONS</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {entities.companies.map(c => {
+                  const isOn = followedEntities.has(c.toLowerCase());
+                  return (
+                    <span key={c} onClick={() => {
+                      const on = toggleFollowEntity(c);
+                      setFollowedEntities(prev => { const s = new Set(prev); on ? s.add(c.toLowerCase()) : s.delete(c.toLowerCase()); return s; });
+                    }} style={{
+                      padding: '5px 11px', borderRadius: 999, cursor: 'pointer',
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      background: isOn ? 'rgba(52,199,89,0.18)' : 'rgba(255,255,255,0.05)',
+                      border: isOn ? '1px solid #34C759' : '1px solid rgba(255,255,255,0.1)',
+                      color: isOn ? '#34C759' : '#e8e8e8',
+                      fontSize: 11.5, fontWeight: isOn ? 700 : 500,
+                      transition: 'background 0.18s, border-color 0.18s, color 0.18s',
+                    }}>
+                      {isOn && <span style={{ fontSize: 10 }}>✓</span>}
+                      🏢 {c}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           )}
