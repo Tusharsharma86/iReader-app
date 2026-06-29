@@ -30,6 +30,7 @@ import { useSaved } from '../contexts/SavedContext';
 import { getCached, setCached, TTL } from '../utils/cache';
 import { trackArticleRead, trackAiUsage } from '../utils/usageTracker';
 import { FALLBACK_IMG } from '../utils/fallback';
+import { toggleFollowEntity, getFollowedEntities } from '../utils/entityFollowStore';
 
 function deriveCategory(source: string, url: string, headline: string): string {
   const s = (source || '').toLowerCase();
@@ -104,6 +105,8 @@ interface AiResult {
   summary?: string;
   fiveWs?: string[];
   eli5?: string;
+  keyPeople?: string[];
+  keyCompanies?: string[];
 }
 
 interface SourceEntry {
@@ -372,6 +375,19 @@ const dmStyles = StyleSheet.create({
   },
 });
 
+const SKIP_NAME_WORDS = new Set([
+  'January','February','March','April','May','June','July','August','September','October','November','December',
+  'The','This','That','These','Those','Their','Its','His','Her','Our','Your',
+  'Said','Also','After','Before','During','While','When','Where','Who','What','How','Why',
+  'Spokesperson','Official','Representative','Director','Secretary','General','Deputy','Chairman',
+  'New','Old','Former','Senior','Junior','Acting','Current','Late',
+  'North','South','East','West','Central',
+]);
+const SKIP_ORG_CODES = new Set([
+  'US','UK','EU','UAE','KSA','AU','NZ','IS','DE','FR','JP','CA','MX','BR','AR','ZA','EG',
+  'SA','IR','IQ','SY','TR','PK','AF','BD','LK','MM','TH','VN','PH','ID','MY',
+]);
+
 function extractEntities(text: string): { people: string[]; companies: string[] } {
   const people: string[] = [];
   const companies: string[] = [];
@@ -379,16 +395,20 @@ function extractEntities(text: string): { people: string[]; companies: string[] 
   words.forEach((word, i) => {
     const clean = word.replace(/[^a-zA-Z]/g, '');
     if (!clean || clean.length < 2) return;
-    if (/^[A-Z]{2,}$/.test(clean)) {
-      if (!companies.includes(clean)) companies.push(clean);
+    // Orgs: all-caps 3-10 chars, not a country code
+    if (/^[A-Z]{3,10}$/.test(clean) && !SKIP_ORG_CODES.has(clean) && !companies.includes(clean)) {
+      companies.push(clean);
     }
-    if (
-      i > 0 &&
-      /^[A-Z][a-z]+$/.test(clean) &&
-      /^[A-Z][a-z]+$/.test(words[i - 1]?.replace(/[^a-zA-Z]/g, ''))
-    ) {
-      const person = words[i - 1].replace(/[^a-zA-Z]/g, '') + ' ' + clean;
-      if (!people.includes(person)) people.push(person);
+    // People: two consecutive TitleCase words (≥3 chars each), not skip words
+    if (i > 0) {
+      const prevClean = words[i - 1]?.replace(/[^a-zA-Z]/g, '') ?? '';
+      if (
+        /^[A-Z][a-z]{2,}$/.test(clean) && /^[A-Z][a-z]{2,}$/.test(prevClean) &&
+        !SKIP_NAME_WORDS.has(clean) && !SKIP_NAME_WORDS.has(prevClean)
+      ) {
+        const person = prevClean + ' ' + clean;
+        if (!people.includes(person)) people.push(person);
+      }
     }
   });
   return { people: people.slice(0, 5), companies: companies.slice(0, 5) };
@@ -446,6 +466,7 @@ export default function ArticleScreen() {
   const [heroImageFailed, setHeroImageFailed] = useState(false);
   const noHero = !params.image || heroImageFailed;
   const [entities, setEntities] = useState<{ people: string[]; companies: string[] }>({ people: [], companies: [] });
+  const [followedEntities, setFollowedEntities] = useState<Set<string>>(() => new Set(getFollowedEntities()));
 
   const allStories = useMemo(() => {
     try {
@@ -726,6 +747,14 @@ export default function ArticleScreen() {
       .catch(e => setAiError(String(e instanceof Error ? e.message : e)))
       .finally(() => setAiLoading(false));
   }, [activeTab, paragraphsLoading, hasBeenRead, paragraphs]);
+
+  // When AI summary loads, upgrade entities with AI-extracted keyPeople/keyCompanies.
+  useEffect(() => {
+    if (!aiResult) return;
+    const people = (aiResult.keyPeople ?? []).filter(Boolean);
+    const companies = (aiResult.keyCompanies ?? []).filter(Boolean);
+    if (people.length > 0 || companies.length > 0) setEntities({ people, companies });
+  }, [aiResult]);
 
   function renderTabContent() {
     const longForm = (
@@ -1118,30 +1147,52 @@ export default function ArticleScreen() {
           </View>
         )}
 
-        {/* Key People & Companies */}
+        {/* Key People & Organizations — tappable follow pills */}
         {(entities.people.length > 0 || entities.companies.length > 0) && (
           <View style={styles.entitySection}>
             {entities.people.length > 0 && (
-              <View style={styles.entityGroup}>
-                <Text style={[styles.entityHeader, { color: accent }]}>KEY PEOPLE</Text>
+              <View style={[styles.entityGroup, { backgroundColor: 'rgba(15,15,22,0.5)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', borderRadius: 14, padding: 14 }]}>
+                <Text style={[styles.entityHeader, { color: '#666' }]}>KEY PEOPLE</Text>
                 <View style={styles.entityChips}>
-                  {entities.people.map(p => (
-                    <View key={p} style={[styles.entityChip, { borderColor: accent + '55' }]}>
-                      <Text style={styles.entityText}>👤 {p}</Text>
-                    </View>
-                  ))}
+                  {entities.people.map(p => {
+                    const isOn = followedEntities.has(p.toLowerCase());
+                    return (
+                      <Pressable key={p} onPress={() => {
+                        const on = toggleFollowEntity(p);
+                        setFollowedEntities(prev => { const s = new Set(prev); on ? s.add(p.toLowerCase()) : s.delete(p.toLowerCase()); return s; });
+                      }} style={[styles.entityChip, {
+                        backgroundColor: isOn ? 'rgba(52,199,89,0.18)' : 'rgba(255,255,255,0.05)',
+                        borderColor: isOn ? '#34C759' : 'rgba(255,255,255,0.1)',
+                        flexDirection: 'row', alignItems: 'center', gap: 4,
+                      }]}>
+                        {isOn && <Text style={{ color: '#34C759', fontSize: 10 }}>✓</Text>}
+                        <Text style={[styles.entityText, { color: isOn ? '#34C759' : '#e8e8e8', fontWeight: isOn ? '700' : '500' }]}>👤 {p}</Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
               </View>
             )}
             {entities.companies.length > 0 && (
-              <View style={styles.entityGroup}>
-                <Text style={[styles.entityHeader, { color: accent }]}>KEY COMPANIES</Text>
+              <View style={[styles.entityGroup, { backgroundColor: 'rgba(15,15,22,0.5)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', borderRadius: 14, padding: 14 }]}>
+                <Text style={[styles.entityHeader, { color: '#666' }]}>KEY ORGANIZATIONS</Text>
                 <View style={styles.entityChips}>
-                  {entities.companies.map(c => (
-                    <View key={c} style={[styles.entityChip, { borderColor: accent + '55' }]}>
-                      <Text style={styles.entityText}>🏢 {c}</Text>
-                    </View>
-                  ))}
+                  {entities.companies.map(c => {
+                    const isOn = followedEntities.has(c.toLowerCase());
+                    return (
+                      <Pressable key={c} onPress={() => {
+                        const on = toggleFollowEntity(c);
+                        setFollowedEntities(prev => { const s = new Set(prev); on ? s.add(c.toLowerCase()) : s.delete(c.toLowerCase()); return s; });
+                      }} style={[styles.entityChip, {
+                        backgroundColor: isOn ? 'rgba(52,199,89,0.18)' : 'rgba(255,255,255,0.05)',
+                        borderColor: isOn ? '#34C759' : 'rgba(255,255,255,0.1)',
+                        flexDirection: 'row', alignItems: 'center', gap: 4,
+                      }]}>
+                        {isOn && <Text style={{ color: '#34C759', fontSize: 10 }}>✓</Text>}
+                        <Text style={[styles.entityText, { color: isOn ? '#34C759' : '#e8e8e8', fontWeight: isOn ? '700' : '500' }]}>🏢 {c}</Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
               </View>
             )}
