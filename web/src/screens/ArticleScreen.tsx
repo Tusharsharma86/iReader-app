@@ -452,8 +452,14 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
             </span>
           </div>
         )}
-        {aiContent}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 28, marginBottom: 20 }}>
+        <div style={{
+          padding: '16px 14px', borderRadius: 12, marginBottom: 20,
+          background: 'rgba(255,255,255,0.04)',
+          border: '1px solid rgba(255,255,255,0.07)',
+        }}>
+          {aiContent}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, marginBottom: 20 }}>
           <div style={{ flex: 1, height: 1, background: `${lighten(dominant, 0.3)}40` }} />
           <span style={{ color: accent, fontSize: 10, fontWeight: 800, letterSpacing: 1.5 }}>FULL ARTICLE</span>
           <div style={{ flex: 1, height: 1, background: `${lighten(dominant, 0.3)}40` }} />
