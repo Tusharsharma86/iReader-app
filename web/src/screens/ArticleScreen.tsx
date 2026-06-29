@@ -434,29 +434,24 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     const isLimitedSource = inputWords < 150;
     return (
       <div>
-        {!paragraphsLoading && inputWords > 0 && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '7px 10px', borderRadius: 8, marginBottom: 14,
-            background: isLimitedSource ? 'rgba(245,158,11,0.10)' : 'rgba(255,255,255,0.04)',
-            border: `1px solid ${isLimitedSource ? 'rgba(245,158,11,0.30)' : 'rgba(255,255,255,0.07)'}`,
-          }}>
-            {isLimitedSource && <span style={{ fontSize: 12 }}>⚠️</span>}
-            <span style={{
-              color: isLimitedSource ? '#f59e0b' : 'rgba(255,255,255,0.25)',
-              fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5,
-            }}>
-              {isLimitedSource
-                ? `LIMITED SOURCE · ${inputWords} words — full article blocked; summary may be inaccurate`
-                : `AI read ${inputWords} words`}
-            </span>
-          </div>
-        )}
         <div style={{
-          padding: '16px 14px', borderRadius: 12, marginBottom: 20,
-          background: 'rgba(255,255,255,0.04)',
-          border: '1px solid rgba(255,255,255,0.07)',
+          padding: '14px 14px', borderRadius: 12, marginBottom: 20,
+          background: isLimitedSource ? 'rgba(245,158,11,0.06)' : 'rgba(255,255,255,0.04)',
+          border: `1px solid ${isLimitedSource ? 'rgba(245,158,11,0.25)' : 'rgba(255,255,255,0.07)'}`,
         }}>
+          {!paragraphsLoading && inputWords > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 12 }}>
+              {isLimitedSource && <span style={{ fontSize: 11 }}>⚠️</span>}
+              <span style={{
+                color: isLimitedSource ? '#f59e0b' : 'rgba(255,255,255,0.2)',
+                fontSize: 9.5, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase',
+              }}>
+                {isLimitedSource
+                  ? `LIMITED SOURCE · ${inputWords} words — summary may be inaccurate`
+                  : `AI read ${inputWords} words`}
+              </span>
+            </div>
+          )}
           {aiContent}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, marginBottom: 20 }}>
