@@ -104,6 +104,8 @@ interface AiResult {
   summary?: string;
   fiveWs?: string[];
   eli5?: string;
+  keyPeople?: string[];
+  keyCompanies?: string[];
 }
 
 interface SourceEntry {
@@ -372,6 +374,21 @@ const dmStyles = StyleSheet.create({
   },
 });
 
+const SKIP_NAME_WORDS = new Set([
+  'January','February','March','April','May','June','July','August','September','October','November','December',
+  'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday',
+  'The','This','That','These','Those','Their','Its','His','Her','Our','Your',
+  'Said','Also','After','Before','During','While','When','Where','Who','What','How','Why',
+  'Spokesperson','Official','Representative','Director','Secretary','General','Deputy','Chairman',
+  'New','Old','Former','Senior','Junior','Acting','Current','Late',
+  'North','South','East','West','Central',
+  'Amazon','Google','Apple','Microsoft','Meta','Twitter','Facebook',
+]);
+const SKIP_ORG_CODES = new Set([
+  'US','UK','EU','UAE','KSA','AU','NZ','IS','DE','FR','JP','CA','MX','BR','AR','ZA','EG',
+  'SA','IR','IQ','SY','TR','PK','AF','BD','LK','MM','TH','VN','PH','ID','MY',
+]);
+
 function extractEntities(text: string): { people: string[]; companies: string[] } {
   const people: string[] = [];
   const companies: string[] = [];
@@ -379,16 +396,18 @@ function extractEntities(text: string): { people: string[]; companies: string[] 
   words.forEach((word, i) => {
     const clean = word.replace(/[^a-zA-Z]/g, '');
     if (!clean || clean.length < 2) return;
-    if (/^[A-Z]{2,}$/.test(clean)) {
-      if (!companies.includes(clean)) companies.push(clean);
+    if (/^[A-Z]{3,10}$/.test(clean) && !SKIP_ORG_CODES.has(clean) && !companies.includes(clean)) {
+      companies.push(clean);
     }
-    if (
-      i > 0 &&
-      /^[A-Z][a-z]+$/.test(clean) &&
-      /^[A-Z][a-z]+$/.test(words[i - 1]?.replace(/[^a-zA-Z]/g, ''))
-    ) {
-      const person = words[i - 1].replace(/[^a-zA-Z]/g, '') + ' ' + clean;
-      if (!people.includes(person)) people.push(person);
+    if (i > 0) {
+      const prevClean = words[i - 1]?.replace(/[^a-zA-Z]/g, '') ?? '';
+      if (
+        /^[A-Z][a-z]{2,}$/.test(clean) && /^[A-Z][a-z]{2,}$/.test(prevClean) &&
+        !SKIP_NAME_WORDS.has(clean) && !SKIP_NAME_WORDS.has(prevClean)
+      ) {
+        const person = prevClean + ' ' + clean;
+        if (!people.includes(person)) people.push(person);
+      }
     }
   });
   return { people: people.slice(0, 5), companies: companies.slice(0, 5) };
@@ -749,6 +768,14 @@ export default function ArticleScreen() {
     run();
     return () => { cancelled = true; };
   }, [activeTab, paragraphsLoading, hasBeenRead, paragraphs]);
+
+  // AI summary overrides regex entities with higher-quality extraction
+  useEffect(() => {
+    if (!aiResult) return;
+    const people = aiResult.keyPeople?.filter(Boolean) ?? [];
+    const companies = aiResult.keyCompanies?.filter(Boolean) ?? [];
+    if (people.length > 0 || companies.length > 0) setEntities({ people, companies });
+  }, [aiResult]);
 
   function renderTabContent() {
     const longForm = (
