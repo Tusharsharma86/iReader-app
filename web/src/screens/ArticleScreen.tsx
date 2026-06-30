@@ -246,6 +246,15 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     trackArticleRead(params.source ?? '', articleCategory, storyTopic);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (hasBeenRead) return; const t = setTimeout(() => setHasBeenRead(true), 5000); return () => clearTimeout(t); }, []);
+  // Skip 5s gate if Summary already pre-warmed in cache
+  useEffect(() => {
+    if (hasBeenRead) return;
+    const lengthMap: Record<string, number> = { short: 150, medium: 250, long: 400 };
+    const maxWords = lengthMap[summaryLength] ?? 250;
+    const cacheKey = `summary_v5_${params.id ?? params.url}_summary_${maxWords}_${keyPointsCount}_${eli5Tone}`;
+    if (getCached(cacheKey, TTL.AI_SUMMARY)) setHasBeenRead(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!params.url) { setParagraphs(params.summary ? [params.summary] : []); setParagraphsLoading(false); return; }
