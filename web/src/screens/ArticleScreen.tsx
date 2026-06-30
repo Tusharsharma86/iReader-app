@@ -246,13 +246,17 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     trackArticleRead(params.source ?? '', articleCategory, storyTopic);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (hasBeenRead) return; const t = setTimeout(() => setHasBeenRead(true), 5000); return () => clearTimeout(t); }, []);
-  // Skip 5s gate if Summary already pre-warmed in cache
+  // If Summary pre-warmed in cache: skip 5s gate + seed AI entities immediately
   useEffect(() => {
-    if (hasBeenRead) return;
     const lengthMap: Record<string, number> = { short: 150, medium: 250, long: 400 };
     const maxWords = lengthMap[summaryLength] ?? 250;
     const cacheKey = `summary_v5_${params.id ?? params.url}_summary_${maxWords}_${keyPointsCount}_${eli5Tone}`;
-    if (getCached(cacheKey, TTL.AI_SUMMARY)) setHasBeenRead(true);
+    const hit = getCached(cacheKey, TTL.AI_SUMMARY) as { keyPeople?: string[]; keyCompanies?: string[] } | null;
+    if (!hit) return;
+    if (!hasBeenRead) setHasBeenRead(true);
+    const people = (hit.keyPeople ?? []).filter(Boolean);
+    const companies = (hit.keyCompanies ?? []).filter(Boolean);
+    if (people.length > 0 || companies.length > 0) setEntities({ people, companies });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
