@@ -609,6 +609,17 @@ export default function ArticleScreen() {
     return () => clearTimeout(timer);
   }, []);
 
+  // If Summary is already pre-warmed in cache, skip the 5s gate and show instantly
+  useEffect(() => {
+    if (hasBeenRead) return;
+    const lengthMap: Record<typeof summaryLength, number> = { short: 150, medium: 250, long: 400 };
+    const maxWords = lengthMap[summaryLength] ?? 250;
+    const cacheKey = `summary_v5_${params.id ?? params.url}_summary_${maxWords}_${keyPointsCount}_${eli5Tone}`;
+    if (getCached(cacheKey, TTL.AI_SUMMARY)) { setHasBeenRead(true); return; }
+    hydrateCached(cacheKey, TTL.AI_SUMMARY).then(hit => { if (hit) setHasBeenRead(true); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Auto-scroll Related Stories strip every 3.5 s, pause on user touch
   useEffect(() => {
     if (related.length < 2) return;
