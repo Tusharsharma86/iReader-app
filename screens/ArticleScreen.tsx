@@ -609,14 +609,20 @@ export default function ArticleScreen() {
     return () => clearTimeout(timer);
   }, []);
 
-  // If Summary is already pre-warmed in cache, skip the 5s gate and show instantly
+  // If Summary already pre-warmed in cache: skip 5s gate + seed AI entities immediately
   useEffect(() => {
-    if (hasBeenRead) return;
     const lengthMap: Record<typeof summaryLength, number> = { short: 150, medium: 250, long: 400 };
     const maxWords = lengthMap[summaryLength] ?? 250;
     const cacheKey = `summary_v5_${params.id ?? params.url}_summary_${maxWords}_${keyPointsCount}_${eli5Tone}`;
-    if (getCached(cacheKey, TTL.AI_SUMMARY)) { setHasBeenRead(true); return; }
-    hydrateCached(cacheKey, TTL.AI_SUMMARY).then(hit => { if (hit) setHasBeenRead(true); });
+    const applyHit = (hit: AiResult) => {
+      if (!hasBeenRead) setHasBeenRead(true);
+      const people = (hit.keyPeople ?? []).filter(Boolean);
+      const companies = (hit.keyCompanies ?? []).filter(Boolean);
+      if (people.length > 0 || companies.length > 0) setEntities({ people, companies });
+    };
+    const mem = getCached(cacheKey, TTL.AI_SUMMARY);
+    if (mem) { applyHit(mem as AiResult); return; }
+    hydrateCached(cacheKey, TTL.AI_SUMMARY).then(hit => { if (hit) applyHit(hit as AiResult); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
