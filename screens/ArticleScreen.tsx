@@ -822,25 +822,27 @@ export default function ArticleScreen() {
     const isLimitedSource = inputWords < 150;
     return (
       <View>
-        {!paragraphsLoading && inputWords > 0 && (
-          <View style={{
-            flexDirection: 'row', alignItems: 'center', gap: 6,
-            paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8, marginBottom: 14,
-            backgroundColor: isLimitedSource ? 'rgba(245,158,11,0.10)' : 'rgba(255,255,255,0.04)',
-            borderWidth: 1, borderColor: isLimitedSource ? 'rgba(245,158,11,0.30)' : 'rgba(255,255,255,0.07)',
-          }}>
-            {isLimitedSource && <Text style={{ fontSize: 12 }}>⚠️</Text>}
-            <Text style={{
-              color: isLimitedSource ? '#f59e0b' : 'rgba(255,255,255,0.25)',
-              fontSize: 10.5, fontWeight: '700', letterSpacing: 0.5,
-            }}>
-              {isLimitedSource
-                ? `LIMITED SOURCE · ${inputWords} words — full article blocked; summary may be inaccurate`
-                : `AI read ${inputWords} words`}
-            </Text>
-          </View>
-        )}
-        {aiContent}
+        <View style={{
+          borderRadius: 14, marginBottom: 14,
+          backgroundColor: isLimitedSource ? 'rgba(245,158,11,0.06)' : 'rgba(255,255,255,0.04)',
+          borderWidth: 1, borderColor: isLimitedSource ? 'rgba(245,158,11,0.30)' : 'rgba(255,255,255,0.07)',
+          padding: 14,
+        }}>
+          {!paragraphsLoading && inputWords > 0 && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 10 }}>
+              {isLimitedSource && <Text style={{ fontSize: 11 }}>⚠️</Text>}
+              <Text style={{
+                color: isLimitedSource ? '#f59e0b' : 'rgba(255,255,255,0.2)',
+                fontSize: 9.5, fontWeight: '600', letterSpacing: 0.4,
+              }}>
+                {isLimitedSource
+                  ? `LIMITED SOURCE · ${inputWords} words — full article blocked; summary may be inaccurate`
+                  : `AI read ${inputWords} words`}
+              </Text>
+            </View>
+          )}
+          {aiContent}
+        </View>
         <View style={styles.articleDivider}>
           <View style={[styles.articleDividerLine, { backgroundColor: borderColor + '40' }]} />
           <Text style={[styles.articleDividerLabel, { color: accent }]}>FULL ARTICLE</Text>
