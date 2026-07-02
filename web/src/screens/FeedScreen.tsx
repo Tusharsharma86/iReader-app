@@ -704,7 +704,10 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
         prewarmQueuedRef.current.add(cacheKey);
         try {
           const articleRes = await fetch(`${API}/article?url=${encodeURIComponent(url)}`);
-          if (!articleRes.ok || cancelled) break;
+          // One bad article must not kill the queue (was `break`), and every
+          // path that made a request must hit the finally-sleep (a bare
+          // `continue` used to skip the throttle → request bursts on errors).
+          if (!articleRes.ok || cancelled) continue;
           const articleData = await articleRes.json() as { paragraphs?: string[] };
           const paragraphs = (articleData.paragraphs ?? []).slice(0, 15);
           if (paragraphs.length < 2) continue;
@@ -716,7 +719,9 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
           if (!summaryRes.ok || cancelled) continue;
           setCached(cacheKey, await summaryRes.json());
         } catch { /* ignore individual failures */ }
-        await new Promise(r => setTimeout(r, 3000));
+        finally {
+          if (!cancelled) await new Promise(r => setTimeout(r, 3000));
+        }
       }
     }, 5000);
     return () => { cancelled = true; clearTimeout(timer); };

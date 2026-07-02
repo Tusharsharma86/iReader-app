@@ -220,7 +220,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
   const [aiResult, setAiResult] = useState<AiResult | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
-  const aiCache = useRef<Partial<Record<Tab, AiResult>>>({});
+  const aiCache = useRef<Record<string, AiResult>>({});
 
   const allStories: Story[] = useMemo(() => { try { return JSON.parse(params.allStories) ?? []; } catch { return []; } }, [params.allStories]);
   const allSources: SourceEntry[] = useMemo(() => { try { return JSON.parse(params.sources); } catch { return [{ name: params.source, url: params.url, publishedAt: params.publishedAt }]; } }, [params.sources]);
@@ -303,7 +303,6 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
   useEffect(() => {
     const aiType = TAB_AI_TYPE[activeTab];
     if (!aiType || !hasBeenRead || paragraphsLoading || paragraphs.length === 0) return;
-    if (aiCache.current[activeTab]) { setAiResult(aiCache.current[activeTab]!); return; }
     // v3 — invalidates v2 entries that may have been poisoned by lenient
     // empty-cache guard letting bullets-only responses through.
     // Customize: summary length → backend maxWords. Cache key includes the
@@ -311,8 +310,17 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     const lengthMap: Record<typeof summaryLength, number> = { short: 150, medium: 250, long: 400 };
     const maxWordsForType = activeTab === 'ELI5' ? 100 : lengthMap[summaryLength];
     const cacheKey = `summary_v5_${params.id ?? params.url}_${aiType}_${maxWordsForType}_${keyPointsCount}_${eli5Tone}`;
+    // Session tab-cache must be keyed by settings too — keyed by tab alone it
+    // kept serving the old-length result after a Customize change, defeating
+    // the re-fetch deps below.
+    const tabCacheKey = `${activeTab}|${maxWordsForType}|${keyPointsCount}|${eli5Tone}`;
+    if (aiCache.current[tabCacheKey]) { setAiResult(aiCache.current[tabCacheKey]!); return; }
     const cached = getCached(cacheKey, TTL.AI_SUMMARY);
-    if (cached) { aiCache.current[activeTab] = cached; setAiResult(cached); return; }
+    if (cached) { aiCache.current[tabCacheKey] = cached; setAiResult(cached); return; }
+    // Cancellation: without it, a quick tab switch left two fetches racing and
+    // the LAST to resolve set state for whichever tab was open (wrong content
+    // or a permanent "Not available" until re-toggle).
+    let cancelled = false;
     setAiLoading(true); setAiError(null); setAiResult(null);
     trackAiUsage(aiType as 'summary' | 'fiveWs' | 'eli5');
     // Render free-tier cold-starts can briefly 5xx — one retry after 2s covers it.
@@ -322,13 +330,16 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
       let r = await doFetch();
       if (!r.ok && r.status >= 500 && r.status < 600) {
         await new Promise(res => setTimeout(res, 2000));
+        if (cancelled) throw new Error('cancelled');
         r = await doFetch();
       }
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return r.json() as Promise<AiResult>;
     })()
-      .then(data => { aiCache.current[activeTab] = data; setCached(cacheKey, data); setAiResult(data); })
-      .catch(e => setAiError(String(e instanceof Error ? e.message : e))).finally(() => setAiLoading(false));
+      .then(data => { aiCache.current[tabCacheKey] = data; setCached(cacheKey, data); if (!cancelled) setAiResult(data); })
+      .catch(e => { if (!cancelled) setAiError(String(e instanceof Error ? e.message : e)); })
+      .finally(() => { if (!cancelled) setAiLoading(false); });
+    return () => { cancelled = true; };
   // Customize: re-fetch when length / key-points / ELI5 tone changes.
   }, [activeTab, paragraphsLoading, hasBeenRead, summaryLength, keyPointsCount, eli5Tone]);
 

@@ -466,6 +466,9 @@ export default function ArticleScreen() {
   const [heroImageFailed, setHeroImageFailed] = useState(false);
   const noHero = !params.image || heroImageFailed;
   const [entities, setEntities] = useState<{ people: string[]; companies: string[] }>({ people: [], companies: [] });
+  // True once AI-quality entities (from cached/live summary) are shown —
+  // blocks the regex fallback from overwriting them when article text loads.
+  const aiEntitiesRef = useRef(false);
   const [followedEntities, setFollowedEntities] = useState<Set<string>>(() => new Set(getFollowedEntities()));
 
   const allStories = useMemo(() => {
@@ -618,7 +621,10 @@ export default function ArticleScreen() {
       if (!hasBeenRead) setHasBeenRead(true);
       const people = (hit.keyPeople ?? []).filter(Boolean);
       const companies = (hit.keyCompanies ?? []).filter(Boolean);
-      if (people.length > 0 || companies.length > 0) setEntities({ people, companies });
+      if (people.length > 0 || companies.length > 0) {
+        aiEntitiesRef.current = true;
+        setEntities({ people, companies });
+      }
     };
     const mem = getCached(cacheKey, TTL.AI_SUMMARY);
     if (mem) { applyHit(mem as AiResult); return; }
@@ -672,7 +678,9 @@ export default function ArticleScreen() {
         setOriginalParagraphs((origRaw || []).filter(Boolean));
         setDedupedFlag(Boolean(data.deduped));
         setParagraphs(filtered);
-        setEntities(extractEntities(filtered.join(' ')));
+        // Regex extraction is the low-quality fallback — never let it clobber
+        // AI-extracted entities already seeded from the pre-warm cache.
+        if (!aiEntitiesRef.current) setEntities(extractEntities(filtered.join(' ')));
         const fullText = filtered.join(' ');
         if (data.readingTimeMinutes) {
           setReadingTimeMinutes(data.readingTimeMinutes);
@@ -782,7 +790,10 @@ export default function ArticleScreen() {
     if (!aiResult) return;
     const people = (aiResult.keyPeople ?? []).filter(Boolean);
     const companies = (aiResult.keyCompanies ?? []).filter(Boolean);
-    if (people.length > 0 || companies.length > 0) setEntities({ people, companies });
+    if (people.length > 0 || companies.length > 0) {
+      aiEntitiesRef.current = true;
+      setEntities({ people, companies });
+    }
   }, [aiResult]);
 
   function renderTabContent() {
