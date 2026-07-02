@@ -106,7 +106,11 @@ export default function CustomizeScreen() {
           const keep = new Set(['@ireader_settings', '@ireader_saved', '@ireader_push_token', '@breaking_theme_mutes_v1', '@notif_history_v1']);
           const toDelete = keys.filter(k =>
             !keep.has(k) && (
-              k.startsWith('summary_') || k.startsWith('@feed_cache_') || k.startsWith('@aifeed_cache') ||
+              // Actual key formats: '@ireader_cache_summary_v5_…' (utils/cache.ts
+              // AS_PREFIX) and '@feed_v3_<topic>' (utils/feedCache.ts). The old
+              // 'summary_' / '@feed_cache_' prefixes matched nothing.
+              k.startsWith('@ireader_cache_') || k.startsWith('@feed_v3_') || k.startsWith('@aifeed_cache') ||
+              k.startsWith('@aifeed_prefetch') ||
               k.startsWith('@deepdive_') || k.startsWith('@ireader_scroll_') || k.startsWith('@ireader_active_topic')
             )
           );

@@ -42,6 +42,30 @@ export function clearCache(): void {
   memoryCache.clear();
 }
 
+// Sweep expired persisted entries. Without this, keys accumulate forever
+// (~40-100/day from pre-warm; article ids never repeat) until AsyncStorage's
+// ~6MB cap is hit — at which point EVERY setItem in the app starts failing
+// silently (settings, saved articles, follows). Call once on app start.
+const SWEEP_MAX_AGE_MS = 24 * 60 * 60 * 1000; // longest TTL we use (AI_SUMMARY)
+export async function sweepExpiredCache(): Promise<void> {
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    const ours = keys.filter(k => k.startsWith(AS_PREFIX));
+    if (ours.length === 0) return;
+    const now = Date.now();
+    const dead: string[] = [];
+    const entries = await AsyncStorage.multiGet(ours);
+    for (const [key, raw] of entries) {
+      if (!raw) { dead.push(key); continue; }
+      try {
+        const entry = JSON.parse(raw) as { timestamp?: number };
+        if (!entry.timestamp || now - entry.timestamp > SWEEP_MAX_AGE_MS) dead.push(key);
+      } catch { dead.push(key); }
+    }
+    if (dead.length > 0) await AsyncStorage.multiRemove(dead);
+  } catch { /* best-effort */ }
+}
+
 // TTL constants
 export const TTL = {
   FEED: 10 * 60 * 1000,          // 10 minutes

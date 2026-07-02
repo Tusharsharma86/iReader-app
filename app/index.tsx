@@ -40,7 +40,7 @@ import { loadBreakingThemeMutes, matchesMutedBreakingTheme } from '../utils/brea
 import { pushNotifHistory } from '../utils/notifHistory';
 import { getArticleColor } from '../utils/colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getCached, setCached, TTL } from '../utils/cache';
+import { getCached, setCached, hydrateCached, sweepExpiredCache, TTL } from '../utils/cache';
 
 const CARD_GAP = 12;
 
@@ -481,6 +481,9 @@ export default function FeedScreen() {
       .then(data => AsyncStorage.setItem('@aifeed_prefetch_v1', JSON.stringify({ data, at: Date.now() })))
       .catch(() => {});
   }, []);
+  // Evict expired persisted cache entries once per launch — without this,
+  // AsyncStorage fills to its ~6MB cap in weeks and ALL app writes fail silently.
+  useEffect(() => { sweepExpiredCache().catch(() => {}); }, []);
   useEffect(() => {
     trackVisit()
       .then(() => getUsageStats())
@@ -827,9 +830,17 @@ export default function FeedScreen() {
       for (const { url, cacheKey } of targets) {
         if (cancelled) break;
         prewarmQueuedRef.current.add(cacheKey);
+        // Disk first — summaries persisted by a previous session make the whole
+        // fetch+generate unnecessary (this was refetching all 40 on every cold
+        // start because getCached only sees the memory Map). No request made,
+        // so no throttle sleep needed on this path.
+        try { if (await hydrateCached(cacheKey, TTL.AI_SUMMARY)) continue; } catch {}
         try {
           const articleRes = await fetch(`${API}/article?url=${encodeURIComponent(url)}`);
-          if (!articleRes.ok || cancelled) break;
+          // One bad article must not kill the queue (was `break`), and every
+          // path that made a request must hit the finally-sleep (a bare
+          // `continue` used to skip the throttle → request bursts).
+          if (!articleRes.ok || cancelled) continue;
           const articleData = await articleRes.json() as { paragraphs?: string[] };
           const paragraphs = (articleData.paragraphs ?? []).slice(0, 15);
           if (paragraphs.length < 2) continue;
@@ -841,7 +852,9 @@ export default function FeedScreen() {
           if (!summaryRes.ok || cancelled) continue;
           setCached(cacheKey, await summaryRes.json());
         } catch { /* ignore individual failures */ }
-        await new Promise(r => setTimeout(r, 3000));
+        finally {
+          if (!cancelled) await new Promise(r => setTimeout(r, 3000));
+        }
       }
     }, 5000);
     return () => { cancelled = true; clearTimeout(timer); };
