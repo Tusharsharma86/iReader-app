@@ -826,37 +826,42 @@ export default function FeedScreen() {
     });
     if (targets.length === 0) return;
     let cancelled = false;
-    const timer = setTimeout(async () => {
-      for (const { url, cacheKey } of targets) {
-        if (cancelled) break;
-        prewarmQueuedRef.current.add(cacheKey);
-        // Disk first — summaries persisted by a previous session make the whole
-        // fetch+generate unnecessary (this was refetching all 40 on every cold
-        // start because getCached only sees the memory Map). No request made,
-        // so no throttle sleep needed on this path.
-        try { if (await hydrateCached(cacheKey, TTL.AI_SUMMARY)) continue; } catch {}
-        try {
-          const articleRes = await fetch(`${API}/article?url=${encodeURIComponent(url)}`);
-          // One bad article must not kill the queue (was `break`), and every
-          // path that made a request must hit the finally-sleep (a bare
-          // `continue` used to skip the throttle → request bursts).
-          if (!articleRes.ok || cancelled) continue;
-          const articleData = await articleRes.json() as { paragraphs?: string[] };
-          const paragraphs = (articleData.paragraphs ?? []).slice(0, 15);
-          if (paragraphs.length < 2) continue;
-          const summaryRes = await fetch(`${API}/ai-summary`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url, paragraphs, type: 'summary', maxWords, keyPoints: keyPointsCount, eli5Tone }),
-          });
-          if (!summaryRes.ok || cancelled) continue;
-          setCached(cacheKey, await summaryRes.json());
-        } catch { /* ignore individual failures */ }
-        finally {
-          if (!cancelled) await new Promise(r => setTimeout(r, 3000));
+    // 3 parallel workers (server caps at 4 concurrent generations — leave one
+    // slot for a user's live tap). Ranked order, so the articles most likely
+    // to be opened warm first. ~40 articles in ~30-45s vs 2+ min serial.
+    const timer = setTimeout(() => {
+      let next = 0;
+      const worker = async () => {
+        while (!cancelled) {
+          const idx = next++;
+          if (idx >= targets.length) return;
+          const { url, cacheKey } = targets[idx];
+          prewarmQueuedRef.current.add(cacheKey);
+          // Disk first — summaries persisted by a previous session make the
+          // whole fetch+generate unnecessary.
+          try { if (await hydrateCached(cacheKey, TTL.AI_SUMMARY)) continue; } catch {}
+          try {
+            const articleRes = await fetch(`${API}/article?url=${encodeURIComponent(url)}`);
+            if (!articleRes.ok || cancelled) continue; // one bad article ≠ dead queue
+            const articleData = await articleRes.json() as { paragraphs?: string[] };
+            const paragraphs = (articleData.paragraphs ?? []).slice(0, 15);
+            if (paragraphs.length < 2) continue;
+            const summaryRes = await fetch(`${API}/ai-summary`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url, paragraphs, type: 'summary', maxWords, keyPoints: keyPointsCount, eli5Tone }),
+            });
+            if (cancelled) return;
+            if (summaryRes.ok) { setCached(cacheKey, await summaryRes.json()); continue; }
+            // Server shedding load (503 breaker/busy) — back off, don't hammer
+            if (summaryRes.status === 503) await new Promise(r => setTimeout(r, 10_000));
+          } catch { /* ignore individual failures */ }
+          // Brief pause after any failure path so error storms stay gentle
+          if (!cancelled) await new Promise(r => setTimeout(r, 1500));
         }
-      }
-    }, 5000);
+      };
+      for (let w = 0; w < 3; w++) void worker();
+    }, 2000);
     return () => { cancelled = true; clearTimeout(timer); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allFeed]);
