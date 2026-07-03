@@ -220,12 +220,12 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
           <div style={{ width: 18, height: 18, borderRadius: 9, background: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
             {source.charAt(0).toUpperCase()}
           </div>
-          <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: 600 }}>{source.toUpperCase()}</span>
+          <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 9.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{source.toUpperCase()}</span>
           {showBiasDots && story.sourceBias && story.sourceBias !== 'unknown' && (
             <div style={{ width: 6, height: 6, borderRadius: 3, background: BIAS_CONFIG[story.sourceBias as BiasRating]?.color, flexShrink: 0 }} />
           )}
-          <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>·</span>
-          <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: 600 }}>{timeFormat === 'absolute' ? timeAbs(story.publishedAt) : timeAgo(story.publishedAt)}</span>
+          <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9.5, flexShrink: 0 }}>·</span>
+          <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 9.5, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>{timeFormat === 'absolute' ? timeAbs(story.publishedAt) : timeAgo(story.publishedAt)}</span>
           {isBreakingBadge && !suppressBreaking && (() => {
             const tier = breakingTier(story.publishedAt, true);
             const dot = <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>·</span>;
