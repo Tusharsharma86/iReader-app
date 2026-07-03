@@ -289,7 +289,7 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight:
       <View style={[styles.textSection, { backgroundColor: textBg }]}>
         {/* Article count · time · badges */}
         <View style={styles.metaRow}>
-          <Text style={styles.metaLabel}>{source.toUpperCase()}  ·  {timeFormat === 'absolute' ? timeAbs(story.publishedAt) : timeAgo(story.publishedAt)}</Text>
+          <Text style={[styles.metaLabel, { flexShrink: 1 }]} numberOfLines={1}>{source.toUpperCase()}  ·  {timeFormat === 'absolute' ? timeAbs(story.publishedAt) : timeAgo(story.publishedAt)}</Text>
           {showBiasDots && <BiasDot bias={story.sourceBias} size={6} />}
           {isBreakingBadge && (() => {
               const tier = breakingTier(story.publishedAt, true);
@@ -395,7 +395,7 @@ const styles = StyleSheet.create({
   },
   metaLabel: {
     color: 'rgba(255,255,255,0.45)',
-    fontSize: 11,
+    fontSize: 9.5,
     fontWeight: '600',
     letterSpacing: 0.4,
   },
