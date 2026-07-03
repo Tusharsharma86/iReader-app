@@ -167,6 +167,8 @@ export default function CustomizeScreen() {
             options={TABS} value={s.defaultArticleTab} onChange={s.setDefaultArticleTab} />
           <RowToggle border label="Stats card" sub="ORIGINAL → DISTILLED card at the bottom."
             value={s.showStatsCard} onChange={s.setShowStatsCard} />
+          <RowToggle border label="RSS summary" sub="Publisher's own blurb below the headline."
+            value={s.showArticleRssSummary} onChange={s.setShowArticleRssSummary} />
           <RowToggle border label="Verify Dedup button"
             value={s.showVerifyDedup} onChange={s.setShowVerifyDedup} />
           <RowToggle border label="Referenced sources" sub="Related-articles list below the body."

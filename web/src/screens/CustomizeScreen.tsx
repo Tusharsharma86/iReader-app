@@ -303,6 +303,9 @@ export default function CustomizeScreen() {
         <RowToggle border label="Stats card"
           sub="Show the ORIGINAL → DISTILLED redundancy card at the bottom."
           value={s.showStatsCard} onChange={s.setShowStatsCard} />
+        <RowToggle border label="RSS summary"
+          sub="Publisher's own blurb below the headline."
+          value={s.showArticleRssSummary} onChange={s.setShowArticleRssSummary} />
         <RowToggle border label="Verify Dedup button"
           sub="Show the </> VERIFY DEDUP button at the bottom of Long Form."
           value={s.showVerifyDedup} onChange={s.setShowVerifyDedup} />

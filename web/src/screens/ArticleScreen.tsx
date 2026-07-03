@@ -159,7 +159,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
   const {
     fontSize: fontSizeName,
     defaultArticleTab,
-    showStatsCard, showVerifyDedup: showVerifyDedupSetting,
+    showStatsCard, showArticleRssSummary, showVerifyDedup: showVerifyDedupSetting,
     showReferencedSources, showKeyPoints,
     summaryLength, keyPointsCount, linkOpen,
     // Wave 2
@@ -614,7 +614,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
           );
         })()}
 
-        {params.summary && <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 10.5, lineHeight: 1.55, margin: '14px 0 0' }}>{params.summary}</p>}
+        {showArticleRssSummary && params.summary && <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 10.5, lineHeight: 1.55, margin: '14px 0 0' }}>{params.summary}</p>}
 
         {biasModalVisible && params.sourceBias && params.sourceBias !== 'unknown' && (() => {
           const cfg = BIAS_CONFIG[params.sourceBias as BiasRating];
