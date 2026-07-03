@@ -1702,7 +1702,7 @@ const styles = StyleSheet.create({
   clusterCountPillText: { color: 'rgba(255,255,255,0.35)', fontSize: 11, fontWeight: '600', letterSpacing: 0.4 },
   diversityBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99, backgroundColor: 'rgba(100,180,100,0.12)', borderWidth: 1, borderColor: 'rgba(100,200,100,0.2)' },
   diversityText: { color: 'rgba(100,200,100,0.8)', fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
-  clusterHeadline: { color: '#FFFFFF', fontSize: 18, fontWeight: '700', lineHeight: 24, letterSpacing: -0.2 },
+  clusterHeadline: { color: '#FFFFFF', fontSize: 15.5, fontWeight: '700', lineHeight: 21, letterSpacing: -0.2 },
   clusterSummary: { color: '#666', fontSize: 13, fontWeight: '400', lineHeight: 18, marginTop: 3 },
   clusterCountBox: { alignItems: 'center', minWidth: 48 },
   clusterCountNum: { color: '#FFFFFF', fontSize: 24, fontWeight: '800', lineHeight: 28 },
