@@ -436,7 +436,7 @@ export default function ArticleScreen() {
   const {
     fontSize: fontSizeName,
     defaultArticleTab,
-    showStatsCard, showVerifyDedup: showVerifyDedupSetting,
+    showStatsCard, showArticleRssSummary, showVerifyDedup: showVerifyDedupSetting,
     showReferencedSources, showKeyPoints,
     summaryLength, keyPointsCount, eli5Tone,
     showEntityHighlights, showReadingDifficulty,
@@ -1022,7 +1022,7 @@ export default function ArticleScreen() {
             )}
           </View>
 
-          {!!params.summary && (
+          {showArticleRssSummary && !!params.summary && (
             <Text style={styles.summaryText}>{params.summary}</Text>
           )}
         </View>

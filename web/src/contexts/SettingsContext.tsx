@@ -50,6 +50,7 @@ interface SettingsCtx {
   // ── Customize: Article ─────────────────────────────────────────────────
   defaultArticleTab: ArticleTab; setDefaultArticleTab: (v: ArticleTab) => void;
   showStatsCard: boolean; setShowStatsCard: (v: boolean) => void;
+  showArticleRssSummary: boolean; setShowArticleRssSummary: (v: boolean) => void;
   showVerifyDedup: boolean; setShowVerifyDedup: (v: boolean) => void;
   showReferencedSources: boolean; setShowReferencedSources: (v: boolean) => void;
 
@@ -109,6 +110,7 @@ const DEFAULTS = {
   cardDensity: 'comfortable' as CardDensity,
   defaultArticleTab: 'Long Form' as ArticleTab,
   showStatsCard: true,
+  showArticleRssSummary: true,
   showVerifyDedup: true,
   showReferencedSources: true,
   summaryLength: 'medium' as SummaryLength,
@@ -148,7 +150,7 @@ const SettingsContext = createContext<SettingsCtx>({
   topicInterests: {}, setTopicInterest: noop,
   resetSettings: noop,
   setShowClusterSummary: noop, setShowBiasDots: noop, setShowMetaPill: noop, setShowCardImages: noop, setCardDensity: noop,
-  setDefaultArticleTab: noop, setShowStatsCard: noop, setShowVerifyDedup: noop, setShowReferencedSources: noop,
+  setDefaultArticleTab: noop, setShowStatsCard: noop, setShowArticleRssSummary: noop, setShowVerifyDedup: noop, setShowReferencedSources: noop,
   setSummaryLength: noop, setKeyPointsCount: noop, setShowKeyPoints: noop,
   setDefaultTopic: noop, setLinkOpen: noop, setPullToRefresh: noop,
   // Wave 2 noops
@@ -183,6 +185,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [cardDensity, setCardDensity] = useState<CardDensity>(DEFAULTS.cardDensity);
   const [defaultArticleTab, setDefaultArticleTab] = useState<ArticleTab>(DEFAULTS.defaultArticleTab);
   const [showStatsCard, setShowStatsCard] = useState(DEFAULTS.showStatsCard);
+  const [showArticleRssSummary, setShowArticleRssSummary] = useState(DEFAULTS.showArticleRssSummary);
   const [showVerifyDedup, setShowVerifyDedup] = useState(DEFAULTS.showVerifyDedup);
   const [showReferencedSources, setShowReferencedSources] = useState(DEFAULTS.showReferencedSources);
   const [summaryLength, setSummaryLength] = useState<SummaryLength>(DEFAULTS.summaryLength);
@@ -240,6 +243,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         if (['compact','comfortable','spacious'].includes(s.cardDensity)) setCardDensity(s.cardDensity);
         if (['Long Form','Summary','5 Ws','ELI5'].includes(s.defaultArticleTab)) setDefaultArticleTab(s.defaultArticleTab);
         if (typeof s.showStatsCard === 'boolean') setShowStatsCard(s.showStatsCard);
+          if (typeof s.showArticleRssSummary === 'boolean') setShowArticleRssSummary(s.showArticleRssSummary);
         if (typeof s.showVerifyDedup === 'boolean') setShowVerifyDedup(s.showVerifyDedup);
         if (typeof s.showReferencedSources === 'boolean') setShowReferencedSources(s.showReferencedSources);
         if (['short','medium','long'].includes(s.summaryLength)) setSummaryLength(s.summaryLength);
@@ -280,7 +284,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         showSports, showEntertainment, activeTopics, activeSubTopics, favSources, favTopics,
         topicInterests,
         showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity,
-        defaultArticleTab, showStatsCard, showVerifyDedup, showReferencedSources,
+        defaultArticleTab, showStatsCard, showArticleRssSummary, showVerifyDedup, showReferencedSources,
         summaryLength, keyPointsCount, showKeyPoints,
         defaultTopic, linkOpen, pullToRefresh,
         // Wave 2
@@ -290,7 +294,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         hiddenTabs, hiddenTopics, autoMarkRead, keyboardShortcuts,
       }));
     } catch {}
-  }, [loaded, fontSize, notifBreaking, notifAiFeed, notifTech, notifDigest, notifSources, showSports, showEntertainment, activeTopics, activeSubTopics, favSources, favTopics, topicInterests, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showVerifyDedup, showReferencedSources, summaryLength, keyPointsCount, showKeyPoints, defaultTopic, linkOpen, pullToRefresh, themeMode, showEntityHighlights, showQuoteHighlights, showReadingDifficulty, timeFormat, fontFamily, lineHeightMode, columnWidth, eli5Tone, deepDiveDepth, showDeepDiveQA, showDeepDiveEntities, showDeepDiveCurious, hiddenTabs, hiddenTopics, autoMarkRead, keyboardShortcuts]);
+  }, [loaded, fontSize, notifBreaking, notifAiFeed, notifTech, notifDigest, notifSources, showSports, showEntertainment, activeTopics, activeSubTopics, favSources, favTopics, topicInterests, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showArticleRssSummary, showVerifyDedup, showReferencedSources, summaryLength, keyPointsCount, showKeyPoints, defaultTopic, linkOpen, pullToRefresh, themeMode, showEntityHighlights, showQuoteHighlights, showReadingDifficulty, timeFormat, fontFamily, lineHeightMode, columnWidth, eli5Tone, deepDiveDepth, showDeepDiveQA, showDeepDiveEntities, showDeepDiveCurious, hiddenTabs, hiddenTopics, autoMarkRead, keyboardShortcuts]);
 
   const setFontSize = useCallback((fs: FontSize) => setFontSizeS(fs), []);
   const setNotifBreaking = useCallback((v: boolean) => setNotifBreakingS(v), []);
@@ -328,6 +332,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setCardDensity(DEFAULTS.cardDensity);
     setDefaultArticleTab(DEFAULTS.defaultArticleTab);
     setShowStatsCard(DEFAULTS.showStatsCard);
+    setShowArticleRssSummary(DEFAULTS.showArticleRssSummary);
     setShowVerifyDedup(DEFAULTS.showVerifyDedup);
     setShowReferencedSources(DEFAULTS.showReferencedSources);
     setSummaryLength(DEFAULTS.summaryLength);
@@ -371,6 +376,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     cardDensity, setCardDensity,
     defaultArticleTab, setDefaultArticleTab,
     showStatsCard, setShowStatsCard,
+    showArticleRssSummary, setShowArticleRssSummary,
     showVerifyDedup, setShowVerifyDedup,
     showReferencedSources, setShowReferencedSources,
     summaryLength, setSummaryLength,
@@ -398,7 +404,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     autoMarkRead, setAutoMarkRead,
     keyboardShortcuts, setKeyboardShortcuts,
     resetCustomize,
-  }), [fontSize, notifBreaking, notifAiFeed, notifTech, notifDigest, notifSources, showSports, showEntertainment, favSources, favTopics, activeTopics, activeSubTopics, topicInterests, setFontSize, setNotifBreaking, setNotifAiFeed, setNotifTech, setNotifDigest, setNotifSources, setShowSports, setShowEntertainment, toggleFavSource, toggleFavTopic, toggleTopic, toggleSubTopic, setTopicInterest, resetSettings, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showVerifyDedup, showReferencedSources, summaryLength, keyPointsCount, showKeyPoints, defaultTopic, linkOpen, pullToRefresh, themeMode, showEntityHighlights, showQuoteHighlights, showReadingDifficulty, timeFormat, fontFamily, lineHeightMode, columnWidth, eli5Tone, deepDiveDepth, showDeepDiveQA, showDeepDiveEntities, showDeepDiveCurious, hiddenTabs, hiddenTopics, autoMarkRead, keyboardShortcuts, toggleHiddenTab, toggleHiddenTopic, resetCustomize]);
+  }), [fontSize, notifBreaking, notifAiFeed, notifTech, notifDigest, notifSources, showSports, showEntertainment, favSources, favTopics, activeTopics, activeSubTopics, topicInterests, setFontSize, setNotifBreaking, setNotifAiFeed, setNotifTech, setNotifDigest, setNotifSources, setShowSports, setShowEntertainment, toggleFavSource, toggleFavTopic, toggleTopic, toggleSubTopic, setTopicInterest, resetSettings, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showArticleRssSummary, showVerifyDedup, showReferencedSources, summaryLength, keyPointsCount, showKeyPoints, defaultTopic, linkOpen, pullToRefresh, themeMode, showEntityHighlights, showQuoteHighlights, showReadingDifficulty, timeFormat, fontFamily, lineHeightMode, columnWidth, eli5Tone, deepDiveDepth, showDeepDiveQA, showDeepDiveEntities, showDeepDiveCurious, hiddenTabs, hiddenTopics, autoMarkRead, keyboardShortcuts, toggleHiddenTab, toggleHiddenTopic, resetCustomize]);
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }
