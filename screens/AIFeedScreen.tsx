@@ -777,8 +777,8 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
   const [aiBullets, setAiBullets] = useState<string[] | null>(null);
 
   useEffect(() => {
-    readDeepDiveCache(story.id).then(d => setHasCached(!!d));
-  }, [story.id]);
+    readDeepDiveCache(story.id, deepDiveDepth).then(d => setHasCached(!!d));
+  }, [story.id, deepDiveDepth]);
 
   useEffect(() => {
     if (!isActive || aiBullets) return;
