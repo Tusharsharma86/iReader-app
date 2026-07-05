@@ -619,7 +619,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
   const sourceName = item.sources[0]?.name ?? story.sources?.[0]?.name ?? 'Unknown';
   const extraSources = Math.max(0, item.sources.length - 1);
   const { deepDiveDepth } = useSettings();
-  const hasCachedDeepDive = !!readCache(story.id);
+  const hasCachedDeepDive = !!readCache(story.id, deepDiveDepth);
   const [aiBullets, setAiBullets] = useState<string[] | null>(null);
   const [quote, setQuote] = useState<{ text: string; by: string } | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
