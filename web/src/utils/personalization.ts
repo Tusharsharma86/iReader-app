@@ -116,7 +116,9 @@ export function rankStories(stories: Story[]): Story[] {
       const novelty = personalScore === 0 ? 4 : 0;
       const exploration = Math.random() * 4 + novelty;
 
-      const entityBoost = entityBoostScore(story.headline ?? '', (story as any).aiSummary ?? story.summary ?? '');
+      // Entity boost decays with age — a flat boost let 9-day-old articles
+      // about followed entities outrank fresh news (zombie articles).
+      const entityBoost = entityBoostScore(story.headline ?? '', (story as any).aiSummary ?? story.summary ?? '') * freshnessMult;
 
       const finalScore = affinityScore * freshnessMult
         + velocityScore
@@ -147,7 +149,7 @@ export function rankStoriesStandard(stories: Story[]): Story[] {
 
       const freshBonus = Math.max(0, (6 - hoursOld) / 6) * 6;
 
-      const entityBoost = entityBoostScore(story.headline ?? '', (story as any).aiSummary ?? story.summary ?? '');
+      const entityBoost = entityBoostScore(story.headline ?? '', (story as any).aiSummary ?? story.summary ?? '') * freshnessMult;
 
       const standardScore = (importanceScore + breakingBonus + trendingBonus) * freshnessMult
         + velocityScore
