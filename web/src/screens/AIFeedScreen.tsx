@@ -193,7 +193,9 @@ function rankFeedItems(items: FeedItem[]): FeedItem[] {
         ? Math.exp(-hoursOld * Math.LN2 / 12)
         : Math.exp(-24 * Math.LN2 / 12) * Math.exp(-(hoursOld - 24) * Math.LN2 / 6);
       const freshBonus = Math.max(0, (6 - hoursOld) / 6) * 6;
-      const entityBoost = entityBoostScore(it.primary.headline ?? '', it.primary.aiSummary ?? it.primary.summary ?? '');
+      // Entity boost decays with age — a flat boost let 9-day-old articles
+      // about followed entities outrank fresh news (zombie articles).
+      const entityBoost = entityBoostScore(it.primary.headline ?? '', it.primary.aiSummary ?? it.primary.summary ?? '') * freshnessMult;
       const score = (importanceScore + breakingBonus + clusterBonus) * freshnessMult
         + velocityScore + freshBonus + entityBoost;
       return { item: it, score };

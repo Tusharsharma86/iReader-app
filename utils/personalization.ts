@@ -138,7 +138,9 @@ export function rankStories(stories: any[]): any[] {
 
       // Interest bonus partially survives freshness decay so a 5★ topic stays
       // pinned high even when older than learned affinity would tolerate.
-      const entityBoost = entityBoostScore(story.headline ?? '', story.aiSummary ?? story.summary ?? '');
+      // Entity boost decays with age — a flat boost let 9-day-old articles
+      // about followed entities outrank fresh news (zombie articles).
+      const entityBoost = entityBoostScore(story.headline ?? '', story.aiSummary ?? story.summary ?? '') * freshnessMult;
 
       const finalScore = affinityScore * freshnessMult
         + velocityScore
@@ -169,7 +171,7 @@ export function rankStoriesStandard(stories: any[]): any[] {
 
       const freshBonus = Math.max(0, (6 - hoursOld) / 6) * 6;
 
-      const entityBoost = entityBoostScore(story.headline ?? '', story.aiSummary ?? story.summary ?? '');
+      const entityBoost = entityBoostScore(story.headline ?? '', story.aiSummary ?? story.summary ?? '') * freshnessMult;
 
       const standardScore = (importanceScore + breakingBonus + trendingBonus) * freshnessMult
         + velocityScore
