@@ -989,8 +989,6 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
           </View>
         )}
       </Animated.View>
-
-      <Text style={styles.swipeHint}>↑ SWIPE FOR NEXT</Text>
     </Pressable>
   );
 }
@@ -1925,10 +1923,6 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 4 }, textShadowRadius: 24,
   },
   cardSummary: { color: '#e5e5e5', fontSize: 15, lineHeight: 22 },
-  swipeHint: {
-    position: 'absolute', bottom: 20, left: 0, right: 0, textAlign: 'center',
-    color: 'rgba(255,255,255,0.35)', fontSize: 10, fontWeight: '700', letterSpacing: 1.4,
-  },
   footerCard: {
     alignItems: 'center', justifyContent: 'center', backgroundColor: '#050507', gap: 12,
   },

@@ -832,12 +832,6 @@ function FullPreviewCard({ item, index, total, onOpen }: {
 
       </div>
 
-      {/* Swipe hint — bottom centered, very subtle */}
-      <div style={{
-        position: 'absolute', left: 0, right: 0, bottom: 18,
-        textAlign: 'center', zIndex: 2,
-        color: 'rgba(255,255,255,0.35)', fontSize: 10, fontWeight: 700, letterSpacing: 1.4,
-      }}>↑ SWIPE FOR NEXT</div>
     </div>
   );
 }
