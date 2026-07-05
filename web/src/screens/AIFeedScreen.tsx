@@ -631,48 +631,44 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         scrollSnapAlign: 'start', scrollSnapStop: 'always',
         position: 'relative',
         overflow: 'hidden',
-        borderRadius: 16,
+        borderRadius: 20,
         background: darkBg,
         cursor: 'pointer',
         userSelect: 'none',
         WebkitTapHighlightColor: 'transparent',
+        display: 'flex', flexDirection: 'column',
       }}
     >
-      {/* Full-bleed image — gradient does the fade, not height constraint */}
-      {story.imageUrl ? (
+      {/* Image block on TOP (main-feed card style) — natural cover crop at a
+          fixed height instead of stretching full-bleed behind the text. The
+          bottom of the image bleeds into the card colour like feed cards. */}
+      <div style={{ position: 'relative', height: '44%', flexShrink: 0 }}>
         <img
-          src={story.imageUrl}
+          src={story.imageUrl || FALLBACK_IMG}
           alt=""
           loading={index < 2 ? 'eager' : 'lazy'}
           decoding="async"
-          style={{
-            position: 'absolute', inset: 0,
-            width: '100%', height: '100%', objectFit: 'cover',
-          }}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
         />
-      ) : (
-        <div style={{ position: 'absolute', inset: 0, background: '#05060c' }}>
-          <img src={FALLBACK_IMG} alt="" loading={index < 2 ? 'eager' : 'lazy'} decoding="async"
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+        {!story.imageUrl && (
           <div style={{
             position: 'absolute', inset: 0,
             background: `linear-gradient(135deg, ${dominant}33 0%, transparent 45%, ${accent}1f 100%)`,
           }} />
-        </div>
-      )}
-
-      {/* Top scrim */}
-      <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0, height: '40%',
-        background: 'linear-gradient(180deg, rgba(0,0,0,0.32) 0%, transparent 100%)',
-        pointerEvents: 'none',
-      }} />
-      {/* Bleed gradient — fades image into dominant color then into dark */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        background: `linear-gradient(180deg, transparent 28%, rgba(${dr},${dg},${db},0.5) 50%, rgba(${Math.round(dr*0.08)},${Math.round(dg*0.08)},${Math.round(db*0.10)},0.92) 68%, ${darkBg} 82%)`,
-        pointerEvents: 'none',
-      }} />
+        )}
+        {/* Top scrim for counter/badge legibility */}
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, height: '45%',
+          background: 'linear-gradient(180deg, rgba(0,0,0,0.32) 0%, transparent 100%)',
+          pointerEvents: 'none',
+        }} />
+        {/* Bleed: image fades into card background, like main feed cards */}
+        <div style={{
+          position: 'absolute', left: 0, right: 0, bottom: -1, height: '55%',
+          background: `linear-gradient(180deg, transparent 0%, rgba(${dr},${dg},${db},0.35) 55%, ${darkBg} 100%)`,
+          pointerEvents: 'none',
+        }} />
+      </div>
 
       {/* Counter pill — solid rgba so we skip backdrop-filter cost while scrolling */}
       <div key={`counter-${index}`} className="aif-counter-pop" style={{
@@ -699,12 +695,12 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         </div>
       )}
 
-      {/* Text overlay — bottom */}
+      {/* Text — flows below the image like a main-feed card */}
       <div className="aif-text-bounce" style={{
-        position: 'absolute', left: 0, right: 0, bottom: 0,
-        padding: '0 22px 44px',
+        flex: 1, minHeight: 0,
+        padding: '4px 22px 44px',
         display: 'flex', flexDirection: 'column', gap: 12,
-        zIndex: 2,
+        zIndex: 2, overflow: 'hidden',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: 800, letterSpacing: 1.4 }}>
           <span>{timeAgo(story.publishedAt)}</span>
