@@ -3,7 +3,7 @@ import type { Story } from '../types';
 import { useTabBarActions } from '../contexts/TabBarContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useSource } from '../contexts/SourceContext';
-import { darken, lighten, getArticleColor, hexToRgb } from '../utils/colors';
+import { darken, lighten, getArticleColor } from '../utils/colors';
 import { FALLBACK_IMG } from '../utils/fallback';
 import { trackDeepDive } from '../utils/personalization';
 import { toggleFollow, isFollowing } from '../utils/followStore';
@@ -549,11 +549,6 @@ function FullPreviewCard({ item, index, total, onOpen }: {
   const story = item.primary;
   const dominant = useMemo(() => getArticleColor(story.id || story.headline), [story.id, story.headline]);
   const accent = useMemo(() => lighten(dominant, 0.55), [dominant]);
-  const dominantRgb = useMemo(() => hexToRgb(dominant), [dominant]);
-  const dr = dominantRgb?.[0] ?? 10;
-  const dg = dominantRgb?.[1] ?? 10;
-  const db = dominantRgb?.[2] ?? 15;
-  const darkBg = `rgb(${Math.round(dr * 0.08)},${Math.round(dg * 0.08)},${Math.round(db * 0.10)})`;
   const sourceName = item.sources[0]?.name ?? story.sources?.[0]?.name ?? 'Unknown';
   const extraSources = Math.max(0, item.sources.length - 1);
   const { deepDiveDepth } = useSettings();
@@ -632,7 +627,9 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         position: 'relative',
         overflow: 'hidden',
         borderRadius: 20,
-        background: darkBg,
+        // Vibrant card body — image bleeds into solid dominant at 44%, then the
+        // colour deepens toward the bottom (main-feed card treatment).
+        background: `linear-gradient(180deg, ${dominant} 44%, ${darken(dominant, 0.45)} 78%, ${darken(dominant, 0.7)} 100%)`,
         cursor: 'pointer',
         userSelect: 'none',
         WebkitTapHighlightColor: 'transparent',
@@ -662,10 +659,11 @@ function FullPreviewCard({ item, index, total, onOpen }: {
           background: 'linear-gradient(180deg, rgba(0,0,0,0.32) 0%, transparent 100%)',
           pointerEvents: 'none',
         }} />
-        {/* Bleed: image fades into card background, like main feed cards */}
+        {/* Bleed: image fades into the story's dominant colour — same vibrant
+            treatment as main-feed cards (transparent → 55 → CC → solid). */}
         <div style={{
-          position: 'absolute', left: 0, right: 0, bottom: -1, height: '55%',
-          background: `linear-gradient(180deg, transparent 0%, rgba(${dr},${dg},${db},0.35) 55%, ${darkBg} 100%)`,
+          position: 'absolute', left: 0, right: 0, bottom: -1, height: '65%',
+          background: `linear-gradient(180deg, transparent 0%, ${dominant}55 35%, ${dominant}CC 72%, ${dominant} 100%)`,
           pointerEvents: 'none',
         }} />
       </div>
