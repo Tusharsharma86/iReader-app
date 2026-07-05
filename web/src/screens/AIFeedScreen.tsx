@@ -261,40 +261,53 @@ export default function AIFeedScreen() {
   const { reportScroll, hide: hideTabBar, show: showTabBar } = useTabBarActions();
   const { deepDiveDepth } = useSettings();
 
-  // Pre-warm deep dives for the top cards (like the main feed's AI-summary
-  // pre-warm) — the server caches by url+depth, so when a card scrolls into
-  // view its bullets/quote land instantly and opening the Deep Dive is instant.
+  // Pre-warm deep dives for the top 10 cards of EVERY category (like the main
+  // feed's AI-summary pre-warm) — the server caches by url+depth for 7 days,
+  // so bullets/quote land instantly on swipe and Deep Dive opens instantly,
+  // whichever category the user switches to.
   const ddPrewarmedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (items.length === 0) return;
-    const targets = items.slice(0, 8).filter(it => it.primary.sources?.[0]?.url && !ddPrewarmedRef.current.has(it.primary.id));
-    if (targets.length === 0) return;
     let cancelled = false;
+    const warmStory = async (s: Story) => {
+      try {
+        await fetch(DEEPDIVE_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: s.sources?.[0]?.url ?? '',
+            headline: s.headline,
+            paragraphs: [s.headline + '. ' + (s.summary ?? s.headline)],
+            sourceUrls: [s.sources?.[0]?.url].filter(Boolean) as string[],
+            depth: deepDiveDepth,
+            publishedAt: s.publishedAt,
+          }),
+        });
+      } catch { /* best-effort warm */ }
+    };
     const timer = setTimeout(async () => {
-      for (const it of targets) {
+      for (const topic of TOPIC_QUEUE) {
         if (cancelled) return;
-        ddPrewarmedRef.current.add(it.primary.id);
-        const s = it.primary;
         try {
-          await fetch(DEEPDIVE_API, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              url: s.sources?.[0]?.url ?? '',
-              headline: s.headline,
-              paragraphs: [s.headline + '. ' + (s.summary ?? s.headline)],
-              sourceUrls: [s.sources?.[0]?.url].filter(Boolean) as string[],
-              depth: deepDiveDepth,
-              publishedAt: s.publishedAt,
-            }),
-          });
-        } catch { /* best-effort warm */ }
-        if (!cancelled) await new Promise(r => setTimeout(r, 4000));
+          const r = await fetch(`${FEED_API_BASE}?topic=${topic}`);
+          if (!r.ok || cancelled) continue;
+          const raw = await r.json();
+          const rawItems: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
+          const top = parseServerFeed(rawItems)
+            .filter(it => !it.collection && it.primary.sources?.[0]?.url)
+            .slice(0, 10);
+          for (const it of top) {
+            if (cancelled) return;
+            if (ddPrewarmedRef.current.has(it.primary.id)) continue;
+            ddPrewarmedRef.current.add(it.primary.id);
+            await warmStory(it.primary);
+            if (!cancelled) await new Promise(res => setTimeout(res, 4000));
+          }
+        } catch { /* skip topic on failure */ }
       }
     }, 3000);
     return () => { cancelled = true; clearTimeout(timer); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items]);
+  }, []);
 
 
   // Deep Dive is an in-page overlay (not a route), and its z-index can't beat
