@@ -824,7 +824,8 @@ export default function ArticleScreen() {
     } else {
       switch (activeTab) {
         case 'Summary':
-          aiContent = <SummaryTab loading={aiLoading} result={aiResult} error={aiError} accentColor={dominant} fontSize={fontSizePx} showKeyPoints={showKeyPoints} highlights={showEntityHighlights} />;
+          // Summary prose matches KEY POINTS sizing (13.5) — parity with web.
+          aiContent = <SummaryTab loading={aiLoading} result={aiResult} error={aiError} accentColor={dominant} fontSize={13.5} showKeyPoints={showKeyPoints} highlights={showEntityHighlights} />;
           break;
         case '5 Ws':
           aiContent = <FiveWsTab loading={aiLoading} result={aiResult} error={aiError} accentColor={accent} />;
