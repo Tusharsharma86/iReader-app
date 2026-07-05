@@ -285,24 +285,34 @@ export default function AIFeedScreen() {
       } catch { /* best-effort warm */ }
     };
     const timer = setTimeout(async () => {
+      // Gather all six category top-10 lists first (feed responses are
+      // server-cached, cheap), then warm ROUND-ROBIN — #1 of every category,
+      // then #2 of every category… Sequential-per-category meant the last
+      // category's cards only warmed ~30 min in; interleaving gets every
+      // category's top cards hot in the first minutes.
+      const perTopic: Story[][] = [];
       for (const topic of TOPIC_QUEUE) {
         if (cancelled) return;
         try {
           const r = await fetch(`${FEED_API_BASE}?topic=${topic}`);
-          if (!r.ok || cancelled) continue;
+          if (!r.ok) { perTopic.push([]); continue; }
           const raw = await r.json();
           const rawItems: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
-          const top = parseServerFeed(rawItems)
+          perTopic.push(parseServerFeed(rawItems)
             .filter(it => !it.collection && it.primary.sources?.[0]?.url)
-            .slice(0, 10);
-          for (const it of top) {
-            if (cancelled) return;
-            if (ddPrewarmedRef.current.has(it.primary.id)) continue;
-            ddPrewarmedRef.current.add(it.primary.id);
-            await warmStory(it.primary);
-            if (!cancelled) await new Promise(res => setTimeout(res, 4000));
-          }
-        } catch { /* skip topic on failure */ }
+            .slice(0, 10)
+            .map(it => it.primary));
+        } catch { perTopic.push([]); }
+      }
+      for (let rank = 0; rank < 10; rank++) {
+        for (const list of perTopic) {
+          if (cancelled) return;
+          const s = list[rank];
+          if (!s || ddPrewarmedRef.current.has(s.id)) continue;
+          ddPrewarmedRef.current.add(s.id);
+          await warmStory(s);
+          if (!cancelled) await new Promise(res => setTimeout(res, 4000));
+        }
       }
     }, 3000);
     return () => { cancelled = true; clearTimeout(timer); };
