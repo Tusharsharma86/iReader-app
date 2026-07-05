@@ -44,7 +44,7 @@ const GOLD = '#FFC542';
 
 const TOPIC_QUEUE = ['breaking', 'technology', 'india-politics', 'geopolitics', 'markets', 'business'];
 
-interface ApiItem { type?: string; articles?: Story[]; }
+interface ApiItem { type?: string; articles?: Story[]; collection?: boolean; }
 interface FeedItem {
   primary: Story;
   allStories: Story[];
@@ -55,6 +55,7 @@ interface StorySection { heading: string; body: string; }
 interface DeepDiveData {
   tldr: string[];
   tldrSections?: TldrSection[];
+  quote?: { text: string; by: string } | null;
   narrative: string;
   storySections?: StorySection[];
   degraded?: boolean;
@@ -154,6 +155,23 @@ function parseServerFeed(items: ApiItem[]): FeedItem[] {
   return out;
 }
 
+// Fact-highlighting for card bullets: **bold** segments from the deep-dive
+// TL;DR (key entities + figures) and plain numbers/money/percentages render
+// in the card's accent colour so facts pop.
+const FACT_SPLIT_RE = /(\$[\d,.]+\s?(?:billion|million|trillion|crore|lakh|[BMKTbmkt]\b)?|\d[\d,.]*\s?(?:billion|million|trillion|crore|lakh|percent|%|bps)|\d[\d,.]*)/g;
+function FactText({ text, color, style }: { text: string; color: string; style?: object }) {
+  const boldParts = text.split(/\*\*([^*]+)\*\*/g);
+  return (
+    <Text style={style}>
+      {boldParts.map((seg, i) => i % 2 === 1
+        ? <Text key={i} style={{ color, fontWeight: '700' }}>{seg}</Text>
+        : seg.split(FACT_SPLIT_RE).map((s2, j) => j % 2 === 1
+            ? <Text key={`${i}-${j}`} style={{ color, fontWeight: '700' }}>{s2}</Text>
+            : <Text key={`${i}-${j}`}>{s2}</Text>))}
+    </Text>
+  );
+}
+
 function splitToBullets(text: string, count = 4): string[] {
   const clean = text.replace(/\.{2,}$/, '').trim();
   const cap = (s: string) => { const w = s.trim().split(/\s+/); return w.length > 13 ? w.slice(0, 13).join(' ') + '…' : s.trim(); };
@@ -237,6 +255,61 @@ export default function AIFeedScreen() {
   // like a fresh open. Cleared as soon as user interacts.
   const [openedRestored, setOpenedRestored] = useState(false);
   const flatListRef = useRef<FlatList<FeedItem> | null>(null);
+  const { deepDiveDepth: prewarmDepth } = useSettings();
+
+  // Pre-warm deep dives for the top 10 cards of EVERY category, round-robin
+  // (#1 of each category, then #2 of each…) so every category's top cards are
+  // hot within the first minutes. Server caches by url+depth for 7 days and
+  // coalesces concurrent generations, so this is shared across users/sessions.
+  const ddPrewarmedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    let cancelled = false;
+    const warmStory = async (s: Story) => {
+      try {
+        await fetch(DEEPDIVE_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: s.sources?.[0]?.url ?? '',
+            headline: s.headline,
+            paragraphs: [s.headline + '. ' + (s.summary ?? s.headline)],
+            sourceUrls: [s.sources?.[0]?.url].filter(Boolean) as string[],
+            depth: prewarmDepth,
+            publishedAt: s.publishedAt,
+          }),
+        });
+      } catch { /* best-effort warm */ }
+    };
+    const timer = setTimeout(async () => {
+      const perTopic: Story[][] = [];
+      for (const topic of TOPIC_QUEUE) {
+        if (cancelled) return;
+        try {
+          const r = await fetch(`${FEED_API_BASE}?topic=${topic}`);
+          if (!r.ok) { perTopic.push([]); continue; }
+          const raw = await r.json();
+          const rawItems: ApiItem[] = (Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [])
+            .filter((ri: ApiItem) => !ri.collection);
+          perTopic.push(parseServerFeed(rawItems)
+            .filter(it => it.primary.sources?.[0]?.url)
+            .slice(0, 10)
+            .map(it => it.primary));
+        } catch { perTopic.push([]); }
+      }
+      for (let rank = 0; rank < 10; rank++) {
+        for (const list of perTopic) {
+          if (cancelled) return;
+          const s = list[rank];
+          if (!s || ddPrewarmedRef.current.has(s.id)) continue;
+          ddPrewarmedRef.current.add(s.id);
+          await warmStory(s);
+          if (!cancelled) await new Promise(res => setTimeout(res, 4000));
+        }
+      }
+    }, 3000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const navigation = useNavigation();
   // Tap the AIFeed tab while on AIFeed → close any open Deep Dive + scroll
   // to first card. Bug fix: previously this fired for ANY tabPress on the
@@ -775,6 +848,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
   const { deepDiveDepth, timeFormat } = useSettings();
   const [hasCached, setHasCached] = useState(false);
   const [aiBullets, setAiBullets] = useState<string[] | null>(null);
+  const [quote, setQuote] = useState<{ text: string; by: string } | null>(null);
 
   useEffect(() => {
     readDeepDiveCache(story.id, deepDiveDepth).then(d => setHasCached(!!d));
@@ -801,7 +875,8 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
         if (!res.ok || cancelled) return;
         const json: DeepDiveData = await res.json();
         if (cancelled) return;
-        if (json.tldr?.length) setAiBullets(json.tldr.slice(0, 4).map(b => b.replace(/\*\*/g, '')));
+        if (json.tldr?.length) setAiBullets(json.tldr.slice(0, 4)); // keep ** — FactText renders them in accent colour
+        if (json.quote?.text) setQuote(json.quote);
       } catch {}
     })();
     return () => { cancelled = true; };
@@ -896,10 +971,16 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
           }}>
             {bullets.slice(0, 3).map((bullet, bi) => (
               <View key={bi} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 9 }}>
-                <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, backgroundColor: aiBullets ? accent : `${accent}66`, flexShrink: 0 }} />
-                <Text style={{ color: 'rgba(255,255,255,0.88)', fontSize: 14, lineHeight: 20, flex: 1, letterSpacing: 0.1 }}>{bullet.trim()}</Text>
+                <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 7, backgroundColor: aiBullets ? accent : `${accent}66`, flexShrink: 0 }} />
+                <FactText text={bullet.trim()} color={accent} style={{ color: 'rgba(255,255,255,0.9)', fontSize: 14.5, lineHeight: 21, flex: 1, letterSpacing: 0.1 }} />
               </View>
             ))}
+            {quote && (
+              <View style={{ borderLeftWidth: 3, borderLeftColor: accent, paddingLeft: 12, marginTop: 4 }}>
+                <Text style={{ color: '#fff', fontSize: 13.5, fontStyle: 'italic', lineHeight: 20 }} numberOfLines={3}>“{quote.text}”</Text>
+                {!!quote.by && <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: '700', marginTop: 4 }}>— {quote.by}</Text>}
+              </View>
+            )}
           </View>
         ) : (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
