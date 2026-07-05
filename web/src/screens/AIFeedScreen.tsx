@@ -66,6 +66,7 @@ interface StorySection { heading: string; body: string; }
 interface DeepDiveData {
   tldr: string[];
   tldrSections?: TldrSection[];
+  quote?: { text: string; by: string } | null;
   narrative: string;
   storySections?: StorySection[];
   degraded?: boolean;
@@ -204,6 +205,23 @@ function rankFeedItems(items: FeedItem[]): FeedItem[] {
     .map(x => x.item);
 }
 
+// Fact-highlighting for card bullets: **bold** segments from the deep-dive
+// TL;DR (key entities + figures) render in the card's accent colour, and any
+// plain numbers/money/percentages get the same treatment so facts pop.
+const FACT_SPLIT_RE = /(\$[\d,.]+\s?(?:billion|million|trillion|crore|lakh|[BMKTbmkt]\b)?|\d[\d,.]*\s?(?:billion|million|trillion|crore|lakh|percent|%|bps)|\d[\d,.]*)/g;
+function highlightFacts(text: string, color: string): React.ReactNode[] {
+  return text.split(FACT_SPLIT_RE).map((seg, j) =>
+    j % 2 === 1 ? <span key={j} style={{ color, fontWeight: 700 }}>{seg}</span> : seg,
+  );
+}
+function FactText({ text, color }: { text: string; color: string }) {
+  return <>{text.split(/\*\*([^*]+)\*\*/g).map((seg, i) =>
+    i % 2 === 1
+      ? <span key={i} style={{ color, fontWeight: 700 }}>{seg}</span>
+      : <React.Fragment key={i}>{highlightFacts(seg, color)}</React.Fragment>,
+  )}</>;
+}
+
 const SOURCE_COVERAGE_RE = /no other sources? (were|was) provided|only one (source|article)|no sources? (were|was) provided|single (source|article)|The article from \S+ highlights/i;
 function isSourcePara(p: string): boolean { return SOURCE_COVERAGE_RE.test(p); }
 
@@ -241,6 +259,42 @@ export default function AIFeedScreen() {
   const [exhausted, setExhausted] = useState(false);
   const [activeTopic, setActiveTopic] = useState<string>(TOPIC_QUEUE[0]);
   const { reportScroll, hide: hideTabBar, show: showTabBar } = useTabBarActions();
+  const { deepDiveDepth } = useSettings();
+
+  // Pre-warm deep dives for the top cards (like the main feed's AI-summary
+  // pre-warm) — the server caches by url+depth, so when a card scrolls into
+  // view its bullets/quote land instantly and opening the Deep Dive is instant.
+  const ddPrewarmedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (items.length === 0) return;
+    const targets = items.slice(0, 8).filter(it => it.primary.sources?.[0]?.url && !ddPrewarmedRef.current.has(it.primary.id));
+    if (targets.length === 0) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      for (const it of targets) {
+        if (cancelled) return;
+        ddPrewarmedRef.current.add(it.primary.id);
+        const s = it.primary;
+        try {
+          await fetch(DEEPDIVE_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              url: s.sources?.[0]?.url ?? '',
+              headline: s.headline,
+              paragraphs: [s.headline + '. ' + (s.summary ?? s.headline)],
+              sourceUrls: [s.sources?.[0]?.url].filter(Boolean) as string[],
+              depth: deepDiveDepth,
+              publishedAt: s.publishedAt,
+            }),
+          });
+        } catch { /* best-effort warm */ }
+        if (!cancelled) await new Promise(r => setTimeout(r, 4000));
+      }
+    }, 3000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
 
 
   // Deep Dive is an in-page overlay (not a route), and its z-index can't beat
@@ -554,6 +608,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
   const { deepDiveDepth } = useSettings();
   const hasCachedDeepDive = !!readCache(story.id);
   const [aiBullets, setAiBullets] = useState<string[] | null>(null);
+  const [quote, setQuote] = useState<{ text: string; by: string } | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -579,7 +634,8 @@ function FullPreviewCard({ item, index, total, onOpen }: {
             if (!res.ok || cancelled) return;
             const json: DeepDiveData = await res.json();
             if (cancelled) return;
-            if (json.tldr?.length) setAiBullets(json.tldr.slice(0, 4).map(b => b.replace(/\*\*/g, '')));
+            if (json.tldr?.length) setAiBullets(json.tldr.slice(0, 4)); // keep ** — FactText renders them in accent colour
+            if (json.quote?.text) setQuote(json.quote);
           } catch {}
         }, 300);
       } else {
@@ -723,15 +779,24 @@ function FullPreviewCard({ item, index, total, onOpen }: {
               display: 'flex', flexDirection: 'column', gap: 6,
             }}>
               {bullets.slice(0, 3).map((bullet, bi) => (
-                <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
-                  <div style={{ width: 4, height: 4, borderRadius: 2, marginTop: 6, background: aiBullets ? VIOLET : 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
+                <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                  <div style={{ width: 5, height: 5, borderRadius: 2.5, marginTop: 8, background: aiBullets ? VIOLET : 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
                   <p style={{
-                    margin: 0, color: '#e5e5e5', fontSize: 12, lineHeight: 1.5,
-                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                    margin: 0, color: '#e9e9e9', fontSize: 14.5, lineHeight: 1.5,
+                    display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
                     textShadow: '0 2px 12px rgba(0,0,0,0.55)',
-                  }}>{bullet.trim()}</p>
+                  }}><FactText text={bullet.trim()} color={accent} /></p>
                 </div>
               ))}
+              {quote && (
+                <div style={{ borderLeft: `3px solid ${accent}`, padding: '2px 0 2px 12px', marginTop: 4 }}>
+                  <p style={{
+                    margin: 0, color: '#fff', fontSize: 13.5, fontStyle: 'italic', lineHeight: 1.5,
+                    display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                  }}>“{quote.text}”</p>
+                  {quote.by && <p style={{ margin: '4px 0 0', color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: 700 }}>— {quote.by}</p>}
+                </div>
+              )}
             </div>
           );
           return (
