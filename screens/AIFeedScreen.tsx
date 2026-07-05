@@ -31,7 +31,7 @@ import { trackDeepDive } from '../utils/personalization';
 import { toggleFollow, isFollowing, loadFollowed } from '../utils/followStore';
 import { toggleFollowEntity, getFollowedEntities, clearFollowedEntities, entityBoostScore } from '../utils/entityFollowStore';
 import { FALLBACK_IMG } from '../utils/fallback';
-import { darken, lighten, getArticleColor, hexToRgb } from '../utils/colors';
+import { darken, lighten, getArticleColor } from '../utils/colors';
 
 const FEED_API_BASE = 'https://ireader.onrender.com/api/news/feed';
 const DEEPDIVE_API = 'https://ireader.onrender.com/api/news/deepdive';
@@ -882,12 +882,6 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
     return () => { cancelled = true; };
   }, [story.id, deepDiveDepth, isActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Derive rgba components from dominant for gradient bleeding
-  const dominantRgb = useMemo(() => hexToRgb(dominant), [dominant]);
-  const dr = dominantRgb?.[0] ?? 10;
-  const dg = dominantRgb?.[1] ?? 10;
-  const db = dominantRgb?.[2] ?? 15;
-
   // Hero zoom-in when card mounts/lands on screen
   const heroScale = useRef(new Animated.Value(1.08)).current;
   const textOp = useRef(new Animated.Value(0)).current;
@@ -902,40 +896,43 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
 
   const bullets = aiBullets ?? (story.summary ? splitToBullets(story.summary) : null);
 
-  const dark = `rgb(${Math.round(dr * 0.08)},${Math.round(dg * 0.08)},${Math.round(db * 0.10)})`;
-
   return (
     <Pressable
       onPress={onOpen}
       style={({ pressed }) => ({
         width, height: cardH,
-        backgroundColor: dark,
-        overflow: 'hidden', borderRadius: 16,
+        backgroundColor: darken(dominant, 0.7),
+        overflow: 'hidden', borderRadius: 20,
         transform: [{ scale: pressed ? 0.985 : 1 }],
       })}
     >
-      {/* ── Full-bleed image ── */}
-      {story.imageUrl ? (
-        <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: heroScale }] }]}>
-          <Image source={{ uri: story.imageUrl }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
-        </Animated.View>
-      ) : (
-        <NoImageFallback dominant={dominant} accent={accent} source={sourceName} url={story.sources?.[0]?.url} />
-      )}
-
-      {/* ── Bleed gradient — transparent top → dominant mid → opaque dark at bottom ── */}
+      {/* Vibrant card body — image bleeds into solid dominant, then the colour
+          deepens toward the bottom (main-feed card treatment, matches web). */}
       <LinearGradient
-        colors={[
-          'rgba(0,0,0,0.18)',
-          'transparent',
-          `rgba(${dr},${dg},${db},0.5)`,
-          `rgba(${Math.round(dr * 0.08)},${Math.round(dg * 0.08)},${Math.round(db * 0.10)},0.93)`,
-          `rgba(${Math.round(dr * 0.08)},${Math.round(dg * 0.08)},${Math.round(db * 0.10)},1)`,
-        ]}
-        locations={[0, 0.22, 0.52, 0.74, 1]}
+        colors={[dominant, darken(dominant, 0.45), darken(dominant, 0.7)]}
+        locations={[0.44, 0.78, 1]}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
+
+      {/* ── Image block on TOP (main-feed card style) — natural cover crop at a
+          fixed height instead of stretching full-bleed behind the text ── */}
+      <View style={{ height: '44%', overflow: 'hidden' }}>
+        {story.imageUrl ? (
+          <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: heroScale }] }]}>
+            <Image source={{ uri: story.imageUrl }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
+          </Animated.View>
+        ) : (
+          <NoImageFallback dominant={dominant} accent={accent} source={sourceName} url={story.sources?.[0]?.url} />
+        )}
+        {/* Top scrim + vibrant bleed into dominant (same ramp as web/main feed) */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0.30)', 'transparent', `${dominant}55`, `${dominant}CC`, dominant]}
+          locations={[0, 0.35, 0.62, 0.85, 1]}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+      </View>
 
       {hasCached && (
         <View style={[styles.readyBadge, { top: 12 }]}>
@@ -944,11 +941,11 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
         </View>
       )}
 
-      {/* ── Text section — absolutely at bottom, floats over gradient dark zone ── */}
+      {/* ── Text section — flows below the image like a main-feed card ── */}
       <Animated.View
         style={{
-          position: 'absolute', left: 0, right: 0, bottom: 0,
-          paddingHorizontal: 20, paddingBottom: 44, paddingTop: 16,
+          flex: 1,
+          paddingHorizontal: 20, paddingBottom: 30, paddingTop: 10,
           opacity: textOp, transform: [{ translateY: textTy }],
         }}
       >
