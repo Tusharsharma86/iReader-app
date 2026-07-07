@@ -38,3 +38,32 @@ export function isBlockedHeadline(
   if (NYT_BRIEFING_RE.test(source ?? '') && /here.?s the latest|here are the latest/i.test(headline)) return true;
   return false;
 }
+
+// Source-quality weighting — user-reported observation: TechCrunch's tech
+// coverage is consistently better than aggregator/consumer-gadget blogs
+// (9to5Mac, Engadget, VentureBeat), yet those all carried equal weight in
+// ranking. Tiers roughly mirror the backend's credibilityScore (news.ts,
+// used for Deep Dive confidence) but keyed by the display NAME Digest
+// actually has (Story.sources[].name) rather than domain — Digest never
+// reliably gets a parseable per-article URL for syndicated/aggregated
+// stories the way the Deep Dive fetch pipeline does.
+const SOURCE_TIER_1 = new Set([
+  'Reuters', 'Bloomberg', 'AP', 'Associated Press', 'BBC', 'BBC World',
+  'The New York Times', 'NYT World', 'The Guardian', 'Financial Times',
+  'The Economist', 'The Washington Post', 'WSJ',
+]);
+const SOURCE_TIER_2 = new Set([
+  'TechCrunch', 'The Verge', 'Ars Technica', 'Wired', 'CNBC', 'CNBC TV18',
+  'CNN', 'Al Jazeera', 'NPR', 'NPR World', 'Forbes', 'Time',
+  'NDTV', 'Hindustan Times', 'The Hindu', 'Indian Express', 'Economic Times',
+  'Livemint', 'Mint', 'The Print', 'Scroll.in', 'India Today',
+]);
+// Not a blocklist — outlets outside tier 1/2 (9to5Mac, Engadget, VentureBeat,
+// aggregator blogs, etc.) just get the lowest weight so they no longer win
+// ties against better-sourced coverage of the same story.
+export function sourceQualityWeight(name?: string): number {
+  if (!name) return 0.3;
+  if (SOURCE_TIER_1.has(name)) return 1.0;
+  if (SOURCE_TIER_2.has(name)) return 0.7;
+  return 0.3;
+}
