@@ -270,13 +270,30 @@ function isHindi(text: string): boolean {
   return /[ऀ-ॿ]/.test(text);
 }
 
+// Stable per-article identity (server-assigned id, else source URL) — used
+// to catch the SAME real story appearing under multiple topics (a big story
+// like an India-US trade deal legitimately qualifies for both
+// india-politics AND business, so each topic's independent clustering run
+// builds its own cluster for it, often with a slightly different
+// AI-generated title). Label-text dedup alone misses this.
+function articleIdentities(it: FeedItem): string[] {
+  const list = it.type === 'cluster' && it.articles?.length ? it.articles : [it];
+  return list.map(a => a.id || a.sources?.[0]?.url).filter((x): x is string => Boolean(x));
+}
+
 function dedup(items: FeedItem[], limit: number): FeedItem[] {
-  const seen = new Set<string>();
+  const seenLabels = new Set<string>();
+  const seenArticles = new Set<string>();
   const out: FeedItem[] = [];
   for (const it of items) {
     const k = itemLabel(it).slice(0, 40);
-    if (!k || seen.has(k)) continue;
-    seen.add(k);
+    if (!k || seenLabels.has(k)) continue;
+    const ids = articleIdentities(it);
+    // Cross-topic duplicate: this item shares a member article with
+    // something already kept, even though its own label differs.
+    if (ids.some(id => seenArticles.has(id))) continue;
+    seenLabels.add(k);
+    ids.forEach(id => seenArticles.add(id));
     out.push(it);
     if (out.length >= limit) break;
   }
