@@ -23,6 +23,7 @@ import { FeedStackParamList } from '../types/navigation';
 import { trackArticleOpen } from '../utils/personalization';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 import { useTabBarAutoHide } from '../utils/tabBarAnim';
+import { isBlockedHeadline, sourceQualityWeight } from '../utils/contentFilters';
 
 const FEED_API = 'https://ireader.onrender.com/api/news/feed';
 const AI_SUMMARY_API = 'https://ireader.onrender.com/api/news/ai-summary';
@@ -129,6 +130,26 @@ function clusterCoherence(articles: Story[], topicTitle: string): number {
   return articles.filter(a => topicMatchScore(a.headline ?? '', topicTitle) > 0).length;
 }
 
+// The server's own feed order is recency/velocity-heavy — right for a live
+// scrolling feed, wrong for a "what actually mattered today" briefing: a
+// product/sale post picked up by one blog an hour ago can outrank a story
+// three major outlets ran this morning. Digest re-ranks the same pool toward
+// corroboration (how many distinct outlets covered it) the way an
+// editors'-picks briefing (Apple News Today, Google News top stories) would,
+// keeps a 48h window instead of a few hours, and drops promotional/deal/
+// benchmark/recurring-column content via isBlockedHeadline().
+//
+// Source quality is a third factor (user-reported: TechCrunch's coverage is
+// consistently better than aggregator/consumer-gadget blogs, but they
+// carried equal weight). Corroboration still dominates; among stories with
+// EQUAL corroboration (the common case — most tech scoops are single-
+// outlet), source tier now decides instead of falling back to pure
+// freshness. The previous hard "2+ sources required" gate is dropped in
+// favour of this soft weighting — it was zeroing out categories on slow
+// news days and made the source-quality signal moot for genuine
+// single-outlet scoops (a TechCrunch exclusive is still worth surfacing).
+const DIGEST_MAX_AGE_HOURS = 48;
+
 async function fetchTopicFeed(topic: string): Promise<Story[]> {
   try {
     const url = `${FEED_API}?topic=${topic}`;
@@ -137,17 +158,16 @@ async function fetchTopicFeed(topic: string): Promise<Story[]> {
     const raw = await res.json();
     const items: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
 
-    const results: Story[] = [];
+    const candidates: { rep: Story; sourceCount: number }[] = [];
     for (const it of items) {
       if (it.type === 'cluster') {
         const topicTitle = String((it as any).topicTitle ?? '');
         const articles = (it.articles ?? []) as Story[];
         const allSources = [...new Set(articles.flatMap(a => (a.sources ?? []).map(s => s.name)).filter(Boolean))];
-
-        // Gate 1: 2+ unique sources
-        if (allSources.length < 2) continue;
-        // Gate 2: coherence — 2+ articles match topicTitle keywords
-        if (topicTitle && clusterCoherence(articles, topicTitle) < 2) continue;
+        if (allSources.length === 0) continue;
+        // Coherence gate: for clusters with 3+ articles, require 2+ to
+        // actually match the topicTitle keywords (drops mis-clustered noise).
+        if (topicTitle && articles.length >= 3 && clusterCoherence(articles, topicTitle) < 2) continue;
 
         const nonLive = articles.filter(s => !LIVE_BLOG_RE.test(s.headline ?? ''));
         const pool = nonLive.length > 0 ? nonLive : articles;
@@ -156,20 +176,32 @@ async function fetchTopicFeed(topic: string): Promise<Story[]> {
           const bScore = (b.sources?.length ?? 0) * 2 + topicMatchScore(b.headline ?? '', topicTitle);
           return bScore - aScore;
         })[0];
-
-        // Gate 3: chosen rep must share at least one keyword with topicTitle
-        if (rep && topicTitle && topicMatchScore(rep.headline ?? '', topicTitle) === 0) continue;
-        if (rep) results.push(rep);
+        if (!rep) continue;
+        if (topicTitle && articles.length >= 3 && topicMatchScore(rep.headline ?? '', topicTitle) === 0) continue;
+        if (isBlockedHeadline(rep.headline ?? '', rep.sources?.[0]?.name)) continue;
+        candidates.push({ rep, sourceCount: allSources.length });
       } else {
         const story = it as unknown as Story;
+        if (!story.headline || LIVE_BLOG_RE.test(story.headline)) continue;
+        if (isBlockedHeadline(story.headline, story.sources?.[0]?.name)) continue;
         const srcCount = [...new Set((story.sources ?? []).map(s => s.name).filter(Boolean))].length;
-        if (story.headline && !LIVE_BLOG_RE.test(story.headline) && srcCount >= 2) results.push(story);
+        candidates.push({ rep: story, sourceCount: Math.max(srcCount, 1) });
       }
     }
 
-    return results
-      .sort((a, b) => (b.sources?.length ?? 0) - (a.sources?.length ?? 0))
-      .slice(0, 10);
+    const scored = candidates
+      .map(({ rep, sourceCount }) => {
+        const hoursOld = rep.publishedAt ? Math.max(0, (Date.now() - new Date(rep.publishedAt).getTime()) / 3_600_000) : DIGEST_MAX_AGE_HOURS + 1;
+        const freshnessMult = Math.exp(-hoursOld * Math.LN2 / 24); // half-life 24h
+        const corroboration = Math.log(sourceCount + 1); // 1 src→0.69, 3→1.39, 6→1.95, 10→2.40
+        const sourceQuality = sourceQualityWeight(rep.sources?.[0]?.name);
+        const score = corroboration * 0.6 + sourceQuality * 0.25 + freshnessMult * 0.15;
+        return { rep, hoursOld, score };
+      })
+      .filter(x => x.hoursOld <= DIGEST_MAX_AGE_HOURS);
+
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, 10).map(x => x.rep);
   } catch { return []; }
 }
 
