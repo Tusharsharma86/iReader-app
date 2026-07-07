@@ -4,6 +4,7 @@ import { useRouter } from '../contexts/RouterContext';
 import { useTabBar } from '../contexts/TabBarContext';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 import { trackArticleOpen } from '../utils/personalization';
+import { isBlockedHeadline } from '../utils/contentFilters';
 
 const FEED_API = 'https://ireader.onrender.com/api/news/feed';
 const AI_SUMMARY_API = 'https://ireader.onrender.com/api/news/ai-summary';
@@ -81,19 +82,42 @@ function extractNumber(text: string): string | null {
   return m[0].trim().replace(/^Rs\.?\s*/i, '₹').slice(0, 24);
 }
 
+// The server's own feed order is recency/velocity-heavy (~75% weight, see
+// buildMixedFeed in news.ts) — right for a live scrolling feed, wrong for a
+// "what actually mattered today" briefing: a product/sale post picked up by
+// one blog an hour ago can outrank a story three major outlets ran this
+// morning. Digest re-ranks the same pool client-side toward corroboration
+// (how many distinct outlets covered it) the way an editors'-picks briefing
+// (Apple News Today, Google News top stories) would, keeps a 48h window
+// instead of a few hours, and drops the promotional/deal/benchmark content
+// FeedScreen already filters out but Digest never did.
+const DIGEST_MAX_AGE_HOURS = 48;
+
 async function fetchTopicFeed(topic: string): Promise<Story[]> {
   try {
     const res = await fetch(`${FEED_API}?topic=${topic}`);
     if (!res.ok) return [];
     const raw = await res.json();
     const items: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
-    return items
+    const scored = items
       .map(it => {
         const stories = it.type === 'cluster' ? (it.articles ?? []) : [it as unknown as Story];
-        return stories.slice().sort((a, b) => (b.sources?.length ?? 0) - (a.sources?.length ?? 0))[0];
+        const rep = stories.slice().sort((a, b) => (b.sources?.length ?? 0) - (a.sources?.length ?? 0))[0];
+        const sourceCount = it.type === 'cluster' ? (it.articles?.length ?? 1) : (rep?.sources?.length ?? 1);
+        return rep ? { rep, sourceCount } : null;
       })
-      .filter((s): s is Story => Boolean(s))
-      .slice(0, 10);
+      .filter((x): x is { rep: Story; sourceCount: number } => Boolean(x))
+      .filter(({ rep }) => !isBlockedHeadline(rep.headline, rep.sources?.[0]?.name))
+      .map(({ rep, sourceCount }) => {
+        const hoursOld = rep.publishedAt ? Math.max(0, (Date.now() - new Date(rep.publishedAt).getTime()) / 3_600_000) : DIGEST_MAX_AGE_HOURS + 1;
+        const freshnessMult = Math.exp(-hoursOld * Math.LN2 / 24); // half-life 24h
+        const corroboration = Math.log(sourceCount + 1); // 1 src→0.69, 3→1.39, 6→1.95, 10→2.40
+        return { rep, hoursOld, score: corroboration * 0.7 + freshnessMult * 0.3 };
+      })
+      .filter(x => x.hoursOld <= DIGEST_MAX_AGE_HOURS);
+
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, 10).map(x => x.rep);
   } catch { return []; }
 }
 
