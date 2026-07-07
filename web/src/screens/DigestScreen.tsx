@@ -4,7 +4,7 @@ import { useRouter } from '../contexts/RouterContext';
 import { useTabBar } from '../contexts/TabBarContext';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 import { trackArticleOpen } from '../utils/personalization';
-import { isBlockedHeadline } from '../utils/contentFilters';
+import { isBlockedHeadline, sourceQualityWeight } from '../utils/contentFilters';
 
 const FEED_API = 'https://ireader.onrender.com/api/news/feed';
 const AI_SUMMARY_API = 'https://ireader.onrender.com/api/news/ai-summary';
@@ -91,6 +91,13 @@ function extractNumber(text: string): string | null {
 // (Apple News Today, Google News top stories) would, keeps a 48h window
 // instead of a few hours, and drops the promotional/deal/benchmark content
 // FeedScreen already filters out but Digest never did.
+//
+// Source quality is the third factor (user-reported: TechCrunch's coverage
+// is consistently better than aggregator/consumer-gadget blogs, but they
+// carried equal weight). Corroboration still dominates — a story three
+// outlets ran matters more than who broke it — but among stories with EQUAL
+// corroboration (the common case: most tech scoops are single-outlet),
+// source tier now decides instead of falling back to pure freshness.
 const DIGEST_MAX_AGE_HOURS = 48;
 
 async function fetchTopicFeed(topic: string): Promise<Story[]> {
@@ -112,7 +119,9 @@ async function fetchTopicFeed(topic: string): Promise<Story[]> {
         const hoursOld = rep.publishedAt ? Math.max(0, (Date.now() - new Date(rep.publishedAt).getTime()) / 3_600_000) : DIGEST_MAX_AGE_HOURS + 1;
         const freshnessMult = Math.exp(-hoursOld * Math.LN2 / 24); // half-life 24h
         const corroboration = Math.log(sourceCount + 1); // 1 src→0.69, 3→1.39, 6→1.95, 10→2.40
-        return { rep, hoursOld, score: corroboration * 0.7 + freshnessMult * 0.3 };
+        const sourceQuality = sourceQualityWeight(rep.sources?.[0]?.name);
+        const score = corroboration * 0.6 + sourceQuality * 0.25 + freshnessMult * 0.15;
+        return { rep, hoursOld, score };
       })
       .filter(x => x.hoursOld <= DIGEST_MAX_AGE_HOURS);
 
