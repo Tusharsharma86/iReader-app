@@ -1,24 +1,118 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import type { Story } from '../types';
+import type { Story, BiasRating } from '../types';
 import { useRouter } from '../contexts/RouterContext';
 import { useTabBar } from '../contexts/TabBarContext';
+import { useSettings } from '../contexts/SettingsContext';
 import { getArticleColor } from '../utils/colors';
 import { trackArticleOpen } from '../utils/personalization';
+import { StoryCard } from '../components/StoryCard';
 
 const API_BASE = 'https://ireader.onrender.com/api/news';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+// Mirrors the server's FeedCluster | FeedArticle union (see api-server
+// routes/news.ts) — the real field names are topicTitle/topicSummary/
+// collection, not clusterLabel (that name never existed server-side, so
+// every cluster card silently fell back to its first article's raw
+// headline instead of the AI-generated cluster title).
 interface FeedItem {
-  type?: string;
+  type?: 'cluster' | 'article';
+  id?: string;
+  topicTitle?: string;
+  topicSummary?: string;
+  collection?: boolean;
   headline?: string;
-  clusterLabel?: string;
   summary?: string;
+  aiSummary?: string;
   imageUrl?: string;
   publishedAt?: string;
   articles?: Story[];
   sources?: { name: string; url: string; imageUrl?: string; publishedAt?: string }[];
   sourceCount?: number;
+  isTrending?: boolean;
+  isBreaking?: boolean;
+  isDeveloping?: boolean;
+  sourceBias?: BiasRating;
+}
+
+// Prefer the AI-generated cluster title (topicTitle); fall back to the raw
+// headline only when the server didn't produce one. Same rule the main feed
+// uses in FeedScreen.tsx.
+function itemLabel(it: FeedItem): string {
+  if (it.topicTitle && it.topicTitle.trim().length > 8) return it.topicTitle;
+  return it.headline || it.articles?.[0]?.headline || it.topicTitle || '';
+}
+
+// Headlines to feed entity extraction. Theme/Catch-Up collections are given
+// a synthetic rail title ("Catch Up · Big Stories This Week") that isn't a
+// real headline — running it through the entity regex produced a fake
+// "Catch Up" topic tile. Use each member article's own headline instead;
+// real AI clusters (non-collection) still use their one true topicTitle.
+function entityHeadlinesFor(it: FeedItem): string[] {
+  if (it.type === 'cluster' && it.collection) {
+    return (it.articles ?? []).map(a => a.headline).filter(Boolean);
+  }
+  return [itemLabel(it)];
+}
+
+// Dedupe a merged source list by publisher name, filling in a fallback date
+// so it satisfies Story['sources'][number].publishedAt (non-optional).
+function normalizeSources(
+  list: { name: string; url: string; imageUrl?: string; publishedAt?: string }[],
+  fallbackDate: string,
+): Story['sources'] {
+  const seen = new Set<string>();
+  const out: Story['sources'] = [];
+  for (const s of list) {
+    if (!s?.name || seen.has(s.name)) continue;
+    seen.add(s.name);
+    out.push({ name: s.name, url: s.url ?? '', imageUrl: s.imageUrl, publishedAt: s.publishedAt ?? fallbackDate });
+  }
+  return out;
+}
+
+// Converts a raw feed item (cluster or single article) into the real Story
+// shape the main feed's StoryCard renders — same headline-resolution,
+// image-with-fallback, and merged-sources logic as FeedScreen's
+// serverItemToCluster, so Explore's cards are pixel-identical to the main
+// feed and pick up every Customize toggle StoryCard already reads
+// (showClusterSummary, showBiasDots, showCardImages, cardDensity,
+// timeFormat, autoMarkRead) with zero extra code here.
+function toStory(item: FeedItem): Story {
+  const label = itemLabel(item);
+  const now = new Date().toISOString();
+  if (item.type === 'cluster' && item.articles?.length) {
+    const primary = item.articles[0];
+    const withImage = item.articles.find(a => a.imageUrl) ?? primary;
+    const sources = normalizeSources(item.articles.flatMap(a => a.sources ?? []), primary.publishedAt ?? now);
+    return {
+      id: primary.id || label,
+      headline: label,
+      summary: item.topicSummary || primary.summary || '',
+      aiSummary: item.topicSummary || primary.aiSummary,
+      publishedAt: primary.publishedAt || now,
+      imageUrl: withImage.imageUrl || '',
+      sources: sources.length ? sources : normalizeSources(primary.sources ?? [], primary.publishedAt ?? now),
+      isTrending: item.articles.length >= 3 || primary.isTrending,
+      isBreaking: primary.isBreaking,
+      isDeveloping: primary.isDeveloping,
+      sourceBias: primary.sourceBias,
+    };
+  }
+  return {
+    id: item.id || label,
+    headline: label,
+    summary: item.summary || '',
+    aiSummary: item.aiSummary,
+    publishedAt: item.publishedAt || now,
+    imageUrl: item.imageUrl || '',
+    sources: normalizeSources(item.sources ?? [], item.publishedAt ?? now),
+    isTrending: item.sourceCount ? item.sourceCount >= 3 : undefined,
+    isBreaking: item.isBreaking,
+    isDeveloping: item.isDeveloping,
+    sourceBias: item.sourceBias,
+  };
 }
 
 interface EntityCard {
@@ -163,7 +257,7 @@ function dedup(items: FeedItem[], limit: number): FeedItem[] {
   const seen = new Set<string>();
   const out: FeedItem[] = [];
   for (const it of items) {
-    const k = (it.clusterLabel || it.headline || '').slice(0, 40);
+    const k = itemLabel(it).slice(0, 40);
     if (!k || seen.has(k)) continue;
     seen.add(k);
     out.push(it);
@@ -231,55 +325,6 @@ function IconSearch({ size = 16, color = '#444' }: { size?: number; color?: stri
   );
 }
 
-// ── Vertical story card (full-width) ──────────────────────────────────────────
-
-function VerticalStoryCard({ item, onOpen, badge }: { item: FeedItem; onOpen: (item: FeedItem) => void; badge?: { text: string; color: string } }) {
-  const label = item.clusterLabel || item.headline || item.articles?.[0]?.headline || '';
-  const imgUrl = item.imageUrl || item.articles?.[0]?.imageUrl;
-  const srcName = item.sources?.[0]?.name || item.articles?.[0]?.sources?.[0]?.name || '';
-  const srcCount = item.sourceCount ?? item.articles?.length ?? 1;
-  const accent = getArticleColor(label);
-  const ts = relTime(item.publishedAt || item.articles?.[0]?.publishedAt);
-
-  return (
-    <div
-      onClick={() => onOpen(item)}
-      style={{
-        width: '100%', height: 200,
-        borderRadius: 16, overflow: 'hidden', cursor: 'pointer',
-        background: accent, position: 'relative', marginBottom: 10,
-        WebkitTapHighlightColor: 'transparent',
-      }}
-    >
-      {imgUrl && <img src={imgUrl} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />}
-      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.06) 0%, transparent 30%, rgba(0,0,0,0.88) 100%)' }} />
-
-      {badge && (
-        <div style={{ position: 'absolute', top: 10, left: 10, background: badge.color, borderRadius: 6, padding: '3px 7px', fontSize: 8.5, fontWeight: 800, color: '#fff', letterSpacing: 0.8 }}>
-          {badge.text}
-        </div>
-      )}
-
-      {srcCount > 1 && (
-        <div style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(0,0,0,0.55)', borderRadius: 20, padding: '3px 8px', fontSize: 9, fontWeight: 700, color: '#fff', backdropFilter: 'blur(6px)' }}>
-          {srcCount} sources
-        </div>
-      )}
-
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '0 13px 14px' }}>
-        {(srcName || ts) && (
-          <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginBottom: 6 }}>
-            {srcName && <span style={{ fontSize: 9.5, fontWeight: 700, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{srcName}</span>}
-            {ts && <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>· {ts}</span>}
-          </div>
-        )}
-        <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', letterSpacing: -0.2 }}>
-          {label}
-        </p>
-      </div>
-    </div>
-  );
-}
 
 // ── Vibrant entity tile (2-col grid) ─────────────────────────────────────────
 
@@ -288,7 +333,7 @@ function EntityTile({ entity, accent, bgColor, onTap }: { entity: EntityCard; ac
     <button
       onClick={() => onTap(entity.name)}
       style={{
-        display: 'block', width: '100%', height: 96,
+        display: 'block', width: '100%', height: 108,
         borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
         background: bgColor, position: 'relative', border: 'none',
         padding: 0, WebkitTapHighlightColor: 'transparent',
@@ -298,9 +343,11 @@ function EntityTile({ entity, accent, bgColor, onTap }: { entity: EntityCard; ac
         <img src={entity.imageUrl} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
       )}
       <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${bgColor}CC 0%, rgba(0,0,0,0.7) 100%)` }} />
+      {/* Name leads (bigger, bold) with the story count underneath it — was
+          reversed (tiny count above a small name), per request. */}
       <div style={{ position: 'absolute', inset: 0, padding: '10px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-        <div style={{ fontSize: 8.5, fontWeight: 700, color: accent, marginBottom: 4, letterSpacing: 0.5 }}>{entity.count} {entity.count === 1 ? 'story' : 'stories'}</div>
-        <div style={{ fontSize: 14, fontWeight: 800, color: '#fff', lineHeight: 1.2, textAlign: 'left', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{entity.name}</div>
+        <div style={{ fontSize: 19, fontWeight: 800, color: '#fff', lineHeight: 1.15, letterSpacing: -0.3, textAlign: 'left', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{entity.name}</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: accent, marginTop: 4, letterSpacing: 0.3 }}>{entity.count} {entity.count === 1 ? 'story' : 'stories'}</div>
       </div>
     </button>
   );
@@ -336,11 +383,16 @@ function SourceChip({ src, onTap }: { src: SourceCard; onTap: (name: string) => 
 const SHIMMER = 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 50%, transparent 100%)';
 const SHIMMER_CSS = `@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`;
 
-function VerticalCardSkeleton() {
+// Matches StoryCard's own DENSITY_HEIGHT map so the skeleton doesn't jump in
+// size once the real cards land.
+const STORY_CARD_DENSITY_HEIGHT: Record<string, number> = { compact: 320, comfortable: 420, spacious: 500 };
+
+function VerticalCardSkeleton({ cardDensity }: { cardDensity: string }) {
+  const height = STORY_CARD_DENSITY_HEIGHT[cardDensity] ?? 420;
   return (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
       {[0,1,2].map(i => (
-        <div key={i} style={{ width: '100%', height: 200, borderRadius: 16, background: '#141414', overflow: 'hidden', position: 'relative', marginBottom: 10 }}>
+        <div key={i} style={{ width: '100%', maxWidth: 452, height, borderRadius: 20, background: '#141414', overflow: 'hidden', position: 'relative' }}>
           <div style={{ position: 'absolute', inset: 0, background: SHIMMER, animation: 'shimmer 1.4s infinite' }} />
         </div>
       ))}
@@ -352,7 +404,7 @@ function TileSkeleton() {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
       {[0,1,2,3,4,5].map(i => (
-        <div key={i} style={{ height: 96, borderRadius: 14, background: '#141414', overflow: 'hidden', position: 'relative' }}>
+        <div key={i} style={{ height: 108, borderRadius: 14, background: '#141414', overflow: 'hidden', position: 'relative' }}>
           <div style={{ position: 'absolute', inset: 0, background: SHIMMER, animation: 'shimmer 1.4s infinite' }} />
         </div>
       ))}
@@ -375,7 +427,7 @@ function SourceGridSkeleton() {
 // ── Search result card (compact) ──────────────────────────────────────────────
 
 function SearchStoryCard({ item, onOpen }: { item: FeedItem; onOpen: (item: FeedItem) => void }) {
-  const label = item.clusterLabel || item.headline || item.articles?.[0]?.headline || '';
+  const label = itemLabel(item);
   const imgUrl = item.imageUrl || item.articles?.[0]?.imageUrl;
   const srcName = item.sources?.[0]?.name || item.articles?.[0]?.sources?.[0]?.name || '';
   const srcCount = item.sourceCount ?? item.articles?.length ?? 1;
@@ -399,8 +451,13 @@ function SearchStoryCard({ item, onOpen }: { item: FeedItem; onOpen: (item: Feed
 export default function ExploreScreen() {
   const { navigate } = useRouter();
   const { show: showTabBar } = useTabBar();
+  const { cardDensity } = useSettings();
+  // Same vertical rhythm the main feed uses between clusters (FeedScreen.tsx)
+  // so Explore's story lists read identically dense/spaced.
+  const cardGap = cardDensity === 'compact' ? 14 : cardDensity === 'spacious' ? 44 : 28;
 
   const [trendingStories, setTrendingStories] = useState<FeedItem[]>([]);
+  const [catchUpStories, setCatchUpStories] = useState<FeedItem[]>([]);
   const [deepDives, setDeepDives] = useState<FeedItem[]>([]);
   const [companies, setCompanies] = useState<EntityCard[]>([]);
   const [people, setPeople] = useState<EntityCard[]>([]);
@@ -434,25 +491,42 @@ export default function ExploreScreen() {
       const allItems: FeedItem[] = results.flatMap(r => r.status === 'fulfilled' ? r.value.items : []);
       allItemsRef.current = allItems;
 
+      // Theme/company rails (incl. "Catch Up") are multi-story collections
+      // grouped under a synthetic topicTitle, not a single trending event —
+      // they belong only in the Don't Miss section below. Without this
+      // filter they leaked into Trending/Deep Dives too (previously masked
+      // by the clusterLabel bug, which mislabeled them as their first
+      // article's headline instead of the collection title, so the dupe was
+      // invisible; fixing the label made the leak visible).
+      const isEventItem = (it: FeedItem) => it.type === 'article' || (it.type === 'cluster' && !it.collection);
+
       // ① Trending — score by sources × freshness, dedup; skip Hindi headlines
-      const noHindi = (it: FeedItem) => {
-        const h = it.clusterLabel || it.headline || it.articles?.[0]?.headline || '';
-        return !isHindi(h);
-      };
+      const noHindi = (it: FeedItem) => !isHindi(itemLabel(it));
       const trending = dedup(
-        [...allItems].filter(noHindi).sort((a, b) => scoreItem(b) - scoreItem(a)),
+        allItems.filter(isEventItem).filter(noHindi).sort((a, b) => scoreItem(b) - scoreItem(a)),
         20
       );
 
       // ② Deep Dives — 3+ sources
       const ddItems = dedup(
-        [...allItems].filter(noHindi).filter(it => (it.sourceCount ?? it.articles?.length ?? 1) >= 3)
+        allItems.filter(isEventItem).filter(noHindi).filter(it => (it.sourceCount ?? it.articles?.length ?? 1) >= 3)
           .sort((a, b) => scoreItem(b) - scoreItem(a)),
         12
       );
 
+      // ②b "Don't Miss" — the server's own "Catch Up · Big Stories This Week"
+      // rail (buildMixedFeed in news.ts): stories from hot themes that aged
+      // past the fresh-rail cutoff but are still under 7 days old. Flatten
+      // every topic's Catch Up rail into one deduped, newest-first list.
+      const catchUp = dedup(
+        allItems
+          .filter(it => it.type === 'cluster' && it.collection && /catch up/i.test(it.topicTitle ?? ''))
+          .flatMap(it => (it.articles ?? []).map(a => ({ ...a, type: 'article' as const }))),
+        10,
+      ).sort((a, b) => new Date(b.publishedAt ?? 0).getTime() - new Date(a.publishedAt ?? 0).getTime());
+
       // ③ Entity classification
-      const allHeadlines = allItems.map(it => it.clusterLabel || it.headline || it.articles?.[0]?.headline || '').filter(Boolean);
+      const allHeadlines = allItems.flatMap(entityHeadlinesFor).filter(Boolean);
       const entityCounts = extractEntityCounts(allHeadlines);
 
       // Build image map per entity
@@ -460,7 +534,7 @@ export default function ExploreScreen() {
       for (const [entity] of entityCounts.entries()) {
         const low = entity.toLowerCase();
         const match = allItems.find(it => {
-          const t = [it.clusterLabel, it.headline, ...(it.articles ?? []).map(a => a.headline)].join(' ').toLowerCase();
+          const t = [itemLabel(it), ...(it.articles ?? []).map(a => a.headline)].join(' ').toLowerCase();
           return t.includes(low) && (it.imageUrl || it.articles?.[0]?.imageUrl);
         });
         const img = match?.imageUrl || match?.articles?.[0]?.imageUrl;
@@ -472,7 +546,7 @@ export default function ExploreScreen() {
       for (const r of results) {
         if (r.status !== 'fulfilled') continue;
         const { topic, items } = r.value;
-        const headlines = items.map((it: FeedItem) => it.clusterLabel || it.headline || '').filter(Boolean);
+        const headlines = items.flatMap((it: FeedItem) => entityHeadlinesFor(it)).filter(Boolean);
         for (const [entity] of extractEntityCounts(headlines).entries()) {
           if (!entityTopicSets.has(entity)) entityTopicSets.set(entity, new Set());
           entityTopicSets.get(entity)!.add(topic);
@@ -522,6 +596,7 @@ export default function ExploreScreen() {
         .map(([name, { domain, count }]) => ({ name, domain, count }));
 
       setTrendingStories(trending);
+      setCatchUpStories(catchUp);
       setDeepDives(ddItems);
       setCompanies(compList.slice(0, 24));
       setPeople(personList.slice(0, 24));
@@ -547,7 +622,7 @@ export default function ExploreScreen() {
           ...(it.sources ?? []).map(s => s.name),
           ...(it.articles ?? []).flatMap(a => (a.sources ?? []).map(s => s.name)),
         ];
-        const text = [it.clusterLabel, it.headline, it.summary, ...(it.articles ?? []).map(a => a.headline), ...srcNames].join(' ').toLowerCase();
+        const text = [itemLabel(it), it.summary, ...(it.articles ?? []).map(a => a.headline), ...srcNames].join(' ').toLowerCase();
         return text.includes(kw);
       }),
       20
@@ -569,7 +644,7 @@ export default function ExploreScreen() {
     const articleWithId = item.articles?.find(a => a.id);
     const firstArticle = item.articles?.[0];
     const primary = articleWithId ?? firstArticle ?? (item as unknown as Story);
-    const headline = primary.headline ?? item.headline ?? item.clusterLabel ?? '';
+    const headline = primary.headline ?? itemLabel(item);
     const allSources = (primary.sources?.length ? primary.sources : item.sources) ?? [];
     const url = allSources[0]?.url ?? '';
     if (!headline) return;
@@ -698,33 +773,56 @@ export default function ExploreScreen() {
         {searchQuery === '' && (
           <>
 
-            {/* 1. Trending Stories */}
+            {/* 1. Trending Stories — the exact StoryCard the main feed uses,
+                so image treatment, meta row, bias dot, bookmark, read-dimming
+                and every Customize toggle (showClusterSummary, showBiasDots,
+                showCardImages, cardDensity, timeFormat, autoMarkRead) match
+                identically. */}
             <div style={{ marginBottom: 28 }}>
               <SectionLabel text="Trending Stories" />
-              {loading ? <VerticalCardSkeleton /> : (
-                <div>
-                  {trendingStories.slice(0, 8).map((item, i) => (
-                    <VerticalStoryCard key={i} item={item} onOpen={openArticle} />
-                  ))}
+              {loading ? <VerticalCardSkeleton cardDensity={cardDensity} /> : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: cardGap }}>
+                  {trendingStories.slice(0, 8).map((item, i) => {
+                    const story = toStory(item);
+                    return <StoryCard key={story.id || i} story={story} allStories={item.articles} />;
+                  })}
                 </div>
               )}
             </div>
 
-            {/* 2. AI Deep Dives */}
-            {(loading || deepDives.length > 0) && (
+            {/* 2. Don't Miss — the server's "Catch Up · Big Stories This Week"
+                rail: big stories from hot themes that are 3-7 days old and
+                would otherwise never resurface once they scroll off Trending. */}
+            {(loading || catchUpStories.length > 0) && (
               <div style={{ marginBottom: 28 }}>
-                <SectionLabel text="AI Deep Dives" />
-                {loading ? <VerticalCardSkeleton /> : (
-                  <div>
-                    {deepDives.slice(0, 5).map((item, i) => (
-                      <VerticalStoryCard key={i} item={item} onOpen={openArticle} badge={{ text: '✦ DEEP DIVE', color: '#7C3AED' }} />
-                    ))}
+                <SectionLabel text="Don't Miss · Last 7 Days" />
+                {loading ? <VerticalCardSkeleton cardDensity={cardDensity} /> : (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: cardGap }}>
+                    {catchUpStories.map((item, i) => {
+                      const story = toStory(item);
+                      return <StoryCard key={story.id || i} story={story} />;
+                    })}
                   </div>
                 )}
               </div>
             )}
 
-            {/* 3. Companies */}
+            {/* 3. AI Deep Dives */}
+            {(loading || deepDives.length > 0) && (
+              <div style={{ marginBottom: 28 }}>
+                <SectionLabel text="AI Deep Dives" />
+                {loading ? <VerticalCardSkeleton cardDensity={cardDensity} /> : (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: cardGap }}>
+                    {deepDives.slice(0, 5).map((item, i) => {
+                      const story = toStory(item);
+                      return <StoryCard key={story.id || i} story={story} allStories={item.articles} />;
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 4. Companies */}
             {(loading || companies.length > 0) && (
               <div style={{ marginBottom: 28 }}>
                 <SectionLabel text="Companies" />
