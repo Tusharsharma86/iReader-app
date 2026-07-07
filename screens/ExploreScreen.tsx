@@ -10,6 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { getArticleColor } from '../utils/colors';
 import { trackArticleOpen } from '../utils/personalization';
 import { ExploreStackParamList } from '../types/navigation';
+import { StoryCard, type Story, type BiasRating } from '../components/StoryCard';
+import { useSettings } from '../contexts/SettingsContext';
 
 const API_BASE = 'https://ireader.onrender.com/api/news';
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -22,16 +24,113 @@ const IMG_FADE = Platform.OS === 'android' ? { fadeDuration: 0 } : {};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+// Mirrors the server's FeedCluster | FeedArticle union (api-server
+// routes/news.ts) — the real field names are topicTitle/topicSummary/
+// collection, not clusterLabel (that name never existed server-side, so
+// every cluster card silently fell back to its first article's raw
+// headline instead of the AI-generated cluster title).
 interface FeedItem {
-  type?: string;
+  type?: 'cluster' | 'article';
+  id?: string;
+  topicTitle?: string;
+  topicSummary?: string;
+  collection?: boolean;
   headline?: string;
-  clusterLabel?: string;
   summary?: string;
+  aiSummary?: string;
   imageUrl?: string;
   publishedAt?: string;
-  articles?: { headline: string; imageUrl?: string; summary?: string; publishedAt?: string; id?: string; sources?: { name: string; url: string }[] }[];
+  articles?: Story[];
   sources?: { name: string; url: string; imageUrl?: string; publishedAt?: string }[];
   sourceCount?: number;
+  isTrending?: boolean;
+  isBreaking?: boolean;
+  isDeveloping?: boolean;
+  sourceBias?: BiasRating;
+}
+
+// Prefer the AI-generated cluster title (topicTitle); fall back to the raw
+// headline only when the server didn't produce one.
+function itemLabel(it: FeedItem): string {
+  if (it.topicTitle && it.topicTitle.trim().length > 8) return it.topicTitle;
+  return it.headline || it.articles?.[0]?.headline || it.topicTitle || '';
+}
+
+// Headlines to feed entity extraction. Theme/Catch-Up collections carry a
+// synthetic rail title ("Catch Up · Big Stories This Week") that isn't a
+// real headline — running it through the entity regex produced a fake
+// "Catch Up" topic tile. Use each member article's own headline instead;
+// real AI clusters (non-collection) still use their one true topicTitle.
+function entityHeadlinesFor(it: FeedItem): string[] {
+  if (it.type === 'cluster' && it.collection) {
+    return (it.articles ?? []).map(a => a.headline).filter(Boolean);
+  }
+  return [itemLabel(it)];
+}
+
+// Theme/company rails (incl. "Catch Up") are multi-story collections grouped
+// under a synthetic topicTitle, not a single trending event — they belong
+// only in the Don't Miss section. Without this filter they'd leak into
+// Trending/Deep Dives too.
+function isEventItem(it: FeedItem): boolean {
+  return it.type === 'article' || (it.type === 'cluster' && !it.collection);
+}
+
+// Dedupe a merged source list by publisher name, filling in a fallback date
+// so it satisfies Story['sources'][number].publishedAt (non-optional).
+function normalizeSources(
+  list: { name: string; url: string; imageUrl?: string; publishedAt?: string }[],
+  fallbackDate: string,
+): Story['sources'] {
+  const seen = new Set<string>();
+  const out: Story['sources'] = [];
+  for (const src of list) {
+    if (!src?.name || seen.has(src.name)) continue;
+    seen.add(src.name);
+    out.push({ name: src.name, url: src.url ?? '', imageUrl: src.imageUrl, publishedAt: src.publishedAt ?? fallbackDate });
+  }
+  return out;
+}
+
+// Converts a raw feed item (cluster or single article) into the real Story
+// shape the main feed's StoryCard renders — same headline-resolution,
+// image-with-fallback, and merged-sources logic as the web port, so
+// Explore's cards are identical to the main feed and pick up every
+// Customize toggle StoryCard already reads for free.
+function toStory(item: FeedItem): Story {
+  const label = itemLabel(item);
+  const now = new Date().toISOString();
+  if (item.type === 'cluster' && item.articles?.length) {
+    const primary = item.articles[0];
+    const withImage = item.articles.find(a => a.imageUrl) ?? primary;
+    const sources = normalizeSources(item.articles.flatMap(a => a.sources ?? []), primary.publishedAt || now);
+    return {
+      id: primary.id || label,
+      headline: label,
+      summary: item.topicSummary || primary.summary || '',
+      aiSummary: item.topicSummary || primary.aiSummary,
+      publishedAt: primary.publishedAt || now,
+      imageUrl: withImage.imageUrl || '',
+      sources: sources.length ? sources : normalizeSources(primary.sources ?? [], primary.publishedAt || now),
+      isTrending: item.articles.length >= 3 || primary.isTrending,
+      isBreaking: primary.isBreaking,
+      isDeveloping: primary.isDeveloping,
+      sourceBias: primary.sourceBias,
+    };
+  }
+  return {
+    id: item.id || label,
+    headline: label,
+    summary: item.summary || '',
+    aiSummary: item.aiSummary,
+    publishedAt: item.publishedAt || now,
+    imageUrl: item.imageUrl || '',
+    sources: normalizeSources(item.sources ?? [], item.publishedAt || now),
+    isTrending: item.sourceCount ? item.sourceCount >= 3 : undefined,
+    isBreaking: item.isBreaking,
+    isDeveloping: item.isDeveloping,
+    sourceBias: item.sourceBias,
+  };
 }
 
 interface EntityCard {
@@ -175,7 +274,7 @@ function dedup(items: FeedItem[], limit: number): FeedItem[] {
   const seen = new Set<string>();
   const out: FeedItem[] = [];
   for (const it of items) {
-    const k = (it.clusterLabel || it.headline || '').slice(0, 40);
+    const k = itemLabel(it).slice(0, 40);
     if (!k || seen.has(k)) continue;
     seen.add(k);
     out.push(it);
@@ -220,51 +319,6 @@ function SectionLabel({ text }: { text: string }) {
   );
 }
 
-// ── Vertical story card ───────────────────────────────────────────────────────
-
-const VerticalStoryCard = memo(function VerticalStoryCard({ item, onPress, badge }: {
-  item: FeedItem;
-  onPress: () => void;
-  badge?: { text: string; color: string };
-}) {
-  const label = item.clusterLabel || item.headline || item.articles?.[0]?.headline || '';
-  const imgUrl = item.imageUrl || item.articles?.[0]?.imageUrl;
-  const srcName = item.sources?.[0]?.name || item.articles?.[0]?.sources?.[0]?.name || '';
-  const srcCount = item.sourceCount ?? item.articles?.length ?? 1;
-  const accent = useMemo(() => getArticleColor(label), [label]);
-  const ts = useMemo(() => relTime(item.publishedAt || item.articles?.[0]?.publishedAt), [item.publishedAt, item.articles]);
-
-  return (
-    <Pressable onPress={onPress} style={[s.vCard, { backgroundColor: accent }]}>
-      {imgUrl ? (
-        <Image source={{ uri: imgUrl }} style={s.vCardImg} resizeMode="cover" {...IMG_FADE} />
-      ) : null}
-      <View style={s.vCardGradient} />
-
-      {badge && (
-        <View style={[s.vCardBadge, { backgroundColor: badge.color }]}>
-          <Text style={s.vCardBadgeText}>{badge.text}</Text>
-        </View>
-      )}
-
-      {srcCount > 1 && (
-        <View style={s.vCardSrcBadge}>
-          <Text style={s.vCardSrcBadgeText}>{srcCount} sources</Text>
-        </View>
-      )}
-
-      <View style={s.vCardBottom}>
-        {(srcName || ts) ? (
-          <View style={s.vCardMeta}>
-            {srcName ? <Text style={s.vCardSrcName}>{srcName}</Text> : null}
-            {ts ? <Text style={s.vCardTs}>· {ts}</Text> : null}
-          </View>
-        ) : null}
-        <Text style={s.vCardHeadline} numberOfLines={3}>{label}</Text>
-      </View>
-    </Pressable>
-  );
-});
 
 // ── Entity tile ───────────────────────────────────────────────────────────────
 
@@ -280,9 +334,11 @@ const EntityTile = memo(function EntityTile({ entity, accent, bgColor, onTap }: 
         <Image source={{ uri: entity.imageUrl }} style={s.entityTileImg} resizeMode="cover" {...IMG_FADE} />
       ) : null}
       <View style={s.entityTileOverlay} />
+      {/* Name leads (bigger, bold) with the story count underneath — was
+          reversed (tiny count above a small name). */}
       <View style={s.entityTileBody}>
-        <Text style={[s.entityTileCount, { color: accent }]}>{entity.count} {entity.count === 1 ? 'story' : 'stories'}</Text>
         <Text style={s.entityTileName} numberOfLines={2}>{entity.name}</Text>
+        <Text style={[s.entityTileCount, { color: accent }]}>{entity.count} {entity.count === 1 ? 'story' : 'stories'}</Text>
       </View>
     </Pressable>
   );
@@ -308,7 +364,7 @@ const SourceChip = memo(function SourceChip({ src, onTap }: { src: SourceCard; o
 // ── Search story card ─────────────────────────────────────────────────────────
 
 const SearchStoryCard = memo(function SearchStoryCard({ item, onPress }: { item: FeedItem; onPress: () => void }) {
-  const label = item.clusterLabel || item.headline || item.articles?.[0]?.headline || '';
+  const label = itemLabel(item);
   const imgUrl = item.imageUrl || item.articles?.[0]?.imageUrl;
   const srcName = item.sources?.[0]?.name || item.articles?.[0]?.sources?.[0]?.name || '';
   const srcCount = item.sourceCount ?? item.articles?.length ?? 1;
@@ -335,32 +391,67 @@ function SkeletonBox({ height, style }: { height: number; style?: object }) {
 
 // ── Memoized section components ───────────────────────────────────────────────
 
-const TrendingSection = memo(function TrendingSection({ loading, stories, onPress }: {
-  loading: boolean; stories: FeedItem[]; onPress: (item: FeedItem) => void;
+// Skeleton height loosely matches StoryCard's own image-height formula
+// (cardWidth * densityScale, plus the text section) so the loading state
+// doesn't visibly jump in size once real cards land.
+const CARD_SKELETON_HEIGHT: Record<string, number> = { compact: 280, comfortable: 360, spacious: 440 };
+
+// Trending Stories, Don't Miss, and AI Deep Dives all render the actual
+// main-feed StoryCard component (via toStory()) instead of the bespoke
+// VerticalStoryCard — same image/gradient treatment, meta row, bias dot,
+// bookmark, read-dimming, and every Customize toggle StoryCard already
+// reads, for free. StoryCard handles its own navigation internally, so no
+// onPress plumbing is needed here.
+const TrendingSection = memo(function TrendingSection({ loading, stories, cardDensity }: {
+  loading: boolean; stories: FeedItem[]; cardDensity: string;
 }) {
+  const h = CARD_SKELETON_HEIGHT[cardDensity] ?? 360;
   return (
     <View style={s.section}>
       <SectionLabel text="Trending Stories" />
       {loading ? (
-        <><SkeletonBox height={200} style={{ marginBottom: 10 }} /><SkeletonBox height={200} style={{ marginBottom: 10 }} /></>
-      ) : stories.slice(0, 6).map((story, i) => (
-        <VerticalStoryCard key={i} item={story} onPress={() => onPress(story)} />
-      ))}
+        <><SkeletonBox height={h} style={{ marginBottom: 14, alignSelf: 'center', width: CONTENT_W }} /><SkeletonBox height={h} style={{ marginBottom: 14, alignSelf: 'center', width: CONTENT_W }} /></>
+      ) : stories.slice(0, 8).map((item, i) => {
+        const story = toStory(item);
+        return <View key={story.id || i} style={{ marginBottom: 14, alignItems: 'center' }}><StoryCard story={story} allStories={item.articles} /></View>;
+      })}
     </View>
   );
 });
 
-const DeepDivesSection = memo(function DeepDivesSection({ loading, stories, onPress }: {
-  loading: boolean; stories: FeedItem[]; onPress: (item: FeedItem) => void;
+// "Don't Miss" — the server's own "Catch Up · Big Stories This Week" rail:
+// stories from hot themes that aged past the fresh-rail cutoff but are
+// still under 7 days old. Flattened into individual cards, newest first.
+const DontMissSection = memo(function DontMissSection({ loading, stories, cardDensity }: {
+  loading: boolean; stories: FeedItem[]; cardDensity: string;
 }) {
+  const h = CARD_SKELETON_HEIGHT[cardDensity] ?? 360;
+  return (
+    <View style={s.section}>
+      <SectionLabel text="Don't Miss · Last 7 Days" />
+      {loading ? (
+        <SkeletonBox height={h} style={{ marginBottom: 14, alignSelf: 'center', width: CONTENT_W }} />
+      ) : stories.map((item, i) => {
+        const story = toStory(item);
+        return <View key={story.id || i} style={{ marginBottom: 14, alignItems: 'center' }}><StoryCard story={story} /></View>;
+      })}
+    </View>
+  );
+});
+
+const DeepDivesSection = memo(function DeepDivesSection({ loading, stories, cardDensity }: {
+  loading: boolean; stories: FeedItem[]; cardDensity: string;
+}) {
+  const h = CARD_SKELETON_HEIGHT[cardDensity] ?? 360;
   return (
     <View style={s.section}>
       <SectionLabel text="AI Deep Dives" />
       {loading ? (
-        <><SkeletonBox height={200} style={{ marginBottom: 10 }} /><SkeletonBox height={200} style={{ marginBottom: 10 }} /></>
-      ) : stories.slice(0, 4).map((story, i) => (
-        <VerticalStoryCard key={i} item={story} onPress={() => onPress(story)} badge={{ text: '✦ DEEP DIVE', color: '#7C3AED' }} />
-      ))}
+        <><SkeletonBox height={h} style={{ marginBottom: 14, alignSelf: 'center', width: CONTENT_W }} /><SkeletonBox height={h} style={{ marginBottom: 14, alignSelf: 'center', width: CONTENT_W }} /></>
+      ) : stories.slice(0, 4).map((item, i) => {
+        const story = toStory(item);
+        return <View key={story.id || i} style={{ marginBottom: 14, alignItems: 'center' }}><StoryCard story={story} allStories={item.articles} /></View>;
+      })}
     </View>
   );
 });
@@ -371,7 +462,7 @@ const CompaniesSection = memo(function CompaniesSection({ loading, companies, on
   return (
     <View style={s.section}>
       <SectionLabel text="Companies" />
-      {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={96} style={{ width: TILE_W }} />)}</View> : (
+      {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={108} style={{ width: TILE_W }} />)}</View> : (
         <View style={s.grid2}>
           {companies.slice(0, 8).map((c, i) => <EntityTile key={i} entity={c} accent="#0A84FF" bgColor={COMPANY_BGS[i % 4]} onTap={onTap} />)}
         </View>
@@ -386,7 +477,7 @@ const PeopleSection = memo(function PeopleSection({ loading, people, onTap }: {
   return (
     <View style={s.section}>
       <SectionLabel text="People" />
-      {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={96} style={{ width: TILE_W }} />)}</View> : (
+      {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={108} style={{ width: TILE_W }} />)}</View> : (
         <View style={s.grid2}>
           {people.slice(0, 8).map((p, i) => <EntityTile key={i} entity={p} accent="#FF9F0A" bgColor={PEOPLE_BGS[i % 4]} onTap={onTap} />)}
         </View>
@@ -401,7 +492,7 @@ const PlacesSection = memo(function PlacesSection({ loading, places, onTap }: {
   return (
     <View style={s.section}>
       <SectionLabel text="Places" />
-      {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={96} style={{ width: TILE_W }} />)}</View> : (
+      {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={108} style={{ width: TILE_W }} />)}</View> : (
         <View style={s.grid2}>
           {places.slice(0, 8).map((p, i) => <EntityTile key={i} entity={p} accent="#30D158" bgColor={PLACE_BGS[i % 4]} onTap={onTap} />)}
         </View>
@@ -449,7 +540,7 @@ const EmergingSection = memo(function EmergingSection({ loading, emergingTopics,
   return (
     <View style={s.section}>
       <SectionLabel text="Emerging Topics" />
-      {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={96} style={{ width: TILE_W }} />)}</View> : (
+      {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={108} style={{ width: TILE_W }} />)}</View> : (
         <View style={s.grid2}>
           {emergingTopics.slice(0, 8).map((t, i) => <EntityTile key={i} entity={t} accent="#64D2FF" bgColor={EMERGE_BGS[i % 4]} onTap={onTap} />)}
         </View>
@@ -565,6 +656,7 @@ type Nav = NativeStackNavigationProp<ExploreStackParamList>;
 
 type Section =
   | { key: 'trending' }
+  | { key: 'dontMiss' }
   | { key: 'deepDives' }
   | { key: 'companies' }
   | { key: 'people' }
@@ -576,8 +668,10 @@ type Section =
 
 export default function ExploreScreen() {
   const navigation = useNavigation<Nav>();
+  const { cardDensity } = useSettings();
 
   const [trendingStories, setTrendingStories] = useState<FeedItem[]>([]);
+  const [catchUpStories, setCatchUpStories] = useState<FeedItem[]>([]);
   const [deepDives, setDeepDives] = useState<FeedItem[]>([]);
   const [companies, setCompanies] = useState<EntityCard[]>([]);
   const [people, setPeople] = useState<EntityCard[]>([]);
@@ -607,28 +701,39 @@ export default function ExploreScreen() {
       const allItems: FeedItem[] = results.flatMap(r => r.status === 'fulfilled' ? r.value.items : []);
       allItemsRef.current = allItems;
 
-      const noHindi = (it: FeedItem) => {
-        const h = it.clusterLabel || it.headline || it.articles?.[0]?.headline || '';
-        return !isHindi(h);
-      };
+      const noHindi = (it: FeedItem) => !isHindi(itemLabel(it));
+
+      // Theme/company rails (incl. Catch Up) never belong in Trending/Deep
+      // Dives — isEventItem excludes them so only single-event items compete.
       const trending = dedup(
-        [...allItems].filter(noHindi).sort((a, b) => scoreItem(b) - scoreItem(a)),
+        allItems.filter(isEventItem).filter(noHindi).sort((a, b) => scoreItem(b) - scoreItem(a)),
         20
       );
       const ddItems = dedup(
-        [...allItems].filter(noHindi).filter(it => (it.sourceCount ?? it.articles?.length ?? 1) >= 3)
+        allItems.filter(isEventItem).filter(noHindi).filter(it => (it.sourceCount ?? it.articles?.length ?? 1) >= 3)
           .sort((a, b) => scoreItem(b) - scoreItem(a)),
         12
       );
 
-      const allHeadlines = allItems.map(it => it.clusterLabel || it.headline || it.articles?.[0]?.headline || '').filter(Boolean);
+      // "Don't Miss" — the server's own "Catch Up · Big Stories This Week"
+      // rail (buildMixedFeed in news.ts): stories from hot themes that aged
+      // past the fresh-rail cutoff but are still under 7 days old. Flatten
+      // every topic's Catch Up rail into one deduped, newest-first list.
+      const catchUp = dedup(
+        allItems
+          .filter(it => it.type === 'cluster' && it.collection && /catch up/i.test(it.topicTitle ?? ''))
+          .flatMap(it => (it.articles ?? []).map(a => ({ ...a, type: 'article' as const }))),
+        10,
+      ).sort((a, b) => new Date(b.publishedAt ?? 0).getTime() - new Date(a.publishedAt ?? 0).getTime());
+
+      const allHeadlines = allItems.flatMap(entityHeadlinesFor).filter(Boolean);
       const entityCounts = extractEntityCounts(allHeadlines);
 
       const entityImages = new Map<string, string>();
       for (const [entity] of entityCounts.entries()) {
         const low = entity.toLowerCase();
         const match = allItems.find(it => {
-          const t = [it.clusterLabel, it.headline, ...(it.articles ?? []).map(a => a.headline)].join(' ').toLowerCase();
+          const t = [itemLabel(it), ...(it.articles ?? []).map(a => a.headline)].join(' ').toLowerCase();
           return t.includes(low) && (it.imageUrl || it.articles?.[0]?.imageUrl);
         });
         const img = match?.imageUrl || match?.articles?.[0]?.imageUrl;
@@ -639,7 +744,7 @@ export default function ExploreScreen() {
       for (const r of results) {
         if (r.status !== 'fulfilled') continue;
         const { topic, items } = r.value;
-        const headlines = items.map((it: FeedItem) => it.clusterLabel || it.headline || '').filter(Boolean);
+        const headlines = items.flatMap((it: FeedItem) => entityHeadlinesFor(it)).filter(Boolean);
         for (const [entity] of extractEntityCounts(headlines).entries()) {
           if (!entityTopicSets.has(entity)) entityTopicSets.set(entity, new Set());
           entityTopicSets.get(entity)!.add(topic);
@@ -687,6 +792,7 @@ export default function ExploreScreen() {
         .map(([name, { domain, count }]) => ({ name, domain, count }));
 
       setTrendingStories(trending);
+      setCatchUpStories(catchUp);
       setDeepDives(ddItems);
       setCompanies(compList.slice(0, 24));
       setPeople(personList.slice(0, 24));
@@ -708,7 +814,7 @@ export default function ExploreScreen() {
           ...(it.sources ?? []).map(s => s.name),
           ...(it.articles ?? []).flatMap(a => (a.sources ?? []).map(s => s.name)),
         ];
-        const text = [it.clusterLabel, it.headline, it.summary, ...(it.articles ?? []).map(a => a.headline), ...srcNames].join(' ').toLowerCase();
+        const text = [itemLabel(it), it.summary, ...(it.articles ?? []).map(a => a.headline), ...srcNames].join(' ').toLowerCase();
         return text.includes(kw);
       }),
       20
@@ -728,7 +834,7 @@ export default function ExploreScreen() {
     const articleWithId = item.articles?.find(a => a.id);
     const firstArticle = item.articles?.[0];
     const primary = articleWithId ?? firstArticle;
-    const headline = primary?.headline ?? item.headline ?? item.clusterLabel ?? '';
+    const headline = primary?.headline ?? itemLabel(item);
     const allSources = (primary?.sources?.length ? primary.sources : item.sources) ?? [];
     const url = allSources[0]?.url ?? '';
     if (!headline) return;
@@ -767,6 +873,7 @@ export default function ExploreScreen() {
   const sections = useMemo<Section[]>(() => {
     if (searchQuery !== '') return [{ key: 'searchResults' }];
     const out: Section[] = [{ key: 'trending' }];
+    if (loading || catchUpStories.length > 0) out.push({ key: 'dontMiss' });
     if (loading || deepDives.length > 0) out.push({ key: 'deepDives' });
     if (loading || companies.length > 0) out.push({ key: 'companies' });
     if (loading || people.length > 0) out.push({ key: 'people' });
@@ -775,12 +882,13 @@ export default function ExploreScreen() {
     if (loading || sources.length > 0) out.push({ key: 'sources' });
     if (loading || emergingTopics.length > 0) out.push({ key: 'emerging' });
     return out;
-  }, [searchQuery, loading, deepDives.length, companies.length, people.length, places.length, sources.length, emergingTopics.length]);
+  }, [searchQuery, loading, catchUpStories.length, deepDives.length, companies.length, people.length, places.length, sources.length, emergingTopics.length]);
 
   const renderSection = useCallback(({ item }: { item: Section }) => {
     switch (item.key) {
-      case 'trending':      return <TrendingSection loading={loading} stories={trendingStories} onPress={openArticle} />;
-      case 'deepDives':     return <DeepDivesSection loading={loading} stories={deepDives} onPress={openArticle} />;
+      case 'trending':      return <TrendingSection loading={loading} stories={trendingStories} cardDensity={cardDensity} />;
+      case 'dontMiss':      return <DontMissSection loading={loading} stories={catchUpStories} cardDensity={cardDensity} />;
+      case 'deepDives':     return <DeepDivesSection loading={loading} stories={deepDives} cardDensity={cardDensity} />;
       case 'companies':     return <CompaniesSection loading={loading} companies={companies} onTap={triggerSearch} />;
       case 'people':        return <PeopleSection loading={loading} people={people} onTap={triggerSearch} />;
       case 'places':        return <PlacesSection loading={loading} places={places} onTap={triggerSearch} />;
@@ -790,8 +898,8 @@ export default function ExploreScreen() {
       case 'searchResults': return <SearchResultsSection searchQuery={searchQuery} searchResults={searchResults} hasSearchResults={hasSearchResults} openArticle={openArticle} triggerSearch={triggerSearch} />;
       default:              return null;
     }
-  }, [loading, trendingStories, deepDives, companies, people, places, sources, emergingTopics,
-      openArticle, openTopic, triggerSearch, searchQuery, searchResults, hasSearchResults]);
+  }, [loading, trendingStories, catchUpStories, deepDives, companies, people, places, sources, emergingTopics,
+      cardDensity, openArticle, openTopic, triggerSearch, searchQuery, searchResults, hasSearchResults]);
 
   return (
     <SafeAreaView style={s.root} edges={['top']}>
@@ -858,12 +966,12 @@ const s = StyleSheet.create({
   vCardHeadline: { fontSize: 15, fontWeight: '800', color: '#fff', lineHeight: 20, letterSpacing: -0.2 },
 
   // Entity tile
-  entityTile: { height: 96, borderRadius: 14, overflow: 'hidden', marginBottom: 10 },
+  entityTile: { height: 108, borderRadius: 14, overflow: 'hidden', marginBottom: 10 },
   entityTileImg: { ...StyleSheet.absoluteFillObject },
   entityTileOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
   entityTileBody: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 12 },
-  entityTileCount: { fontSize: 8.5, fontWeight: '700', marginBottom: 4, letterSpacing: 0.5 },
-  entityTileName: { fontSize: 14, fontWeight: '800', color: '#fff', lineHeight: 17 },
+  entityTileName: { fontSize: 19, fontWeight: '800', color: '#fff', lineHeight: 22, letterSpacing: -0.3 },
+  entityTileCount: { fontSize: 11, fontWeight: '700', marginTop: 4, letterSpacing: 0.3 },
 
   // Source chip
   sourceChip: {
