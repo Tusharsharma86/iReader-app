@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Story } from '../types';
 import { useRouter } from '../contexts/RouterContext';
 import { useTabBar } from '../contexts/TabBarContext';
@@ -180,6 +180,33 @@ export default function DigestScreen() {
   const [error, setError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
+  // Scroll-position memory — same pattern as FeedScreen.tsx/ExploreScreen.tsx.
+  // Digest unmounts when you tap into an Article and remounts on back, so
+  // without this the scroll silently resets to the top every time.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollOffsetRef = useRef(0);
+  const isFirstLoadDone = useRef(false);
+  const SCROLL_RESTORE_MAX_AGE_MS = 30 * 60 * 1000; // 30 min
+  useEffect(() => {
+    if (loading || isFirstLoadDone.current) return;
+    isFirstLoadDone.current = true;
+    const saved = localStorage.getItem('@ireader_scroll_digest');
+    let offset = 0;
+    if (saved) {
+      try {
+        const p = JSON.parse(saved) as { y?: number; at?: number };
+        if (typeof p?.y === 'number' && typeof p?.at === 'number' && Date.now() - p.at < SCROLL_RESTORE_MAX_AGE_MS) offset = p.y;
+      } catch { /* ignore */ }
+    }
+    if (offset > 0) requestAnimationFrame(() => { scrollRef.current?.scrollTo({ top: offset, behavior: 'auto' }); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+  useEffect(() => {
+    const save = () => { localStorage.setItem('@ireader_scroll_digest', JSON.stringify({ y: scrollOffsetRef.current, at: Date.now() })); };
+    window.addEventListener('beforeunload', save);
+    return () => { save(); window.removeEventListener('beforeunload', save); };
+  }, []);
+
   const load = useCallback(async (force = false) => {
     setError(null);
     const dateKey = todayKey();
@@ -246,7 +273,12 @@ export default function DigestScreen() {
 
   return (
     <div
-      onScroll={(e) => reportScroll((e.target as HTMLDivElement).scrollTop)}
+      ref={scrollRef}
+      onScroll={(e) => {
+        const top = (e.target as HTMLDivElement).scrollTop;
+        reportScroll(top);
+        scrollOffsetRef.current = top;
+      }}
       style={{
         height: '100%', background: '#080808', overflowY: 'auto', overflowX: 'hidden',
         WebkitOverflowScrolling: 'touch', color: '#fff',
