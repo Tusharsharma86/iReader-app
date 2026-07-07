@@ -13,10 +13,18 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png?v=pro3" />
     <title>iReader Pro</title>
     <style>
+      /* height: 100% is the fallback for browsers without dvh support; the
+         100dvh line below overrides it everywhere dvh IS supported. html/
+         body used to override with the legacy -webkit-fill-available hack
+         instead — a documented WebKit bug where it computes short on a cold
+         standalone-PWA launch (leaving a black gap at the bottom until the
+         next full layout pass, e.g. a device rotation forces one). #root
+         already used 100dvh correctly; html/body now match so the very
+         first paint is correct without needing a later resize to fix it. */
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       html {
         height: 100%;
-        height: -webkit-fill-available;
+        height: 100dvh;
         background: #000;
         overscroll-behavior: none;
       }
@@ -24,7 +32,7 @@
         position: fixed;
         width: 100%;
         height: 100%;
-        height: -webkit-fill-available;
+        height: 100dvh;
         background: #000;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         -webkit-font-smoothing: antialiased;
