@@ -554,7 +554,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
       </div>
 
       {/* Meta — pulled up to overlap hero fade */}
-      <div style={{ padding: '4px 16px 14px', marginTop: -32, position: 'relative' }}>
+      <div style={{ padding: '4px 16px 14px', marginTop: -64, position: 'relative' }}>
         {/* Category chip */}
         <div style={{
           display: 'inline-flex', alignItems: 'center',
