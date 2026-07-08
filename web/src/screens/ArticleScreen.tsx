@@ -67,6 +67,22 @@ function renderEntities(text: string, entities: string[]): React.ReactNode {
     : <React.Fragment key={i}>{p}</React.Fragment>);
 }
 
+// Headline entity highlight — same word-matching as renderEntities, but
+// colored (accent) instead of white, matching the Particle-style headline.
+function renderHeadlineHighlights(text: string, entities: string[], color: string): React.ReactNode {
+  if (!entities || entities.length === 0) return text;
+  const escaped = [...new Set(entities)]
+    .filter(e => e && e.length > 2)
+    .sort((a, b) => b.length - a.length)
+    .map(e => e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (escaped.length === 0) return text;
+  const re = new RegExp(`\\b(${escaped.join('|')})\\b`, 'g');
+  const parts = text.split(re);
+  return parts.map((p, i) => i % 2 === 1
+    ? <span key={i} style={{ color }}>{p}</span>
+    : <React.Fragment key={i}>{p}</React.Fragment>);
+}
+
 const SKIP_NAME_WORDS = new Set([
   'January','February','March','April','May','June','July','August','September','October','November','December',
   'The','This','That','These','Those','Their','Its','His','Her','Our','Your',
@@ -554,7 +570,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
       </div>
 
       {/* Meta — pulled up to overlap hero fade */}
-      <div style={{ padding: '4px 16px 14px', marginTop: -64, position: 'relative' }}>
+      <div style={{ padding: '4px 16px 14px', marginTop: -96, position: 'relative' }}>
         {/* Category chip */}
         <div style={{
           display: 'inline-flex', alignItems: 'center',
@@ -564,7 +580,9 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
           marginBottom: 14,
         }}>{articleCategory}</div>
 
-        <h1 style={{ color: '#fff', fontSize: 24, fontWeight: 800, lineHeight: 1.33, margin: 0 }}>{params.headline}</h1>
+        <h1 style={{ color: '#fff', fontSize: 24, fontWeight: 800, lineHeight: 1.33, margin: 0 }}>
+          {renderHeadlineHighlights(params.headline, [...entities.people, ...entities.companies], accent)}
+        </h1>
 
         {/* Primary source row: avatar + name + verified */}
         {allSources.length > 0 && (() => {

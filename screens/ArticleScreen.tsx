@@ -414,6 +414,23 @@ function extractEntities(text: string): { people: string[]; companies: string[] 
   return { people: people.slice(0, 5), companies: companies.slice(0, 5) };
 }
 
+// Headline entity highlight — colors recognized people/company names within
+// the headline (accent color), matching the Particle-style multi-color
+// headline. Rest of the headline stays the default white.
+function renderHeadlineHighlights(text: string, entities: string[], color: string): React.ReactNode {
+  if (!entities || entities.length === 0) return text;
+  const escaped = [...new Set(entities)]
+    .filter(e => e && e.length > 2)
+    .sort((a, b) => b.length - a.length)
+    .map(e => e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (escaped.length === 0) return text;
+  const re = new RegExp(`\\b(${escaped.join('|')})\\b`, 'g');
+  const parts = text.split(re);
+  return parts.map((p, i) => i % 2 === 1
+    ? <Text key={i} style={{ color }}>{p}</Text>
+    : <Text key={i}>{p}</Text>);
+}
+
 export default function ArticleScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'Article'>>();
@@ -960,7 +977,7 @@ export default function ArticleScreen() {
           </View>
 
           {/* Headline */}
-          <Text style={styles.headline}>{params.headline}</Text>
+          <Text style={styles.headline}>{renderHeadlineHighlights(params.headline, [...entities.people, ...entities.companies], accent)}</Text>
 
           {/* Source row: avatar + name + verified */}
           {allSources.length > 0 && (() => {
@@ -1655,7 +1672,7 @@ const styles = StyleSheet.create({
   },
   // Pull metaBlock up so headline starts inside the faded bottom of the image —
   // image dissolves into screen bg with no visible edge.
-  metaBlock: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 14, marginTop: -64 },
+  metaBlock: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 14, marginTop: -96 },
   categoryChip: {
     alignSelf: 'flex-start',
     borderWidth: 1,
