@@ -159,9 +159,10 @@ interface Props {
   cardWidth?: number;
   imageHeight?: number;
   allStories?: Story[];
+  suppressBreaking?: boolean;
 }
 
-function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight: imageHeightProp, allStories }: Props) {
+function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight: imageHeightProp, allStories, suppressBreaking }: Props) {
   // Customize options — gate UI elements per user preference.
   const {
     showClusterSummary, showBiasDots, showCardImages, cardDensity, timeFormat,
@@ -291,7 +292,7 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight:
         <View style={styles.metaRow}>
           <Text style={[styles.metaLabel, { flexShrink: 1 }]} numberOfLines={1}>{source.toUpperCase()}  ·  {timeFormat === 'absolute' ? timeAbs(story.publishedAt) : timeAgo(story.publishedAt)}</Text>
           {showBiasDots && <BiasDot bias={story.sourceBias} size={6} />}
-          {isBreakingBadge && (() => {
+          {isBreakingBadge && !suppressBreaking && (() => {
               const tier = breakingTier(story.publishedAt, true);
               if (tier === 'live') return (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>

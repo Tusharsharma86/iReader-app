@@ -170,17 +170,28 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
         {showMetaPill && (() => {
           const tier = breakingTier(cluster.stories[0]?.publishedAt, isBreaking);
           if (!tier) return null;
+          const color = tier === 'developing' ? '#FF9500' : '#FF3B30';
+          const bg = tier === 'developing' ? 'rgba(255,149,0,0.12)' : 'rgba(255,59,48,0.12)';
+          const border = tier === 'developing' ? 'rgba(255,149,0,0.3)' : 'rgba(255,59,48,0.3)';
           return (
-            <div style={{ padding: '0 20px', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-              {tier === 'live' && <span className="live-dot" style={{ width: 7, height: 7, borderRadius: '50%', background: '#FF3B30', display: 'inline-block', flexShrink: 0 }} />}
-              <span style={{ color: tier === 'developing' ? '#FF9500' : '#FF3B30', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>
-                {tier === 'live' ? 'LIVE' : tier === 'developing' ? 'DEVELOPING' : 'BREAKING'}
+            <div style={{ padding: '0 20px', marginBottom: 6 }}>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '3px 9px', borderRadius: 999,
+                background: bg, border: `1px solid ${border}`,
+              }}>
+                {tier === 'live' && <span className="live-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0 }} />}
+                <span style={{ color, fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>
+                  {tier === 'live' ? 'LIVE' : tier === 'developing' ? 'DEVELOPING' : 'BREAKING'}
+                </span>
               </span>
             </div>
           );
         })()}
         <div style={{ display: 'flex', justifyContent: 'center' }}>
-          <StoryCard story={clusterStory} cardWidth={soloCardWidth} allStories={allStories} />
+          {/* suppressBreaking: singleton cards already show the tier pill above — showing
+              it again inline in the card's meta row would duplicate it. */}
+          <StoryCard story={clusterStory} cardWidth={soloCardWidth} allStories={allStories} suppressBreaking />
         </div>
       </div>
     );

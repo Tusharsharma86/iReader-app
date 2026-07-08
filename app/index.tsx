@@ -1520,13 +1520,22 @@ const TopicSection = React.memo(function TopicSection({
       <View style={styles.section}>
         {showMetaPill && tier1 && (
           <View style={{ paddingHorizontal: 16, marginBottom: 6 }}>
-            {tier1 === 'live' && <LivePulse />}
-            {tier1 === 'breaking' && <Text style={styles.breakingText}>BREAKING</Text>}
-            {tier1 === 'developing' && <Text style={{ color: '#FF9500', fontSize: 9, fontWeight: '800', letterSpacing: 1 }}>DEVELOPING</Text>}
+            <View style={{
+              alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 5,
+              paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999,
+              backgroundColor: tier1 === 'developing' ? 'rgba(255,149,0,0.12)' : 'rgba(255,59,48,0.12)',
+              borderWidth: 1, borderColor: tier1 === 'developing' ? 'rgba(255,149,0,0.3)' : 'rgba(255,59,48,0.3)',
+            }}>
+              {tier1 === 'live' && <LivePulse />}
+              {tier1 === 'breaking' && <Text style={styles.breakingText}>BREAKING</Text>}
+              {tier1 === 'developing' && <Text style={{ color: '#FF9500', fontSize: 9, fontWeight: '800', letterSpacing: 1 }}>DEVELOPING</Text>}
+            </View>
           </View>
         )}
         <View style={{ alignItems: 'center' }}>
-          <StoryCard story={cluster.stories[0]} cardWidth={cardWidth} allStories={allStories} />
+          {/* suppressBreaking: singleton cards already show the tier pill above — showing
+              it again inline in the card's meta row would duplicate it. */}
+          <StoryCard story={cluster.stories[0]} cardWidth={cardWidth} allStories={allStories} suppressBreaking />
         </View>
       </View>
     );
