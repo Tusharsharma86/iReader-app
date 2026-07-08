@@ -161,7 +161,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     defaultArticleTab,
     showStatsCard, showArticleRssSummary, showVerifyDedup: showVerifyDedupSetting,
     showReferencedSources, showKeyPoints,
-    summaryLength, keyPointsCount, linkOpen,
+    summaryLength, summaryFormat, keyPointsCount, linkOpen,
     // Wave 2
     showEntityHighlights, showQuoteHighlights, showReadingDifficulty,
     fontFamily, lineHeightMode, columnWidth,
@@ -402,7 +402,20 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
         for (let i = 0; i < sents.length; i += 3) out.push(sents.slice(i, i + 3).join(' '));
         return out;
       };
-      if (rawSummary) {
+      if (summaryFormat === 'bullets' && bullets.length > 0) {
+        // Customize → Summary format: "Bullets" skips the narrative prose
+        // entirely and shows the takeaway list on its own.
+        aiContent = (
+          <div>
+            {bullets.map((line, i) => (
+              <div key={i} style={{ display: 'flex', gap: 14, marginBottom: 18, alignItems: 'flex-start' }}>
+                <div style={{ width: 8, height: 8, borderRadius: 4, background: dominant, flexShrink: 0, marginTop: 7 }} />
+                <p style={{ color: '#DDD', fontSize: 15, lineHeight: 1.6, margin: 0 }}>{line}</p>
+              </div>
+            ))}
+          </div>
+        );
+      } else if (rawSummary) {
         const paragraphs = rawSummary.includes('\n\n')
           ? rawSummary.split(/\n{2,}/).map(p => p.trim()).filter(Boolean)
           : splitSentences(rawSummary);

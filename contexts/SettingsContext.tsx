@@ -9,6 +9,7 @@ export type FontSize = 'Small' | 'Medium' | 'Large' | 'XLarge';
 export type CardDensity = 'compact' | 'comfortable' | 'spacious';
 export type ArticleTab = 'Long Form' | 'Summary' | '5 Ws' | 'ELI5';
 export type SummaryLength = 'short' | 'medium' | 'long';
+export type SummaryFormat = 'paragraph' | 'bullets';
 export type KeyPointsCount = 3 | 5 | 7;
 export type Eli5Tone = 'kid' | 'casual' | 'plain';
 export type DeepDiveDepth = 'quick' | 'standard' | 'deep';
@@ -76,6 +77,7 @@ interface SettingsContextType {
 
   // ── Customize: AI ──────────────────────────────────────────────────────
   summaryLength: SummaryLength; setSummaryLength: (v: SummaryLength) => void;
+  summaryFormat: SummaryFormat; setSummaryFormat: (v: SummaryFormat) => void;
   keyPointsCount: KeyPointsCount; setKeyPointsCount: (v: KeyPointsCount) => void;
   showKeyPoints: boolean; setShowKeyPoints: (v: boolean) => void;
   eli5Tone: Eli5Tone; setEli5Tone: (v: Eli5Tone) => void;
@@ -119,6 +121,7 @@ const DEFAULTS = {
   showEntityHighlights: true,
   showReadingDifficulty: true,
   summaryLength: 'medium' as SummaryLength,
+  summaryFormat: 'paragraph' as SummaryFormat,
   keyPointsCount: 3 as KeyPointsCount,
   showKeyPoints: true,
   eli5Tone: 'casual' as Eli5Tone,
@@ -159,7 +162,7 @@ const SettingsContext = createContext<SettingsContextType>({
   setShowCardImages: () => {}, setCardDensity: () => {},
   setDefaultArticleTab: () => {}, setShowStatsCard: () => {}, setShowArticleRssSummary: () => {}, setShowVerifyDedup: () => {},
   setShowReferencedSources: () => {}, setShowEntityHighlights: () => {}, setShowReadingDifficulty: () => {},
-  setSummaryLength: () => {}, setKeyPointsCount: () => {}, setShowKeyPoints: () => {},
+  setSummaryLength: () => {}, setSummaryFormat: () => {}, setKeyPointsCount: () => {}, setShowKeyPoints: () => {},
   setEli5Tone: () => {}, setDeepDiveDepth: () => {},
   setShowDeepDiveEntities: () => {}, setShowDeepDiveCurious: () => {},
   timeFormat: 'relative' as TimeFormat, setTimeFormat: () => {},
@@ -198,6 +201,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [showEntityHighlights, setShowEntityHighlights] = useState(DEFAULTS.showEntityHighlights);
   const [showReadingDifficulty, setShowReadingDifficulty] = useState(DEFAULTS.showReadingDifficulty);
   const [summaryLength, setSummaryLength] = useState<SummaryLength>(DEFAULTS.summaryLength);
+  const [summaryFormat, setSummaryFormat] = useState<SummaryFormat>(DEFAULTS.summaryFormat);
   const [keyPointsCount, setKeyPointsCount] = useState<KeyPointsCount>(DEFAULTS.keyPointsCount);
   const [showKeyPoints, setShowKeyPoints] = useState(DEFAULTS.showKeyPoints);
   const [eli5Tone, setEli5Tone] = useState<Eli5Tone>(DEFAULTS.eli5Tone);
@@ -248,6 +252,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           if (typeof saved.showEntityHighlights === 'boolean') setShowEntityHighlights(saved.showEntityHighlights);
           if (typeof saved.showReadingDifficulty === 'boolean') setShowReadingDifficulty(saved.showReadingDifficulty);
           if (['short','medium','long'].includes(saved.summaryLength)) setSummaryLength(saved.summaryLength);
+          if (['paragraph','bullets'].includes(saved.summaryFormat)) setSummaryFormat(saved.summaryFormat);
           if ([3,5,7].includes(saved.keyPointsCount)) setKeyPointsCount(saved.keyPointsCount);
           if (typeof saved.showKeyPoints === 'boolean') setShowKeyPoints(saved.showKeyPoints);
           if (['kid','casual','plain'].includes(saved.eli5Tone)) setEli5Tone(saved.eli5Tone);
@@ -273,11 +278,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity,
       defaultArticleTab, showStatsCard, showArticleRssSummary, showVerifyDedup, showReferencedSources,
       showEntityHighlights, showReadingDifficulty,
-      summaryLength, keyPointsCount, showKeyPoints,
+      summaryLength, summaryFormat, keyPointsCount, showKeyPoints,
       eli5Tone, deepDiveDepth, showDeepDiveEntities, showDeepDiveCurious,
       timeFormat, autoMarkRead, showQuoteHighlights,
     })).catch(() => {});
-  }, [loaded, fontSize, notifBreaking, breakingSensitivity, notifTech, notifDigest, notifAiFeed, notifSources, activeTopics, activeSubTopics, favSources, favTopics, topicInterests, showSports, showEntertainment, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showArticleRssSummary, showVerifyDedup, showReferencedSources, showEntityHighlights, showReadingDifficulty, summaryLength, keyPointsCount, showKeyPoints, eli5Tone, deepDiveDepth, showDeepDiveEntities, showDeepDiveCurious, timeFormat, autoMarkRead, showQuoteHighlights]);
+  }, [loaded, fontSize, notifBreaking, breakingSensitivity, notifTech, notifDigest, notifAiFeed, notifSources, activeTopics, activeSubTopics, favSources, favTopics, topicInterests, showSports, showEntertainment, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showArticleRssSummary, showVerifyDedup, showReferencedSources, showEntityHighlights, showReadingDifficulty, summaryLength, summaryFormat, keyPointsCount, showKeyPoints, eli5Tone, deepDiveDepth, showDeepDiveEntities, showDeepDiveCurious, timeFormat, autoMarkRead, showQuoteHighlights]);
 
   // Reconcile backend notification prefs with the toggles shown locally —
   // ONCE per launch, after settings load. Fixes the fresh-install / new-token
@@ -386,6 +391,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setShowEntityHighlights(DEFAULTS.showEntityHighlights);
     setShowReadingDifficulty(DEFAULTS.showReadingDifficulty);
     setSummaryLength(DEFAULTS.summaryLength);
+    setSummaryFormat(DEFAULTS.summaryFormat);
     setKeyPointsCount(DEFAULTS.keyPointsCount);
     setShowKeyPoints(DEFAULTS.showKeyPoints);
     setEli5Tone(DEFAULTS.eli5Tone);
@@ -427,6 +433,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     showEntityHighlights, setShowEntityHighlights,
     showReadingDifficulty, setShowReadingDifficulty,
     summaryLength, setSummaryLength,
+    summaryFormat, setSummaryFormat,
     keyPointsCount, setKeyPointsCount,
     showKeyPoints, setShowKeyPoints,
     eli5Tone, setEli5Tone,
@@ -437,7 +444,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     autoMarkRead, setAutoMarkRead,
     showQuoteHighlights, setShowQuoteHighlights,
     resetCustomize,
-  }), [fontSize, notifBreaking, breakingSensitivity, notifTech, notifDigest, notifAiFeed, notifSources, showSports, showEntertainment, favSources, favTopics, topicInterests, activeTopics, activeSubTopics, setFontSize, setNotifBreaking, setBreakingSensitivity, setNotifTech, setNotifDigest, setNotifAiFeed, setNotifSources, setShowSports, setShowEntertainment, toggleFavSource, toggleFavTopic, toggleTopic, toggleSubTopic, setTopicInterest, resetSettings, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showArticleRssSummary, showVerifyDedup, showReferencedSources, showEntityHighlights, showReadingDifficulty, summaryLength, keyPointsCount, showKeyPoints, eli5Tone, deepDiveDepth, showDeepDiveEntities, showDeepDiveCurious, timeFormat, autoMarkRead, showQuoteHighlights, resetCustomize]);
+  }), [fontSize, notifBreaking, breakingSensitivity, notifTech, notifDigest, notifAiFeed, notifSources, showSports, showEntertainment, favSources, favTopics, topicInterests, activeTopics, activeSubTopics, setFontSize, setNotifBreaking, setBreakingSensitivity, setNotifTech, setNotifDigest, setNotifAiFeed, setNotifSources, setShowSports, setShowEntertainment, toggleFavSource, toggleFavTopic, toggleTopic, toggleSubTopic, setTopicInterest, resetSettings, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showArticleRssSummary, showVerifyDedup, showReferencedSources, showEntityHighlights, showReadingDifficulty, summaryLength, summaryFormat, keyPointsCount, showKeyPoints, eli5Tone, deepDiveDepth, showDeepDiveEntities, showDeepDiveCurious, timeFormat, autoMarkRead, showQuoteHighlights, resetCustomize]);
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }

@@ -12,7 +12,7 @@ import React, { useCallback } from 'react';
 import { useRouter } from '../contexts/RouterContext';
 import {
   useSettings,
-  type CardDensity, type ArticleTab, type SummaryLength,
+  type CardDensity, type ArticleTab, type SummaryLength, type SummaryFormat,
   type KeyPointsCount, type LinkOpen,
   type ThemeMode, type FontFamily, type LineHeightMode, type ColumnWidth,
   type Eli5Tone, type DeepDiveDepth, type TimeFormat,
@@ -211,6 +211,11 @@ const SUMMARY_LENGTH_OPTIONS: { label: string; value: SummaryLength }[] = [
   { label: 'Long',   value: 'long' },
 ];
 
+const SUMMARY_FORMAT_OPTIONS: { label: string; value: SummaryFormat }[] = [
+  { label: 'Paragraph', value: 'paragraph' },
+  { label: 'Bullets',   value: 'bullets' },
+];
+
 const KEY_POINTS_OPTIONS: { label: string; value: KeyPointsCount }[] = [
   { label: '3', value: 3 },
   { label: '5', value: 5 },
@@ -321,6 +326,10 @@ export default function CustomizeScreen() {
           sub="Target word count for the narrative summary."
           options={SUMMARY_LENGTH_OPTIONS}
           value={s.summaryLength} onChange={s.setSummaryLength} />
+        <RowSegmented border label="Summary format"
+          sub="Paragraph prose, or straight to the bullet points."
+          options={SUMMARY_FORMAT_OPTIONS}
+          value={s.summaryFormat} onChange={s.setSummaryFormat} />
         <RowSegmented border label="Key points count"
           sub="Number of takeaway bullets requested from the model."
           options={KEY_POINTS_OPTIONS}

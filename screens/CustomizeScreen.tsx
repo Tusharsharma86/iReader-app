@@ -8,7 +8,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 're
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   useSettings,
-  type CardDensity, type ArticleTab, type SummaryLength,
+  type CardDensity, type ArticleTab, type SummaryLength, type SummaryFormat,
   type KeyPointsCount, type Eli5Tone, type DeepDiveDepth, type TimeFormat,
 } from '../contexts/SettingsContext';
 
@@ -79,6 +79,10 @@ const SUMMARY_LEN: SegmentedOption<SummaryLength>[] = [
   { label: 'Short', value: 'short' },
   { label: 'Medium', value: 'medium' },
   { label: 'Long', value: 'long' },
+];
+const SUMMARY_FORMAT: SegmentedOption<SummaryFormat>[] = [
+  { label: 'Paragraph', value: 'paragraph' },
+  { label: 'Bullets', value: 'bullets' },
 ];
 const KP_COUNT: SegmentedOption<KeyPointsCount>[] = [
   { label: '3', value: 3 }, { label: '5', value: 5 }, { label: '7', value: 7 },
@@ -193,6 +197,8 @@ export default function CustomizeScreen() {
         <View style={styles.card}>
           <RowSegmented label="Summary length" sub="Word count target for narrative."
             options={SUMMARY_LEN} value={s.summaryLength} onChange={s.setSummaryLength} />
+          <RowSegmented border label="Summary format" sub="Paragraph prose, or straight to the bullet points."
+            options={SUMMARY_FORMAT} value={s.summaryFormat} onChange={s.setSummaryFormat} />
           <RowSegmented border label="Key points count" sub="Bullets requested from the model."
             options={KP_COUNT} value={s.keyPointsCount} onChange={s.setKeyPointsCount} />
           <RowToggle border label="Show KEY POINTS footer"

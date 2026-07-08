@@ -25,7 +25,7 @@ import { tabBarTranslateY } from '../utils/tabBarAnim';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 import { BiasDot, BIAS_CONFIG, type BiasRating } from '../components/StoryCard';
 import { RootStackParamList } from '../types/navigation';
-import { useSettings } from '../contexts/SettingsContext';
+import { useSettings, type SummaryFormat } from '../contexts/SettingsContext';
 import { useSaved } from '../contexts/SavedContext';
 import { getCached, setCached, hydrateCached, TTL } from '../utils/cache';
 import { trackArticleRead, trackAiUsage } from '../utils/usageTracker';
@@ -438,7 +438,7 @@ export default function ArticleScreen() {
     defaultArticleTab,
     showStatsCard, showArticleRssSummary, showVerifyDedup: showVerifyDedupSetting,
     showReferencedSources, showKeyPoints,
-    summaryLength, keyPointsCount, eli5Tone,
+    summaryLength, summaryFormat, keyPointsCount, eli5Tone,
     showEntityHighlights, showReadingDifficulty,
   } = useSettings();
   const { isSaved, toggleSave } = useSaved();
@@ -825,7 +825,7 @@ export default function ArticleScreen() {
       switch (activeTab) {
         case 'Summary':
           // Summary prose matches KEY POINTS sizing (13.5) — parity with web.
-          aiContent = <SummaryTab loading={aiLoading} result={aiResult} error={aiError} accentColor={dominant} fontSize={13.5} showKeyPoints={showKeyPoints} highlights={showEntityHighlights} />;
+          aiContent = <SummaryTab loading={aiLoading} result={aiResult} error={aiError} accentColor={dominant} fontSize={13.5} showKeyPoints={showKeyPoints} highlights={showEntityHighlights} summaryFormat={summaryFormat} />;
           break;
         case '5 Ws':
           aiContent = <FiveWsTab loading={aiLoading} result={aiResult} error={aiError} accentColor={accent} />;
@@ -1495,16 +1495,32 @@ function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accen
   );
 }
 
-function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoints = true, highlights = true }: { loading: boolean; result: AiResult | null; error: string | null; accentColor: string; fontSize: number; showKeyPoints?: boolean; highlights?: boolean }) {
+function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoints = true, highlights = true, summaryFormat = 'paragraph' }: { loading: boolean; result: AiResult | null; error: string | null; accentColor: string; fontSize: number; showKeyPoints?: boolean; highlights?: boolean; summaryFormat?: SummaryFormat }) {
   if (loading) return <Spinner />;
   if (error) return <ErrorMsg msg={error} />;
   if (!result) return <ErrorMsg msg="No summary available." />;
 
+  const rawSummary = (result.summary ?? '').trim();
+  const bullets = result.bullets ?? [];
+
+  // Customize → Summary format: "Bullets" skips the narrative prose
+  // entirely and shows the takeaway list on its own.
+  if (summaryFormat === 'bullets' && bullets.length > 0) {
+    return (
+      <View>
+        {bullets.map((line, i) => (
+          <View key={i} style={styles.bulletRow}>
+            <View style={[styles.bulletDot, { backgroundColor: accentColor }]} />
+            <Text style={styles.bulletText}>{line}</Text>
+          </View>
+        ))}
+      </View>
+    );
+  }
+
   // Prefer narrative `summary` (paragraph prose) over `bullets`. If the model
   // returned only bullets (older cache), stitch them into prose so the user
   // still gets a readable flow instead of a bullet dump.
-  const rawSummary = (result.summary ?? '').trim();
-  const bullets = result.bullets ?? [];
   const narrative = rawSummary
     || bullets.join(' ').trim()
     || '';
