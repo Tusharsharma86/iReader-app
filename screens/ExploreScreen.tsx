@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
 import {
   View, Text, FlatList, Image, Pressable, TextInput,
-  StyleSheet, Dimensions, ScrollView, Platform,
+  StyleSheet, Dimensions, ScrollView, Platform, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { getArticleColor } from '../utils/colors';
@@ -700,20 +700,29 @@ export default function ExploreScreen() {
   const [searchText, setSearchText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<GroupedSearch>({ stories: [], companies: [], people: [], places: [] });
+  const [refreshing, setRefreshing] = useState(false);
 
   const allItemsRef = useRef<FeedItem[]>([]);
+  // Tracks when data was last fetched so focus-triggered refetches only fire
+  // once the server's own cache would plausibly have new data (5 min, same
+  // as api-server's feed cache TTL) — avoids re-fetching on every tab switch.
+  const lastFetchRef = useRef(0);
+  const REFRESH_STALE_MS = 5 * 60 * 1000;
+  const isMountedRef = useRef(true);
+  useEffect(() => () => { isMountedRef.current = false; }, []);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadData = useCallback((force = false) => {
+    lastFetchRef.current = Date.now();
     const FEED_TOPICS = ['breaking', 'india-politics', 'technology', 'geopolitics', 'markets', 'business'];
+    const forceParam = force ? '&force=1' : '';
 
-    Promise.allSettled(
+    return Promise.allSettled(
       FEED_TOPICS.map(t =>
-        fetch(`${API_BASE}/feed?topic=${t}`).then(r => r.json())
+        fetch(`${API_BASE}/feed?topic=${t}${forceParam}`).then(r => r.json())
           .then((d: { feed?: FeedItem[] }) => ({ topic: t, items: (d?.feed ?? []) as FeedItem[] }))
       )
     ).then(results => {
-      if (cancelled) return;
+      if (!isMountedRef.current) return;
 
       const allItems: FeedItem[] = results.flatMap(r => r.status === 'fulfilled' ? r.value.items : []);
       allItemsRef.current = allItems;
@@ -817,10 +826,22 @@ export default function ExploreScreen() {
       setEmergingTopics(emerging);
       setSources(srcList);
       setLoading(false);
-    }).catch(() => { if (!cancelled) setLoading(false); });
-
-    return () => { cancelled = true; };
+    }).catch(() => { if (isMountedRef.current) setLoading(false); });
   }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  // Refetch when the tab regains focus, but only if the last fetch is stale —
+  // otherwise flipping between tabs would refetch every time.
+  useFocusEffect(useCallback(() => {
+    if (Date.now() - lastFetchRef.current > REFRESH_STALE_MS) loadData();
+  }, [loadData]));
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadData(true);
+    setRefreshing(false);
+  }, [loadData]);
 
   const doSearch = useCallback((q: string) => {
     setSearchQuery(q);
@@ -937,6 +958,9 @@ export default function ExploreScreen() {
         maxToRenderPerBatch={2}
         windowSize={5}
         removeClippedSubviews={true}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#888" colors={['#888']} />
+        }
       />
     </SafeAreaView>
   );

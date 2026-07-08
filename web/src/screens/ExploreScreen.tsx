@@ -519,17 +519,21 @@ export default function ExploreScreen() {
 
   useEffect(() => { showTabBar(); }, [showTabBar]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const FEED_TOPICS = ['breaking', 'india-politics', 'technology', 'geopolitics', 'markets', 'business'];
+  const [refreshing, setRefreshing] = useState(false);
+  const isMountedRef = useRef(true);
+  useEffect(() => () => { isMountedRef.current = false; }, []);
 
-    Promise.allSettled(
+  const loadData = useCallback((force = false) => {
+    const FEED_TOPICS = ['breaking', 'india-politics', 'technology', 'geopolitics', 'markets', 'business'];
+    const forceParam = force ? '&force=1' : '';
+
+    return Promise.allSettled(
       FEED_TOPICS.map(t =>
-        fetch(`${API_BASE}/feed?topic=${t}`).then(r => r.json())
+        fetch(`${API_BASE}/feed?topic=${t}${forceParam}`).then(r => r.json())
           .then((d: any) => ({ topic: t, items: (d?.feed ?? []) as FeedItem[] }))
       )
     ).then(results => {
-      if (cancelled) return;
+      if (!isMountedRef.current) return;
 
       const allItems: FeedItem[] = results.flatMap(r => r.status === 'fulfilled' ? r.value.items : []);
       allItemsRef.current = allItems;
@@ -647,10 +651,38 @@ export default function ExploreScreen() {
       setEmergingTopics(emerging);
       setSources(srcList);
       setLoading(false);
-    }).catch(() => { if (!cancelled) setLoading(false); });
-
-    return () => { cancelled = true; };
+    }).catch(() => { if (isMountedRef.current) setLoading(false); });
   }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadData(true);
+    setRefreshing(false);
+  }, [loadData]);
+
+  // Pull-to-refresh — same hand-rolled touch-gesture pattern as FeedScreen.tsx
+  // (no native browser API for this on web).
+  const [pullProgress, setPullProgress] = useState(0);
+  const touchStartYRef = useRef(0);
+  const PULL_THRESHOLD = 80;
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    if (refreshing) return;
+    if ((scrollRef.current?.scrollTop ?? 1) > 0) return;
+    touchStartYRef.current = e.touches[0].clientY;
+  }, [refreshing]);
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    if (refreshing || touchStartYRef.current === 0) return;
+    const dy = e.touches[0].clientY - touchStartYRef.current;
+    setPullProgress(dy <= 0 ? 0 : Math.min(1, dy / PULL_THRESHOLD));
+  }, [refreshing]);
+  const onTouchEnd = useCallback(() => {
+    const prog = pullProgress;
+    touchStartYRef.current = 0;
+    setPullProgress(0);
+    if (prog >= 1) onRefresh();
+  }, [pullProgress, onRefresh]);
 
   const doSearch = useCallback(async (q: string) => {
     setSearchQuery(q);
@@ -720,9 +752,27 @@ export default function ExploreScreen() {
     <div
       ref={scrollRef}
       onScroll={e => { scrollOffsetRef.current = (e.target as HTMLDivElement).scrollTop; }}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
       style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', background: '#080808', WebkitOverflowScrolling: 'touch' }}
     >
       <style>{SHIMMER_CSS}</style>
+      {(refreshing || pullProgress > 0.1) && (
+        <div style={{
+          display: 'flex', justifyContent: 'center', alignItems: 'center', height: 28,
+          opacity: refreshing ? 1 : pullProgress,
+          transition: refreshing ? 'opacity 0.15s' : 'none',
+        }}>
+          <div style={{
+            width: 16, height: 16, borderRadius: '50%',
+            border: '2px solid rgba(255,255,255,0.08)',
+            borderTop: `2px solid ${pullProgress >= 1 && !refreshing ? '#fff' : 'rgba(255,255,255,0.45)'}`,
+            animation: refreshing ? 'spin 0.7s linear infinite' : 'none',
+            transform: refreshing ? undefined : `rotate(${pullProgress * 360}deg)`,
+          }} />
+        </div>
+      )}
       <div style={{
         paddingLeft: 'max(16px, env(safe-area-inset-left, 16px))',
         paddingRight: 'max(16px, env(safe-area-inset-right, 16px))',
