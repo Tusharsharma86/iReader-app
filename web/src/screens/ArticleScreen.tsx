@@ -537,7 +537,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
       </div>
 
       {/* Hero — image variant OR typographic fallback */}
-      <div style={{ height: 280, position: 'relative', marginTop: 0, overflow: 'hidden' }}>
+      <div style={{ height: 320, position: 'relative', marginTop: 0, overflow: 'hidden' }}>
         {noHero ? (
           <>
             <div style={{ position: 'absolute', inset: 0, background: '#05060c' }} />
@@ -570,7 +570,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
       </div>
 
       {/* Meta — pulled up to overlap hero fade */}
-      <div style={{ padding: '4px 16px 14px', marginTop: -96, position: 'relative' }}>
+      <div style={{ padding: '4px 16px 14px', marginTop: -136, position: 'relative' }}>
         {/* Category chip */}
         <div style={{
           display: 'inline-flex', alignItems: 'center',

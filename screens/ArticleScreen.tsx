@@ -56,7 +56,7 @@ function fmtDateInline(iso: string): string {
   } catch { return ''; }
 }
 
-const HERO_HEIGHT = 280;
+const HERO_HEIGHT = 320;
 
 const DIFFICULTY_COLORS: Record<string, string> = {
   Easy: '#34C759',
@@ -1672,7 +1672,7 @@ const styles = StyleSheet.create({
   },
   // Pull metaBlock up so headline starts inside the faded bottom of the image —
   // image dissolves into screen bg with no visible edge.
-  metaBlock: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 14, marginTop: -96 },
+  metaBlock: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 14, marginTop: -136 },
   categoryChip: {
     alignSelf: 'flex-start',
     borderWidth: 1,
