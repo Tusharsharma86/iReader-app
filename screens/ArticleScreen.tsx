@@ -1650,7 +1650,7 @@ const styles = StyleSheet.create({
   },
   // Pull metaBlock up so headline starts inside the faded bottom of the image —
   // image dissolves into screen bg with no visible edge.
-  metaBlock: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 14, marginTop: -32 },
+  metaBlock: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 14, marginTop: -64 },
   categoryChip: {
     alignSelf: 'flex-start',
     borderWidth: 1,
