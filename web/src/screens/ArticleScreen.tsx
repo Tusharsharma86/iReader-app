@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ArticleParams, Story } from '../types';
-import { darken, lighten } from '../utils/colors';
+import { lighten } from '../utils/colors';
 import { useRouter } from '../contexts/RouterContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useTabBar } from '../contexts/TabBarContext';
 import { getCached, setCached, TTL } from '../utils/cache';
 import { trackArticleRead, trackAiUsage } from '../utils/usageTracker';
+import { FALLBACK_IMG } from '../utils/fallback';
 
 const API = 'https://ireader.onrender.com/api/news';
 const TABS = ['Long Form', 'Summary', '5 Ws', 'ELI5'] as const;
@@ -157,7 +158,9 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
   const fontSizePx = FONT_SIZE_MAP[fontSizeName] ?? 17;
 
   const dominant = params.dominantColor;
-  const accent = lighten(dominant, 0.5);
+  const accent = lighten(dominant, 0.2);
+  const [heroImageFailed, setHeroImageFailed] = useState(false);
+  const noHero = !params.image || heroImageFailed;
 
   const [activeTab, setActiveTab] = useState<Tab>(defaultArticleTab as Tab);
   const [paragraphs, setParagraphs] = useState<string[]>([]);
@@ -300,7 +303,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
             return (
               <div key={i} style={{ display: 'flex', gap: 12, marginBottom: i === lines.length - 1 ? 0 : 18, alignItems: 'flex-start' }}>
                 <div style={{ width: 7, height: 7, borderRadius: 4, background: accent, flexShrink: 0, marginTop: 8 }} />
-                <p style={{ color: '#EDEDED', fontSize: 15.5, lineHeight: 1.55, margin: 0 }}>
+                <p style={{ color: '#EDEDED', fontSize: 16.5, lineHeight: 1.6, margin: 0 }}>
                   <strong style={{ color: accent, fontWeight: 800 }}>{label}:</strong> {highlightTerms(body, entityList, accent)}
                 </p>
               </div>
@@ -317,14 +320,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
 
   return (
     <div style={{ height: '100%', background: '#000', overflowY: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative' }}>
-      {/* Color bleed — story's dominant color washes down from the very top
-          edge (behind the status bar) into black, same as the reference. */}
-      <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0, height: 420, zIndex: 0,
-        background: `linear-gradient(to bottom, ${dominant} 0%, ${darken(dominant, 0.45)} 38%, #000 100%)`,
-      }} />
-
-      {/* Back button — floats over content, no hero to sit on in this design */}
+      {/* Back button — floats over the hero, same as the reference's Safari chrome sitting over the article's featured image */}
       <div style={{ position: 'absolute', top: 'calc(env(safe-area-inset-top, 0px) + 16px)', left: 12, right: 12, zIndex: 10, display: 'flex', justifyContent: 'space-between', pointerEvents: 'none' }}>
         <button onClick={goBack} style={{ pointerEvents: 'auto', background: `${dominant}90`, border: '1px solid rgba(255,255,255,0.15)', borderRadius: 22, padding: 9, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
@@ -334,7 +330,24 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
         </a>
       </div>
 
-      <div style={{ position: 'relative', zIndex: 1, padding: 'calc(env(safe-area-inset-top, 0px) + 68px) 18px 0' }}>
+      {/* Hero — story's dominant color washes over the image, fading fully to
+          black before the headline (matches the reference: the photo/color
+          bleed resolves to solid black well above the text, never behind it). */}
+      <div style={{ height: 260, position: 'relative', overflow: 'hidden' }}>
+        <img
+          src={noHero ? FALLBACK_IMG : params.image}
+          alt=""
+          onError={() => setHeroImageFailed(true)}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
+        <div style={{ position: 'absolute', inset: 0, background: `${dominant}55` }} />
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: `linear-gradient(to bottom, transparent 0%, transparent 40%, #000 92%)`,
+        }} />
+      </div>
+
+      <div style={{ position: 'relative', zIndex: 1, padding: '14px 18px 0', marginTop: -1 }}>
         {/* Timestamp */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontSize: 12 }}>⚡</span>
@@ -344,7 +357,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
         </div>
 
         {/* Headline — entity terms colored/bold, rest plain white */}
-        <h1 style={{ color: '#fff', fontSize: 26, fontWeight: 800, lineHeight: 1.28, margin: '10px 0 0' }}>
+        <h1 style={{ color: '#fff', fontSize: 29, fontWeight: 800, lineHeight: 1.25, margin: '10px 0 0' }}>
           {highlightTerms(params.headline, entityList, accent)}
         </h1>
 
@@ -378,7 +391,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
 
         {/* Content card */}
         <div style={{ margin: '18px 0', maxWidth: columnMaxPx, marginInline: 'auto' }}>
-          <div style={{ borderRadius: 20, padding: '20px 18px', background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ borderRadius: 20, padding: '20px 18px', background: 'rgba(255,255,255,0.065)' }}>
             {renderTabContent()}
           </div>
         </div>
@@ -440,7 +453,7 @@ function BulletList({ lines, entities, accent }: { lines: string[]; entities: st
       {lines.map((line, i) => (
         <div key={i} style={{ display: 'flex', gap: 12, marginBottom: i === lines.length - 1 ? 0 : 16, alignItems: 'flex-start' }}>
           <div style={{ width: 7, height: 7, borderRadius: 4, background: accent, flexShrink: 0, marginTop: 8 }} />
-          <p style={{ color: '#EDEDED', fontSize: 15.5, lineHeight: 1.55, margin: 0 }}>{highlightTerms(line, entities, accent)}</p>
+          <p style={{ color: '#EDEDED', fontSize: 16.5, lineHeight: 1.6, margin: 0 }}>{highlightTerms(line, entities, accent)}</p>
         </div>
       ))}
     </div>
