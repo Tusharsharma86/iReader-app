@@ -16,6 +16,16 @@ const TAB_AI_TYPE: Partial<Record<Tab, AiType>> = { Summary: 'summary', '5 Ws': 
 const FONT_SIZE_MAP: Record<string, number> = { Small: 14, Medium: 17, Large: 19, XLarge: 21 };
 
 interface AiResult { bullets?: string[]; summary?: string; fiveWs?: string[]; eli5?: string; keyPeople?: string[]; keyCompanies?: string[]; }
+interface SourceEntry { name: string; url: string; imageUrl?: string; publishedAt: string; }
+
+const DIFFICULTY_COLORS: Record<string, string> = { Easy: '#34C759', Medium: '#FF9500', Hard: '#FF3B30' };
+
+function faviconFromUrl(url: string): string {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, '');
+    return `https://www.google.com/s2/favicons?domain=${hostname}&sz=64`;
+  } catch { return ''; }
+}
 
 // Colored/bold highlight for named entities (people/companies) — used on both
 // the headline and bullet/paragraph text so a brand or person's name pops the
@@ -112,19 +122,12 @@ function fmtDateInline(iso: string): string {
   } catch { return ''; }
 }
 
-// "24 MIN AGO" style relative stamp — falls back to a plain date past a week old.
-function formatRelativeTime(iso?: string): string {
+function fmtTimeInline(iso: string): string {
   if (!iso) return '';
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return '';
-  const diffMin = Math.max(0, Math.round((Date.now() - then) / 60000));
-  if (diffMin < 1) return 'JUST NOW';
-  if (diffMin < 60) return `${diffMin} MIN AGO`;
-  const diffHr = Math.round(diffMin / 60);
-  if (diffHr < 24) return `${diffHr} HR AGO`;
-  const diffDay = Math.round(diffHr / 24);
-  if (diffDay < 7) return `${diffDay} DAY${diffDay > 1 ? 'S' : ''} AGO`;
-  return fmtDateInline(iso).toUpperCase();
+  try {
+    const d = new Date(iso);
+    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  } catch { return ''; }
 }
 
 function splitSentences(t: string): string[] {
@@ -138,7 +141,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
   const { goBack } = useRouter();
   const {
     fontSize: fontSizeName, defaultArticleTab, summaryLength, keyPointsCount, eli5Tone, linkOpen,
-    showEntityHighlights, showQuoteHighlights, fontFamily, lineHeightMode, columnWidth,
+    showEntityHighlights, showQuoteHighlights, showReadingDifficulty, fontFamily, lineHeightMode, columnWidth,
   } = useSettings();
 
   const fontFamilyCss = fontFamily === 'serif'
@@ -172,9 +175,14 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [readingTimeMinutes, setReadingTimeMinutes] = useState<number | null>(null);
+  const [difficulty, setDifficulty] = useState<string | null>(null);
   const aiCache = useRef<Record<string, AiResult>>({});
 
   const allStories: Story[] = useMemo(() => { try { return JSON.parse(params.allStories) ?? []; } catch { return []; } }, [params.allStories]);
+  const allSources: SourceEntry[] = useMemo(() => {
+    try { return JSON.parse(params.sources); } catch { return [{ name: params.source, url: params.url, publishedAt: params.publishedAt }]; }
+  }, [params.sources]);
 
   useEffect(() => {
     const articleCategory = deriveCategory(params.source ?? '', params.url ?? '', params.headline ?? '');
@@ -207,6 +215,30 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
         const filtered = paras.filter(Boolean);
         setParagraphs(filtered);
         setEntities(extractEntities(filtered.join(' ')));
+        const fullText = filtered.join(' ');
+        if (data.readingTimeMinutes) {
+          setReadingTimeMinutes(data.readingTimeMinutes);
+        } else {
+          const wc = fullText.trim().split(/\s+/).filter(Boolean).length;
+          setReadingTimeMinutes(Math.max(1, Math.round(wc / 200)));
+        }
+        if (data.difficulty) {
+          setDifficulty(data.difficulty);
+        } else {
+          const sentences = fullText.split(/[.!?]+/).filter(s => s.trim().length > 0);
+          const words = fullText.trim().split(/\s+/).filter(Boolean);
+          if (sentences.length && words.length) {
+            let syl = 0;
+            for (const w of words) {
+              const c = w.toLowerCase().replace(/[^a-z]/g, '');
+              if (c.length <= 3) { syl += 1; continue; }
+              const m = c.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/, '').replace(/^y/, '').match(/[aeiouy]{1,2}/g);
+              syl += m ? m.length : 1;
+            }
+            const score = 206.835 - 1.015 * (words.length / sentences.length) - 84.6 * (syl / words.length);
+            setDifficulty(score >= 70 ? 'Easy' : score >= 50 ? 'Medium' : 'Hard');
+          }
+        }
       }).catch(e => { setParagraphsError(e.message); setParagraphs(params.summary ? [params.summary] : []); })
       .finally(() => setParagraphsLoading(false));
   }, [params.url]);
@@ -348,16 +380,60 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
       </div>
 
       <div style={{ position: 'relative', zIndex: 1, padding: '14px 18px 0', marginTop: -1 }}>
-        {/* Timestamp */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 12 }}>⚡</span>
-          <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: 700, letterSpacing: 1 }}>
-            {formatRelativeTime(params.publishedAt)}
-          </span>
+        {/* Source row: avatar + name + verified + extra-source count */}
+        {allSources.length > 0 && (() => {
+          const primary = allSources[0];
+          const faviconUri = primary.url ? faviconFromUrl(primary.url) : '';
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{
+                width: 30, height: 30, borderRadius: 15, border: `2px solid ${dominant}`,
+                overflow: 'hidden', background: lighten(dominant, 0.2),
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}>
+                {faviconUri ? (
+                  <img src={faviconUri} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                ) : (
+                  <span style={{ color: accent, fontSize: 12, fontWeight: 800 }}>{primary.name.charAt(0)}</span>
+                )}
+              </div>
+              <span style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>{primary.name}</span>
+              <svg width="14" height="14" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" fill="#3B9EFF" />
+                <path d="M9 12l2 2 4-4" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {allSources.length > 1 && (
+                <span style={{ color: lighten(dominant, 0.4), fontSize: 11, fontWeight: 600 }}>+{allSources.length - 1}</span>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Date · time · reading time · difficulty */}
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+          <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12.5, fontWeight: 500 }}>{fmtDateInline(params.publishedAt)}</span>
+          {params.publishedAt && (
+            <>
+              <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12.5 }}>·</span>
+              <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12.5, fontWeight: 500 }}>{fmtTimeInline(params.publishedAt)}</span>
+            </>
+          )}
+          {readingTimeMinutes != null && (
+            <>
+              <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12.5 }}>·</span>
+              <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12.5, fontWeight: 500 }}>{readingTimeMinutes} min read</span>
+            </>
+          )}
+          {showReadingDifficulty && difficulty != null && (
+            <>
+              <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12.5 }}>·</span>
+              <span style={{ color: DIFFICULTY_COLORS[difficulty] ?? '#FF9500', fontSize: 12.5, fontWeight: 700 }}>{difficulty}</span>
+            </>
+          )}
         </div>
 
         {/* Headline — entity terms colored/bold, rest plain white */}
-        <h1 style={{ color: '#fff', fontSize: 29, fontWeight: 800, lineHeight: 1.25, margin: '10px 0 0' }}>
+        <h1 style={{ color: '#fff', fontSize: 29, fontWeight: 800, lineHeight: 1.25, margin: '14px 0 0' }}>
           {highlightTerms(params.headline, entityList, accent)}
         </h1>
 
