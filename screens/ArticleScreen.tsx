@@ -1504,11 +1504,16 @@ function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoin
   const bullets = result.bullets ?? [];
 
   // Customize → Summary format: "Bullets" skips the narrative prose
-  // entirely and shows the takeaway list on its own.
-  if (summaryFormat === 'bullets' && bullets.length > 0) {
+  // entirely and shows the takeaway list on its own. Split the SAME
+  // full-length narrative (capped by summaryLength, same as paragraph mode)
+  // into one bullet per sentence — do NOT use the short `bullets` (KEY
+  // POINTS) array here, that's capped independently by keyPointsCount and
+  // reads noticeably shorter than the narrative.
+  if (summaryFormat === 'bullets' && (rawSummary || bullets.length > 0)) {
+    const lines = rawSummary ? sentenceParagraphs(rawSummary, 1) : bullets;
     return (
       <View>
-        {bullets.map((line, i) => (
+        {lines.map((line, i) => (
           <View key={i} style={styles.bulletRow}>
             <View style={[styles.bulletDot, { backgroundColor: accentColor }]} />
             <Text style={styles.bulletText}>{line}</Text>

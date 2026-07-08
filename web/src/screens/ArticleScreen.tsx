@@ -402,12 +402,19 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
         for (let i = 0; i < sents.length; i += 3) out.push(sents.slice(i, i + 3).join(' '));
         return out;
       };
-      if (summaryFormat === 'bullets' && bullets.length > 0) {
+      const splitToSingleSentences = (t: string): string[] =>
+        t.match(/[^.!?]+[.!?]+(\s|$)/g)?.map(s => s.trim()).filter(Boolean) ?? [t];
+      if (summaryFormat === 'bullets' && (rawSummary || bullets.length > 0)) {
         // Customize → Summary format: "Bullets" skips the narrative prose
-        // entirely and shows the takeaway list on its own.
+        // entirely and shows the takeaway list on its own. Split the SAME
+        // full-length narrative (capped by summaryLength, same as paragraph
+        // mode) into one bullet per sentence — do NOT use the short
+        // `bullets` (KEY POINTS) array here, that's capped independently by
+        // keyPointsCount and reads noticeably shorter than the narrative.
+        const lines = rawSummary ? splitToSingleSentences(rawSummary) : bullets;
         aiContent = (
           <div>
-            {bullets.map((line, i) => (
+            {lines.map((line, i) => (
               <div key={i} style={{ display: 'flex', gap: 14, marginBottom: 18, alignItems: 'flex-start' }}>
                 <div style={{ width: 8, height: 8, borderRadius: 4, background: dominant, flexShrink: 0, marginTop: 7 }} />
                 <p style={{ color: '#DDD', fontSize: 15, lineHeight: 1.6, margin: 0 }}>{line}</p>
