@@ -100,6 +100,27 @@ function extractNumber(text: string): string | null {
 // source tier now decides instead of falling back to pure freshness.
 const DIGEST_MAX_AGE_HOURS = 48;
 
+// Tech coverage should skew toward the outlets that actually specialize in
+// it, not just whichever aggregator picked up a story first. These get the
+// same top-tier weight as wire services (1.0), but ONLY when scoring the
+// tech topic — every other category still uses the generic 3-tier
+// sourceQualityWeight so this doesn't quietly change Explore/Feed/AI Feed
+// ranking, which import that shared function too.
+const TOP_TECH_SOURCES = new Set(['TechCrunch', 'The Verge', 'Ars Technica']);
+function techAwareSourceQuality(topic: string, sourceName?: string): number {
+  if (topic === 'technology' && sourceName && TOP_TECH_SOURCES.has(sourceName)) return 1.0;
+  return sourceQualityWeight(sourceName);
+}
+
+// Article identity for cross-section dedup — id first, falling back to the
+// primary source URL, then headline. Two different topic clusters about the
+// same real event (e.g. an Apple earnings story clustered independently
+// under both "technology" and "business") otherwise show up as two separate
+// cards across two different Digest sections.
+function articleIdentity(s: Story): string {
+  return s.id || s.sources?.[0]?.url || s.headline;
+}
+
 async function fetchTopicFeed(topic: string): Promise<Story[]> {
   try {
     const res = await fetch(`${FEED_API}?topic=${topic}`);
@@ -119,7 +140,7 @@ async function fetchTopicFeed(topic: string): Promise<Story[]> {
         const hoursOld = rep.publishedAt ? Math.max(0, (Date.now() - new Date(rep.publishedAt).getTime()) / 3_600_000) : DIGEST_MAX_AGE_HOURS + 1;
         const freshnessMult = Math.exp(-hoursOld * Math.LN2 / 24); // half-life 24h
         const corroboration = Math.log(sourceCount + 1); // 1 src→0.69, 3→1.39, 6→1.95, 10→2.40
-        const sourceQuality = sourceQualityWeight(rep.sources?.[0]?.name);
+        const sourceQuality = techAwareSourceQuality(topic, rep.sources?.[0]?.name);
         const score = corroboration * 0.6 + sourceQuality * 0.25 + freshnessMult * 0.15;
         return { rep, hoursOld, score };
       })
@@ -146,9 +167,27 @@ async function aiBullets(text: string): Promise<string[]> {
 }
 
 async function buildSnapshot(): Promise<Snapshot> {
-  const sectionsRaw = await Promise.all(
+  const sectionsRawFetched = await Promise.all(
     CATEGORY_DEFS.map(async def => ({ def, stories: await fetchTopicFeed(def.topic) })),
   );
+
+  // Cross-section dedup: the same real story can independently cluster
+  // under two different topics (an Apple earnings story under both
+  // "technology" and "business"), each with its own AI-generated cluster,
+  // so headline-text dedup alone won't catch it. Promise.all preserves
+  // CATEGORY_DEFS order (Breaking, India, World, Markets, Tech, Business),
+  // so iterating in that order and keeping first-seen means Breaking wins
+  // ties over the rest, matching what a reader would expect.
+  const seenIdentities = new Set<string>();
+  const sectionsRaw = sectionsRawFetched.map(({ def, stories }) => ({
+    def,
+    stories: stories.filter(s => {
+      const id = articleIdentity(s);
+      if (seenIdentities.has(id)) return false;
+      seenIdentities.add(id);
+      return true;
+    }),
+  }));
 
   const allStories: Story[] = [];
   const sources = new Set<string>();
