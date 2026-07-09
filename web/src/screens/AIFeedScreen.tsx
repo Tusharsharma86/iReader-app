@@ -428,11 +428,22 @@ export default function AIFeedScreen() {
         try { localStorage.setItem(FEED_LIST_CACHE, JSON.stringify({ items: next, at: Date.now() })); } catch {}
         if (mode === 'refresh') scrollRef.current?.scrollTo({ top: 0, behavior: 'auto' });
         setError(null);
-      } else if (mode === 'initial') {
+      } else if (mode === 'initial' || mode === 'refresh') {
+        // Empty cluster response — fall back to the plain per-topic loader
+        // instead of a bare no-op. Previously 'refresh' just let the pull
+        // spinner spin down with nothing changed and no explanation, which
+        // read as "pull-to-refresh is broken".
         await loadTopic(0, true);
       }
     } catch (e) {
-      if (mode === 'initial') setError(String(e));
+      if (mode === 'initial') {
+        setError(String(e));
+      } else if (mode === 'refresh') {
+        // Same fallback on a hard failure (network/HTTP error) — give the
+        // pull-to-refresh a real second attempt via the per-topic endpoint
+        // before giving up silently.
+        try { await loadTopic(0, true); } catch { /* keep showing what's on screen */ }
+      }
     } finally {
       if (mode === 'initial') setLoading(false);
       else if (mode === 'refresh') setRefreshing(false);

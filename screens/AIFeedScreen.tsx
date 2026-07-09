@@ -491,11 +491,22 @@ export default function AIFeedScreen() {
           setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: false }), 0);
         }
         setError(null);
-      } else if (mode === 'initial') {
+      } else if (mode === 'initial' || mode === 'refresh') {
+        // Empty cluster response — fall back to the plain per-topic loader
+        // instead of a bare no-op. Previously 'refresh' just let the pull
+        // spinner spin down with nothing changed and no explanation, which
+        // read as "pull-to-refresh is broken".
         await loadTopic(0, true);
       }
     } catch (e) {
-      if (mode === 'initial') setError(String(e instanceof Error ? e.message : e));
+      if (mode === 'initial') {
+        setError(String(e instanceof Error ? e.message : e));
+      } else if (mode === 'refresh') {
+        // Same fallback on a hard failure (network/HTTP error) — give the
+        // pull-to-refresh a real second attempt via the per-topic endpoint
+        // before giving up silently.
+        try { await loadTopic(0, true); } catch { /* keep showing what's on screen */ }
+      }
     } finally {
       if (mode === 'initial') setLoading(false);
       else if (mode === 'refresh') setRefreshing(false);
