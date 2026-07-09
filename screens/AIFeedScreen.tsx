@@ -176,20 +176,6 @@ function FactText({ text, color, style, numberOfLines }: { text: string; color: 
   );
 }
 
-// Image/text split adapts to content length so long headlines/bullets/quotes
-// get more room instead of overflowing the fixed-height card (getItemLayout
-// assumes a uniform card height, so total card height must stay fixed — only
-// the internal image-vs-text split changes).
-function imageHeightPct(headline: string, bullets: string[] | null, quoteText?: string): number {
-  const bulletChars = (bullets ?? []).slice(0, 3).reduce((sum, b) => sum + b.length, 0);
-  const weight = (headline?.length ?? 0) + bulletChars + (quoteText?.length ?? 0);
-  if (weight < 220) return 0.44;
-  if (weight < 320) return 0.40;
-  if (weight < 420) return 0.35;
-  if (weight < 520) return 0.30;
-  return 0.26;
-}
-
 function splitToBullets(text: string, count = 4): string[] {
   const clean = text.replace(/\.{2,}$/, '').trim();
   const cap = (s: string) => { const w = s.trim().split(/\s+/); return w.length > 13 ? w.slice(0, 13).join(' ') + '…' : s.trim(); };
@@ -913,7 +899,6 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
   }, [heroScale, textOp, textTy]);
 
   const bullets = aiBullets ?? (story.summary ? splitToBullets(story.summary) : null);
-  const imgHeightPct = imageHeightPct(story.headline, bullets, quote?.text);
 
   return (
     <Pressable
@@ -936,7 +921,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
 
       {/* ── Image block on TOP (main-feed card style) — natural cover crop at a
           fixed height instead of stretching full-bleed behind the text ── */}
-      <View style={{ height: `${imgHeightPct * 100}%`, overflow: 'hidden' }}>
+      <View style={{ height: '44%', overflow: 'hidden' }}>
         {story.imageUrl ? (
           <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: heroScale }] }]}>
             <Image source={{ uri: story.imageUrl }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
@@ -960,10 +945,12 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
         </View>
       )}
 
-      {/* ── Text section — flows below the image like a main-feed card ── */}
+      {/* ── Text section — flows below the image like a main-feed card. Centered
+          (not top-anchored) so short content doesn't leave a big dead gap only
+          at the bottom — the empty space splits above/below instead. ── */}
       <Animated.View
         style={{
-          flex: 1, overflow: 'hidden',
+          flex: 1, overflow: 'hidden', justifyContent: 'center',
           paddingHorizontal: 20, paddingBottom: 30, paddingTop: 10,
           opacity: textOp, transform: [{ translateY: textTy }],
         }}
