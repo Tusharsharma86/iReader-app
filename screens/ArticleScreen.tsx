@@ -7,8 +7,10 @@ import {
   Animated,
   ActivityIndicator,
   Modal,
+  Linking,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -25,7 +27,7 @@ import { tabBarTranslateY } from '../utils/tabBarAnim';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 import { BiasDot, BIAS_CONFIG, type BiasRating } from '../components/StoryCard';
 import { RootStackParamList } from '../types/navigation';
-import { useSettings, type SummaryFormat } from '../contexts/SettingsContext';
+import { useSettings, type SummaryFormat, type LinkOpen } from '../contexts/SettingsContext';
 import { useSaved } from '../contexts/SavedContext';
 import { getCached, setCached, hydrateCached, TTL } from '../utils/cache';
 import { trackArticleRead, trackAiUsage } from '../utils/usageTracker';
@@ -457,9 +459,19 @@ export default function ArticleScreen() {
     showReferencedSources, showKeyPoints,
     summaryLength, summaryFormat, keyPointsCount, eli5Tone,
     showEntityHighlights, showQuoteHighlights, showReadingDifficulty,
+    fontFamily, lineHeightMode, columnWidth, linkOpen,
   } = useSettings();
   const { isSaved, toggleSave } = useSaved();
   const fontSizePx = FONT_SIZE_MAP[fontSizeName] ?? 17;
+  // Customize → font family / line-height / column width. RN fontFamily
+  // needs an actual installed font name, not a CSS stack — serif maps to
+  // each platform's built-in serif (Georgia on iOS, serif on Android), no
+  // custom font loading required. Column width mostly matters on tablets;
+  // on typical phone widths it's a no-op since the screen is already
+  // narrower than the "narrow" cap.
+  const articleFontFamily = fontFamily === 'serif' ? (Platform.OS === 'ios' ? 'Georgia' : 'serif') : undefined;
+  const lineHeightMultiplier = lineHeightMode === 'tight' ? 1.45 : lineHeightMode === 'loose' ? 1.9 : 1.7;
+  const columnMaxPx = columnWidth === 'narrow' ? 520 : columnWidth === 'wide' ? 820 : 660;
   const articleCategory = deriveCategory(params.source ?? '', params.url ?? '', params.headline ?? '');
   const savedNow = isSaved(params.id);
   // Sources that block full-text fetch (paywall / scrape protection) — hide the
@@ -825,6 +837,9 @@ export default function ArticleScreen() {
         accentColor={accent}
         showEntityHighlights={showEntityHighlights}
         showQuoteHighlights={showQuoteHighlights}
+        fontFamily={articleFontFamily}
+        lineHeightMultiplier={lineHeightMultiplier}
+        linkOpen={linkOpen}
       />
     );
 
@@ -843,7 +858,7 @@ export default function ArticleScreen() {
       switch (activeTab) {
         case 'Summary':
           // Summary prose matches KEY POINTS sizing (13.5) — parity with web.
-          aiContent = <SummaryTab loading={aiLoading} result={aiResult} error={aiError} accentColor={dominant} fontSize={13.5} showKeyPoints={showKeyPoints} showEntityHighlights={showEntityHighlights} showQuoteHighlights={showQuoteHighlights} summaryFormat={summaryFormat} />;
+          aiContent = <SummaryTab loading={aiLoading} result={aiResult} error={aiError} accentColor={dominant} fontSize={13.5} showKeyPoints={showKeyPoints} showEntityHighlights={showEntityHighlights} showQuoteHighlights={showQuoteHighlights} summaryFormat={summaryFormat} fontFamily={articleFontFamily} />;
           break;
         case '5 Ws':
           aiContent = <FiveWsTab loading={aiLoading} result={aiResult} error={aiError} accentColor={accent} />;
@@ -1072,7 +1087,7 @@ export default function ArticleScreen() {
           })}
         </View>
 
-        <View style={styles.tabBody}>
+        <View style={[styles.tabBody, { maxWidth: columnMaxPx, alignSelf: 'center', width: '100%' }]}>
           {renderTabContent()}
         </View>
 
@@ -1434,10 +1449,10 @@ function tokenize(text: string): Seg[] {
   return out;
 }
 
-function RichParagraph({ text, fontSize, accentColor, showEntityHighlights = true, showQuoteHighlights = true }: { text: string; fontSize: number; accentColor: string; showEntityHighlights?: boolean; showQuoteHighlights?: boolean }) {
+function RichParagraph({ text, fontSize, accentColor, showEntityHighlights = true, showQuoteHighlights = true, fontFamily, lineHeightMultiplier = 1.65 }: { text: string; fontSize: number; accentColor: string; showEntityHighlights?: boolean; showQuoteHighlights?: boolean; fontFamily?: string; lineHeightMultiplier?: number }) {
   const segs = useMemo(() => tokenize(text), [text]);
   return (
-    <Text style={[styles.paragraph, { fontSize, lineHeight: fontSize * 1.65 }]}>
+    <Text style={[styles.paragraph, { fontSize, lineHeight: fontSize * lineHeightMultiplier, fontFamily }]}>
       {segs.map((seg, i) => {
         if (seg.kind === 'quote') {
           if (!showQuoteHighlights) return <Text key={i}>{seg.text}</Text>;
@@ -1456,10 +1471,12 @@ function RichParagraph({ text, fontSize, accentColor, showEntityHighlights = tru
   );
 }
 
-function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accentColor, borderColor, showVerifyDedup, onVerifyDedup, showEntityHighlights = true, showQuoteHighlights = true }: {
+function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accentColor, borderColor, showVerifyDedup, onVerifyDedup, showEntityHighlights = true, showQuoteHighlights = true, fontFamily, lineHeightMultiplier, linkOpen = 'in-app' }: {
   loading: boolean; paragraphs: string[]; error: string | null; summary: string; fontSize: number; url?: string; accentColor: string;
   borderColor?: string; showVerifyDedup?: boolean; onVerifyDedup?: () => void; showEntityHighlights?: boolean; showQuoteHighlights?: boolean;
+  fontFamily?: string; lineHeightMultiplier?: number; linkOpen?: LinkOpen;
 }) {
+  const openLink = (u: string) => (linkOpen === 'external' ? Linking.openURL(u) : WebBrowser.openBrowserAsync(u));
   if (loading) return <Spinner />;
 
   const isBlocked = !!error && /50[0-9]|blocked|unavailable/i.test(error);
@@ -1482,14 +1499,14 @@ function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accen
       <View>
         <Text style={styles.errorHint}>Full text unavailable from this publisher</Text>
         {summary ? (
-          <RichParagraph text={summary} fontSize={fontSize} accentColor={accentColor} showEntityHighlights={showEntityHighlights} showQuoteHighlights={showQuoteHighlights} />
+          <RichParagraph text={summary} fontSize={fontSize} accentColor={accentColor} showEntityHighlights={showEntityHighlights} showQuoteHighlights={showQuoteHighlights} fontFamily={fontFamily} lineHeightMultiplier={lineHeightMultiplier} />
         ) : (
           <ErrorMsg msg="No content available." />
         )}
         {url ? (
           <TouchableOpacity
             style={styles.readFullBtn}
-            onPress={() => WebBrowser.openBrowserAsync(url)}
+            onPress={() => openLink(url)}
           >
             <Text style={styles.readFullText}>Read Full Article →</Text>
           </TouchableOpacity>
@@ -1501,11 +1518,11 @@ function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accen
 
   return (
     <View>
-      {paragraphs.map((p, i) => <RichParagraph key={i} text={p} fontSize={fontSize} accentColor={accentColor} showEntityHighlights={showEntityHighlights} showQuoteHighlights={showQuoteHighlights} />)}
+      {paragraphs.map((p, i) => <RichParagraph key={i} text={p} fontSize={fontSize} accentColor={accentColor} showEntityHighlights={showEntityHighlights} showQuoteHighlights={showQuoteHighlights} fontFamily={fontFamily} lineHeightMultiplier={lineHeightMultiplier} />)}
       {url ? (
         <TouchableOpacity
           style={styles.readFullBtn}
-          onPress={() => WebBrowser.openBrowserAsync(url)}
+          onPress={() => openLink(url)}
         >
           <Text style={styles.readFullText}>Read Full Article →</Text>
         </TouchableOpacity>
@@ -1515,7 +1532,7 @@ function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accen
   );
 }
 
-function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoints = true, showEntityHighlights = true, showQuoteHighlights = true, summaryFormat = 'paragraph' }: { loading: boolean; result: AiResult | null; error: string | null; accentColor: string; fontSize: number; showKeyPoints?: boolean; showEntityHighlights?: boolean; showQuoteHighlights?: boolean; summaryFormat?: SummaryFormat }) {
+function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoints = true, showEntityHighlights = true, showQuoteHighlights = true, summaryFormat = 'paragraph', fontFamily }: { loading: boolean; result: AiResult | null; error: string | null; accentColor: string; fontSize: number; showKeyPoints?: boolean; showEntityHighlights?: boolean; showQuoteHighlights?: boolean; summaryFormat?: SummaryFormat; fontFamily?: string }) {
   if (loading) return <Spinner />;
   if (error) return <ErrorMsg msg={error} />;
   if (!result) return <ErrorMsg msg="No summary available." />;
@@ -1561,7 +1578,7 @@ function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoin
   return (
     <View>
       {paragraphs.map((p, i) => (
-        <RichParagraph key={i} text={p} fontSize={fontSize} accentColor={accentColor} showEntityHighlights={showEntityHighlights} showQuoteHighlights={showQuoteHighlights} />
+        <RichParagraph key={i} text={p} fontSize={fontSize} accentColor={accentColor} showEntityHighlights={showEntityHighlights} showQuoteHighlights={showQuoteHighlights} fontFamily={fontFamily} />
       ))}
       {showKeyPoints && bullets.length > 0 && rawSummary ? (
         <View style={{ marginTop: 18, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.08)' }}>

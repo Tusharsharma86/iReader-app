@@ -19,7 +19,7 @@ import AIFeedScreen from './screens/AIFeedScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import TopicsScreen from './screens/TopicsScreen';
 import SourcesScreen from './screens/SourcesScreen';
-import { SettingsProvider } from './contexts/SettingsContext';
+import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import { SourceProvider } from './contexts/SourceContext';
 import { SavedProvider } from './contexts/SavedContext';
 import { FeedStackParamList, RootTabParamList, SettingsStackParamList, ExploreStackParamList } from './types/navigation';
@@ -140,9 +140,15 @@ const TAB_ITEMS: { route: keyof RootTabParamList; label: string; icon: IoniconsN
   { route: 'Saved',    label: 'Saved',    icon: 'bookmark-outline',   iconActive: 'bookmark'   },
   { route: 'Settings', label: 'Settings', icon: 'settings-outline',   iconActive: 'settings'   },
 ];
+// Customize → hiddenTabs stores lowercase keys (matches web's convention);
+// 'explore' isn't hideable, same as web (no entry for it in web's TAB_OPTIONS).
+const TAB_ROUTE_TO_KEY: Partial<Record<keyof RootTabParamList, string>> = {
+  Feed: 'feed', Digest: 'digest', AIFeed: 'aifeed', Saved: 'saved', Settings: 'settings',
+};
 
 function ParticleTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const { hiddenTabs } = useSettings();
 
   // Hide tab bar when on Article screen, or on any Settings sub-screen
   // (anything beyond SettingsHome inside the Settings stack).
@@ -167,8 +173,17 @@ function ParticleTabBar({ state, navigation }: BottomTabBarProps) {
       <View style={tabStyles.pill}>
         {/* Subtle inner border + glassy tint for depth */}
         <View style={tabStyles.pillBorder} pointerEvents="none" />
-        {TAB_ITEMS.map((item, index) => {
-          const focused = state.index === index;
+        {TAB_ITEMS.filter(item => {
+          const key = TAB_ROUTE_TO_KEY[item.route];
+          return !key || !hiddenTabs.includes(key);
+        }).map((item) => {
+          // Look up this item's position in the underlying route list by NAME,
+          // not array index — TAB_ITEMS may be a filtered subset (hiddenTabs)
+          // while state.routes always has all 6 registered screens, so a
+          // positional index would misalign focus/navigation once any tab
+          // is hidden.
+          const routeIndex = state.routes.findIndex(r => r.name === item.route);
+          const focused = state.index === routeIndex;
           return (
             <TabItem
               key={item.route}
@@ -177,7 +192,7 @@ function ParticleTabBar({ state, navigation }: BottomTabBarProps) {
               onPress={() => {
                 const event = navigation.emit({
                   type: 'tabPress',
-                  target: state.routes[index]?.key,
+                  target: state.routes[routeIndex]?.key,
                   canPreventDefault: true,
                 });
                 if (!focused && !event.defaultPrevented) {

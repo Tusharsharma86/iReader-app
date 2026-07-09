@@ -10,6 +10,8 @@ import {
   useSettings,
   type CardDensity, type ArticleTab, type SummaryLength, type SummaryFormat,
   type KeyPointsCount, type Eli5Tone, type DeepDiveDepth, type TimeFormat,
+  type FontFamily, type LineHeightMode, type ColumnWidth,
+  type TopicKey, type LinkOpen,
 } from '../contexts/SettingsContext';
 
 const VIOLET = '#b994ff';
@@ -64,6 +66,42 @@ function RowSegmented<T extends string | number>({ label, sub, options, value, o
   );
 }
 
+// Pill-toggle chips for hide/show lists (tabs, topic pills) — untick to hide.
+function RowChips({ label, sub, items, hidden, onToggle, lockedKeys, border }: {
+  label: string; sub?: string; items: { key: string; label: string }[]; hidden: string[];
+  onToggle: (key: string) => void; lockedKeys?: string[]; border?: boolean;
+}) {
+  return (
+    <View style={[{ paddingHorizontal: 16, paddingVertical: 14 }, border && styles.rowBorder]}>
+      <Text style={styles.rowLabel}>{label}</Text>
+      {sub ? <Text style={styles.rowSub}>{sub}</Text> : null}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+        {items.map(item => {
+          const isHidden = hidden.includes(item.key);
+          const locked = lockedKeys?.includes(item.key) ?? false;
+          return (
+            <Pressable
+              key={item.key}
+              disabled={locked}
+              onPress={() => onToggle(item.key)}
+              style={{
+                paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999,
+                borderWidth: 1, borderColor: isHidden ? '#222' : 'rgba(185,148,255,0.4)',
+                backgroundColor: isHidden ? '#0A0A0A' : 'rgba(185,148,255,0.14)',
+                opacity: locked ? 0.45 : 1,
+              }}
+            >
+              <Text style={{ color: isHidden ? '#555' : VIOLET, fontSize: 12, fontWeight: '700', letterSpacing: 0.3 }}>
+                {item.label}{locked ? ' 🔒' : ''}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 const DENSITY: SegmentedOption<CardDensity>[] = [
   { label: 'Compact', value: 'compact' },
   { label: 'Comfortable', value: 'comfortable' },
@@ -95,6 +133,37 @@ const DEPTH: SegmentedOption<DeepDiveDepth>[] = [
 ];
 const TIME_FMT: SegmentedOption<TimeFormat>[] = [
   { label: 'Relative', value: 'relative' }, { label: 'Absolute', value: 'absolute' },
+];
+const FONT_FAMILY: SegmentedOption<FontFamily>[] = [
+  { label: 'Inter', value: 'inter' }, { label: 'Serif', value: 'serif' }, { label: 'System', value: 'system' },
+];
+const LINE_HEIGHT: SegmentedOption<LineHeightMode>[] = [
+  { label: 'Tight', value: 'tight' }, { label: 'Normal', value: 'normal' }, { label: 'Loose', value: 'loose' },
+];
+const COLUMN_WIDTH: SegmentedOption<ColumnWidth>[] = [
+  { label: 'Narrow', value: 'narrow' }, { label: 'Medium', value: 'medium' }, { label: 'Wide', value: 'wide' },
+];
+const DEFAULT_TOPIC: SegmentedOption<TopicKey>[] = [
+  { label: 'Breaking', value: 'breaking' }, { label: 'Tech', value: 'technology' },
+  { label: 'India', value: 'india-politics' }, { label: 'World', value: 'geopolitics' },
+];
+const LINK_OPEN: SegmentedOption<LinkOpen>[] = [
+  { label: 'In app', value: 'in-app' }, { label: 'External', value: 'external' },
+];
+const TAB_OPTIONS: { key: string; label: string }[] = [
+  { key: 'feed', label: 'Feed' },
+  { key: 'digest', label: 'Digest' },
+  { key: 'aifeed', label: 'AI Feed' },
+  { key: 'saved', label: 'Saved' },
+  { key: 'settings', label: 'Settings' },
+];
+const TOPIC_PILLS: { key: string; label: string }[] = [
+  { key: 'breaking', label: 'Breaking' },
+  { key: 'technology', label: 'Tech' },
+  { key: 'india-politics', label: 'India' },
+  { key: 'geopolitics', label: 'World' },
+  { key: 'markets', label: 'Markets' },
+  { key: 'business', label: 'Business' },
 ];
 
 export default function CustomizeScreen() {
@@ -183,6 +252,12 @@ export default function CustomizeScreen() {
             value={s.showReadingDifficulty} onChange={s.setShowReadingDifficulty} />
           <RowToggle border label="Quote highlights" sub="Highlight quoted passages in article body."
             value={s.showQuoteHighlights} onChange={s.setShowQuoteHighlights} />
+          <RowSegmented border label="Font" sub="Typeface for the article body."
+            options={FONT_FAMILY} value={s.fontFamily} onChange={s.setFontFamily} />
+          <RowSegmented border label="Line height" sub="Spacing between lines of body text."
+            options={LINE_HEIGHT} value={s.lineHeightMode} onChange={s.setLineHeightMode} />
+          <RowSegmented border label="Column width" sub="Max reading width on larger screens."
+            options={COLUMN_WIDTH} value={s.columnWidth} onChange={s.setColumnWidth} />
         </View>
 
         {/* BEHAVIOR */}
@@ -190,6 +265,21 @@ export default function CustomizeScreen() {
         <View style={styles.card}>
           <RowToggle label="Auto mark-as-read" sub="Stories scrolled past 80% are marked read automatically."
             value={s.autoMarkRead} onChange={s.setAutoMarkRead} />
+          <RowSegmented border label="Default topic" sub="Which feed loads when the app opens."
+            options={DEFAULT_TOPIC} value={s.defaultTopic} onChange={s.setDefaultTopic} />
+          <RowSegmented border label="Open external links" sub="In the in-app browser or jump to the publisher site."
+            options={LINK_OPEN} value={s.linkOpen} onChange={s.setLinkOpen} />
+          <RowToggle border label="Pull to refresh" sub="Swipe down on the feed to reload."
+            value={s.pullToRefresh} onChange={s.setPullToRefresh} />
+        </View>
+
+        {/* NAVIGATION */}
+        <Text style={styles.sectionHeader}>NAVIGATION</Text>
+        <View style={styles.card}>
+          <RowChips label="Tabs" sub="Untick to hide from the bottom bar. Feed and Settings always stay."
+            items={TAB_OPTIONS} hidden={s.hiddenTabs} onToggle={s.toggleHiddenTab} lockedKeys={['feed', 'settings']} />
+          <RowChips border label="Topic pills" sub="Untick to hide a topic from the feed."
+            items={TOPIC_PILLS} hidden={s.hiddenTopics} onToggle={s.toggleHiddenTopic} />
         </View>
 
         {/* AI */}

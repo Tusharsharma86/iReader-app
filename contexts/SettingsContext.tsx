@@ -15,6 +15,10 @@ export type Eli5Tone = 'kid' | 'casual' | 'plain';
 export type DeepDiveDepth = 'quick' | 'standard' | 'deep';
 export type BreakingSensitivity = 'all' | 'important' | 'critical';
 export type TimeFormat = 'relative' | 'absolute';
+export type FontFamily = 'inter' | 'serif' | 'system';
+export type LineHeightMode = 'tight' | 'normal' | 'loose';
+export type ColumnWidth = 'narrow' | 'medium' | 'wide';
+export type LinkOpen = 'in-app' | 'external';
 
 export const ALL_TOPICS = ['breaking', 'technology', 'india-politics', 'geopolitics', 'markets', 'business'] as const;
 export type TopicKey = typeof ALL_TOPICS[number];
@@ -90,6 +94,20 @@ interface SettingsContextType {
   autoMarkRead: boolean; setAutoMarkRead: (v: boolean) => void;
   showQuoteHighlights: boolean; setShowQuoteHighlights: (v: boolean) => void;
 
+  // ── Customize: Article reader (typography) ────────────────────────────
+  fontFamily: FontFamily; setFontFamily: (v: FontFamily) => void;
+  lineHeightMode: LineHeightMode; setLineHeightMode: (v: LineHeightMode) => void;
+  columnWidth: ColumnWidth; setColumnWidth: (v: ColumnWidth) => void;
+
+  // ── Customize: Behavior ────────────────────────────────────────────────
+  defaultTopic: TopicKey; setDefaultTopic: (v: TopicKey) => void;
+  linkOpen: LinkOpen; setLinkOpen: (v: LinkOpen) => void;
+  pullToRefresh: boolean; setPullToRefresh: (v: boolean) => void;
+
+  // ── Customize: Navigation (hide/show tabs + topic pills) ──────────────
+  hiddenTabs: string[]; toggleHiddenTab: (tab: string) => void;
+  hiddenTopics: string[]; toggleHiddenTopic: (topic: string) => void;
+
   resetCustomize: () => void;
 }
 
@@ -131,6 +149,14 @@ const DEFAULTS = {
   timeFormat: 'relative' as TimeFormat,
   autoMarkRead: false,
   showQuoteHighlights: true,
+  fontFamily: 'inter' as FontFamily,
+  lineHeightMode: 'normal' as LineHeightMode,
+  columnWidth: 'medium' as ColumnWidth,
+  defaultTopic: 'breaking' as TopicKey,
+  linkOpen: 'in-app' as LinkOpen,
+  pullToRefresh: true,
+  hiddenTabs: [] as string[],
+  hiddenTopics: [] as string[],
 };
 
 const SettingsContext = createContext<SettingsContextType>({
@@ -168,6 +194,9 @@ const SettingsContext = createContext<SettingsContextType>({
   timeFormat: 'relative' as TimeFormat, setTimeFormat: () => {},
   autoMarkRead: false, setAutoMarkRead: () => {},
   showQuoteHighlights: true, setShowQuoteHighlights: () => {},
+  setFontFamily: () => {}, setLineHeightMode: () => {}, setColumnWidth: () => {},
+  setDefaultTopic: () => {}, setLinkOpen: () => {}, setPullToRefresh: () => {},
+  toggleHiddenTab: () => {}, toggleHiddenTopic: () => {},
   resetCustomize: () => {},
 });
 
@@ -211,6 +240,14 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [timeFormat, setTimeFormat] = useState<TimeFormat>(DEFAULTS.timeFormat);
   const [autoMarkRead, setAutoMarkRead] = useState(DEFAULTS.autoMarkRead);
   const [showQuoteHighlights, setShowQuoteHighlights] = useState(DEFAULTS.showQuoteHighlights);
+  const [fontFamily, setFontFamily] = useState<FontFamily>(DEFAULTS.fontFamily);
+  const [lineHeightMode, setLineHeightMode] = useState<LineHeightMode>(DEFAULTS.lineHeightMode);
+  const [columnWidth, setColumnWidth] = useState<ColumnWidth>(DEFAULTS.columnWidth);
+  const [defaultTopic, setDefaultTopic] = useState<TopicKey>(DEFAULTS.defaultTopic);
+  const [linkOpen, setLinkOpen] = useState<LinkOpen>(DEFAULTS.linkOpen);
+  const [pullToRefresh, setPullToRefresh] = useState(DEFAULTS.pullToRefresh);
+  const [hiddenTabs, setHiddenTabs] = useState<string[]>(DEFAULTS.hiddenTabs);
+  const [hiddenTopics, setHiddenTopics] = useState<string[]>(DEFAULTS.hiddenTopics);
 
   const [loaded, setLoaded] = useState(false);
 
@@ -262,6 +299,14 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           if (['relative','absolute'].includes(saved.timeFormat)) setTimeFormat(saved.timeFormat);
           if (typeof saved.autoMarkRead === 'boolean') setAutoMarkRead(saved.autoMarkRead);
           if (typeof saved.showQuoteHighlights === 'boolean') setShowQuoteHighlights(saved.showQuoteHighlights);
+          if (['inter','serif','system'].includes(saved.fontFamily)) setFontFamily(saved.fontFamily);
+          if (['tight','normal','loose'].includes(saved.lineHeightMode)) setLineHeightMode(saved.lineHeightMode);
+          if (['narrow','medium','wide'].includes(saved.columnWidth)) setColumnWidth(saved.columnWidth);
+          if (typeof saved.defaultTopic === 'string') setDefaultTopic(saved.defaultTopic);
+          if (['in-app','external'].includes(saved.linkOpen)) setLinkOpen(saved.linkOpen);
+          if (typeof saved.pullToRefresh === 'boolean') setPullToRefresh(saved.pullToRefresh);
+          if (Array.isArray(saved.hiddenTabs)) setHiddenTabs(saved.hiddenTabs);
+          if (Array.isArray(saved.hiddenTopics)) setHiddenTopics(saved.hiddenTopics);
         } catch {}
       }
     }).finally(() => setLoaded(true));
@@ -281,8 +326,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       summaryLength, summaryFormat, keyPointsCount, showKeyPoints,
       eli5Tone, deepDiveDepth, showDeepDiveEntities, showDeepDiveCurious,
       timeFormat, autoMarkRead, showQuoteHighlights,
+      fontFamily, lineHeightMode, columnWidth,
+      defaultTopic, linkOpen, pullToRefresh,
+      hiddenTabs, hiddenTopics,
     })).catch(() => {});
-  }, [loaded, fontSize, notifBreaking, breakingSensitivity, notifTech, notifDigest, notifAiFeed, notifSources, activeTopics, activeSubTopics, favSources, favTopics, topicInterests, showSports, showEntertainment, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showArticleRssSummary, showVerifyDedup, showReferencedSources, showEntityHighlights, showReadingDifficulty, summaryLength, summaryFormat, keyPointsCount, showKeyPoints, eli5Tone, deepDiveDepth, showDeepDiveEntities, showDeepDiveCurious, timeFormat, autoMarkRead, showQuoteHighlights]);
+  }, [loaded, fontSize, notifBreaking, breakingSensitivity, notifTech, notifDigest, notifAiFeed, notifSources, activeTopics, activeSubTopics, favSources, favTopics, topicInterests, showSports, showEntertainment, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showArticleRssSummary, showVerifyDedup, showReferencedSources, showEntityHighlights, showReadingDifficulty, summaryLength, summaryFormat, keyPointsCount, showKeyPoints, eli5Tone, deepDiveDepth, showDeepDiveEntities, showDeepDiveCurious, timeFormat, autoMarkRead, showQuoteHighlights, fontFamily, lineHeightMode, columnWidth, defaultTopic, linkOpen, pullToRefresh, hiddenTabs, hiddenTopics]);
 
   // Reconcile backend notification prefs with the toggles shown locally —
   // ONCE per launch, after settings load. Fixes the fresh-install / new-token
@@ -345,6 +393,12 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       prev.includes(key) ? prev.filter(t => t !== key) : [...prev, key],
     );
   }, []);
+  const toggleHiddenTab = useCallback((tab: string) => {
+    setHiddenTabs(prev => prev.includes(tab) ? prev.filter(t => t !== tab) : [...prev, tab]);
+  }, []);
+  const toggleHiddenTopic = useCallback((topic: string) => {
+    setHiddenTopics(prev => prev.includes(topic) ? prev.filter(t => t !== topic) : [...prev, topic]);
+  }, []);
 
   const toggleTopic = useCallback((topic: TopicKey) => {
     setActiveTopics(prev => ({ ...prev, [topic]: !prev[topic] }));
@@ -401,6 +455,14 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setTimeFormat(DEFAULTS.timeFormat);
     setAutoMarkRead(DEFAULTS.autoMarkRead);
     setShowQuoteHighlights(DEFAULTS.showQuoteHighlights);
+    setFontFamily(DEFAULTS.fontFamily);
+    setLineHeightMode(DEFAULTS.lineHeightMode);
+    setColumnWidth(DEFAULTS.columnWidth);
+    setDefaultTopic(DEFAULTS.defaultTopic);
+    setLinkOpen(DEFAULTS.linkOpen);
+    setPullToRefresh(DEFAULTS.pullToRefresh);
+    setHiddenTabs(DEFAULTS.hiddenTabs);
+    setHiddenTopics(DEFAULTS.hiddenTopics);
   }, []);
 
   const value = useMemo(() => ({
@@ -443,8 +505,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     timeFormat, setTimeFormat,
     autoMarkRead, setAutoMarkRead,
     showQuoteHighlights, setShowQuoteHighlights,
+    fontFamily, setFontFamily, lineHeightMode, setLineHeightMode, columnWidth, setColumnWidth,
+    defaultTopic, setDefaultTopic, linkOpen, setLinkOpen, pullToRefresh, setPullToRefresh,
+    hiddenTabs, toggleHiddenTab, hiddenTopics, toggleHiddenTopic,
     resetCustomize,
-  }), [fontSize, notifBreaking, breakingSensitivity, notifTech, notifDigest, notifAiFeed, notifSources, showSports, showEntertainment, favSources, favTopics, topicInterests, activeTopics, activeSubTopics, setFontSize, setNotifBreaking, setBreakingSensitivity, setNotifTech, setNotifDigest, setNotifAiFeed, setNotifSources, setShowSports, setShowEntertainment, toggleFavSource, toggleFavTopic, toggleTopic, toggleSubTopic, setTopicInterest, resetSettings, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showArticleRssSummary, showVerifyDedup, showReferencedSources, showEntityHighlights, showReadingDifficulty, summaryLength, summaryFormat, keyPointsCount, showKeyPoints, eli5Tone, deepDiveDepth, showDeepDiveEntities, showDeepDiveCurious, timeFormat, autoMarkRead, showQuoteHighlights, resetCustomize]);
+  }), [fontSize, notifBreaking, breakingSensitivity, notifTech, notifDigest, notifAiFeed, notifSources, showSports, showEntertainment, favSources, favTopics, topicInterests, activeTopics, activeSubTopics, setFontSize, setNotifBreaking, setBreakingSensitivity, setNotifTech, setNotifDigest, setNotifAiFeed, setNotifSources, setShowSports, setShowEntertainment, toggleFavSource, toggleFavTopic, toggleTopic, toggleSubTopic, setTopicInterest, resetSettings, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showArticleRssSummary, showVerifyDedup, showReferencedSources, showEntityHighlights, showReadingDifficulty, summaryLength, summaryFormat, keyPointsCount, showKeyPoints, eli5Tone, deepDiveDepth, showDeepDiveEntities, showDeepDiveCurious, timeFormat, autoMarkRead, showQuoteHighlights, fontFamily, setFontFamily, lineHeightMode, setLineHeightMode, columnWidth, setColumnWidth, defaultTopic, setDefaultTopic, linkOpen, setLinkOpen, pullToRefresh, setPullToRefresh, hiddenTabs, toggleHiddenTab, hiddenTopics, toggleHiddenTopic, resetCustomize]);
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }

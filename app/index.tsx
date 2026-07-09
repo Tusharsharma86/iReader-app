@@ -448,11 +448,11 @@ function FeedSkeleton() {
 
 export default function FeedScreen() {
   const { activeSources } = useSource();
-  const { notifBreaking, breakingSensitivity, notifSources, favSources, favTopics, showSports, showEntertainment, activeSubTopics, topicInterests, summaryLength, keyPointsCount, eli5Tone } = useSettings();
+  const { notifBreaking, breakingSensitivity, notifSources, favSources, favTopics, showSports, showEntertainment, activeSubTopics, topicInterests, summaryLength, keyPointsCount, eli5Tone, defaultTopic, pullToRefresh, hiddenTopics } = useSettings();
   const layout = useLayout();
   const insets = useSafeAreaInsets();
   const rootNav = useNavigation<NativeStackNavigationProp<FeedStackParamList>>();
-  const [activeTopic, setActiveTopic] = useState<CategoryTopic>('breaking');
+  const [activeTopic, setActiveTopic] = useState<CategoryTopic>(defaultTopic as CategoryTopic);
   const [topicRestored, setTopicRestored] = useState(false);
   const [allFeed, setAllFeed] = useState<ApiFeedItem[]>([]);
   const [pendingFeed, setPendingFeed] = useState<ApiFeedItem[] | null>(null);
@@ -1078,7 +1078,7 @@ export default function FeedScreen() {
           }}
           style={{ flex: 1 }}
         >
-          {CATEGORIES.map(cat => {
+          {CATEGORIES.filter(cat => cat.topic === 'myspace' || !hiddenTopics.includes(cat.topic)).map(cat => {
             const active = cat.topic === activeTopic;
             return (
               <Pressable
@@ -1303,11 +1303,13 @@ export default function FeedScreen() {
         onViewableItemsChanged={onViewableItemsChanged.current}
         viewabilityConfig={viewabilityConfig.current}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={isBreaking ? '#FF3333' : '#AAAAAA'}
-          />
+          pullToRefresh ? (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={isBreaking ? '#FF3333' : '#AAAAAA'}
+            />
+          ) : undefined
         }
         ListFooterComponent={
           <View style={{ height: insets.bottom + 100 }} />
