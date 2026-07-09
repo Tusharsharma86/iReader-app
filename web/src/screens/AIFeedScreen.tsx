@@ -144,6 +144,10 @@ function timeAgo(iso: string): string {
     return `${Math.round(hrs / 24)}D AGO`;
   } catch { return ''; }
 }
+function timeAbs(iso: string): string {
+  try { return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
+  catch { return ''; }
+}
 
 interface ApiItem { type?: string; articles?: Story[]; topicTitle?: string; collection?: boolean; }
 
@@ -343,6 +347,35 @@ export default function AIFeedScreen() {
   const itemsRef = useRef<FeedItem[]>([]);
   itemsRef.current = items;
 
+  // Silent background refresh for stale-while-revalidate: fetch the current
+  // topic and REPLACE + re-rank items, no loading/skeleton flicker. Only
+  // swaps in fresh data if the fetch actually returned something (never
+  // blanks the feed on a failed/empty response). Ported from native
+  // (screens/AIFeedScreen.tsx) — previously this used the append-only
+  // loadTopic(0,false) path, which just tacked new items onto the bottom
+  // instead of surfacing freshly-ranked top stories.
+  const silentRefresh = useCallback(async (topicIdx: number) => {
+    const topic = TOPIC_QUEUE[topicIdx % TOPIC_QUEUE.length];
+    try {
+      const r = await fetch(`${FEED_API_BASE}?topic=${topic}`);
+      if (!r.ok) return;
+      const raw = await r.json();
+      const rawItems: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
+      const fresh = rankFeedItems(
+        parseServerFeed(rawItems)
+          .filter(it => !it.collection)
+          .filter(it => it.primary.headline && it.primary.publishedAt)
+          .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded))
+          .filter(it => activeSources[it.primary.sources?.[0]?.name ?? ''] !== false)
+      );
+      if (fresh.length > 0) {
+        setItems(fresh);
+        scrollRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+        setError(null);
+      }
+    } catch { /* keep showing cached items */ }
+  }, [activeSources]);
+
   // Load one topic — same as main feed: trust the server's clusters as-is,
   // dedupe only by article ID (so the same article doesn't appear twice on
   // load-more), drop theme collections (browse rails don't fit the AI Feed UX).
@@ -362,11 +395,13 @@ export default function AIFeedScreen() {
         .filter(it => activeSources[it.primary.sources?.[0]?.name ?? ''] !== false);
 
       const existingIds = new Set(itemsRef.current.map(it => it.primary.id));
-      const newOnes = incoming.filter(it => !existingIds.has(it.primary.id));
+      // Capped to match native (screens/AIFeedScreen.tsx) — an unbounded list
+      // during a long scroll session was a real memory/perf risk on web too.
+      const newOnes = incoming.filter(it => !existingIds.has(it.primary.id)).slice(0, 30);
       if (newOnes.length === 0 && !isInitial) { setExhausted(true); return; }
 
       setItems(prev => {
-        const next = isInitial ? rankFeedItems(newOnes) : [...prev, ...newOnes];
+        const next = isInitial ? rankFeedItems(newOnes) : [...prev, ...newOnes].slice(0, 120);
         if (isInitial) { try { localStorage.setItem(FEED_LIST_CACHE, JSON.stringify({ items: next, at: Date.now() })); } catch {} }
         return next;
       });
@@ -388,15 +423,15 @@ export default function AIFeedScreen() {
       if (raw) {
         const c = JSON.parse(raw) as { items: FeedItem[]; at: number };
         if (Array.isArray(c.items) && c.items.length > 0) {
-          setItems(c.items);
+          setItems(c.items.slice(0, 50)); // capped to match native's cache-restore cap
           setLoading(false);
-          if (Date.now() - c.at > 10 * 60_000) setTimeout(() => loadTopic(0, false), 300);
+          if (Date.now() - c.at > 10 * 60_000) setTimeout(() => silentRefresh(0), 300);
           return;
         }
       }
     } catch {}
     loadTopic(0, true);
-  }, [loadTopic]);
+  }, [loadTopic, silentRefresh]);
 
   // ── Pull-to-refresh ─────────────────────────────────────────────────────
   const PULL_THRESHOLD = 80;
@@ -630,7 +665,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
   const accent = useMemo(() => lighten(dominant, 0.55), [dominant]);
   const sourceName = item.sources[0]?.name ?? story.sources?.[0]?.name ?? 'Unknown';
   const extraSources = Math.max(0, item.sources.length - 1);
-  const { deepDiveDepth } = useSettings();
+  const { deepDiveDepth, timeFormat } = useSettings();
   const hasCachedDeepDive = !!readCache(story.id, deepDiveDepth);
   const [aiBullets, setAiBullets] = useState<string[] | null>(null);
   const [quote, setQuote] = useState<{ text: string; by: string } | null>(null);
@@ -789,7 +824,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         zIndex: 2, overflow: 'hidden',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: 800, letterSpacing: 1.4 }}>
-          <span>{timeAgo(story.publishedAt)}</span>
+          <span>{timeFormat === 'absolute' ? timeAbs(story.publishedAt) : timeAgo(story.publishedAt)}</span>
           <span style={{ opacity: 0.5 }}>·</span>
           <span>{sourceName}{extraSources > 0 ? ` +${extraSources}` : ''}</span>
         </div>
@@ -949,7 +984,7 @@ function RelatedStoryCard({ s, onPress }: { s: Story; onPress: () => void }) {
 function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onClose: () => void; onOpenRelated?: (s: Story) => void }) {
   const story = item.primary;
   // Customize → Deep Dive section toggles + depth.
-  const { showDeepDiveEntities, showDeepDiveCurious, deepDiveDepth, fontSize: globalFontSize } = useSettings();
+  const { showDeepDiveEntities, showDeepDiveCurious, deepDiveDepth, fontSize: globalFontSize, timeFormat } = useSettings();
   // Scale Deep Dive body text by the user's Article font size. Headers/labels
   // stay branded; only reading content scales.
   const ddScale = globalFontSize === 'Small' ? 0.88
@@ -1076,7 +1111,7 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
               paragraphs,
               // For event clusters: read every source in full. For theme collections:
               // only the lead article (others are different stories on the same topic).
-              sourceUrls: [story.sources?.[0]?.url].filter(Boolean) as string[],
+              sourceUrls: (item.sources ?? []).map(s => s.url).filter(Boolean) as string[],
               depth: deepDiveDepth,
               publishedAt: story.publishedAt,
               systemPrompt: DEEPDIVE_SYSTEM_PROMPT,
@@ -1294,7 +1329,7 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, color: accent, fontSize: 10, fontWeight: 800, letterSpacing: 1.4 }}>
           <span>{sourceName.toUpperCase()}</span>
           <span style={{ color: 'rgba(255,255,255,0.3)' }}>·</span>
-          <span>{timeAgo(story.publishedAt)}</span>
+          <span>{timeFormat === 'absolute' ? timeAbs(story.publishedAt) : timeAgo(story.publishedAt)}</span>
         </div>
 
         {stage === 'generating' ? (
