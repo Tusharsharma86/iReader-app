@@ -159,10 +159,10 @@ function parseServerFeed(items: ApiItem[]): FeedItem[] {
 // TL;DR (key entities + figures) and plain numbers/money/percentages render
 // in the card's accent colour so facts pop.
 const FACT_SPLIT_RE = /(\$[\d,.]+\s?(?:billion|million|trillion|crore|lakh|[BMKTbmkt]\b)?|\d[\d,.]*\s?(?:billion|million|trillion|crore|lakh|percent|%|bps)|\d[\d,.]*)/g;
-function FactText({ text, color, style }: { text: string; color: string; style?: object }) {
+function FactText({ text, color, style, numberOfLines }: { text: string; color: string; style?: object; numberOfLines?: number }) {
   const boldParts = text.split(/\*\*([^*]+)\*\*/g);
   return (
-    <Text style={style}>
+    <Text style={style} numberOfLines={numberOfLines}>
       {boldParts.map((seg, i) => i % 2 === 1
         ? <Text key={i} style={{ color, fontWeight: '700' }}>{seg}</Text>
         : seg.split(FACT_SPLIT_RE).map((s2, j) => j % 2 === 1
@@ -170,6 +170,20 @@ function FactText({ text, color, style }: { text: string; color: string; style?:
             : <Text key={`${i}-${j}`}>{s2}</Text>))}
     </Text>
   );
+}
+
+// Image/text split adapts to content length so long headlines/bullets/quotes
+// get more room instead of overflowing the fixed-height card (getItemLayout
+// assumes a uniform card height, so total card height must stay fixed — only
+// the internal image-vs-text split changes).
+function imageHeightPct(headline: string, bullets: string[] | null, quoteText?: string): number {
+  const bulletChars = (bullets ?? []).slice(0, 3).reduce((sum, b) => sum + b.length, 0);
+  const weight = (headline?.length ?? 0) + bulletChars + (quoteText?.length ?? 0);
+  if (weight < 220) return 0.44;
+  if (weight < 320) return 0.40;
+  if (weight < 420) return 0.35;
+  if (weight < 520) return 0.30;
+  return 0.26;
 }
 
 function splitToBullets(text: string, count = 4): string[] {
@@ -895,6 +909,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
   }, [heroScale, textOp, textTy]);
 
   const bullets = aiBullets ?? (story.summary ? splitToBullets(story.summary) : null);
+  const imgHeightPct = imageHeightPct(story.headline, bullets, quote?.text);
 
   return (
     <Pressable
@@ -917,7 +932,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
 
       {/* ── Image block on TOP (main-feed card style) — natural cover crop at a
           fixed height instead of stretching full-bleed behind the text ── */}
-      <View style={{ height: '44%', overflow: 'hidden' }}>
+      <View style={{ height: `${imgHeightPct * 100}%`, overflow: 'hidden' }}>
         {story.imageUrl ? (
           <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: heroScale }] }]}>
             <Image source={{ uri: story.imageUrl }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
@@ -944,7 +959,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
       {/* ── Text section — flows below the image like a main-feed card ── */}
       <Animated.View
         style={{
-          flex: 1,
+          flex: 1, overflow: 'hidden',
           paddingHorizontal: 20, paddingBottom: 30, paddingTop: 10,
           opacity: textOp, transform: [{ translateY: textTy }],
         }}
@@ -969,7 +984,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
             {bullets.slice(0, 3).map((bullet, bi) => (
               <View key={bi} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 9 }}>
                 <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 7, backgroundColor: aiBullets ? accent : `${accent}66`, flexShrink: 0 }} />
-                <FactText text={bullet.trim()} color={accent} style={{ color: 'rgba(255,255,255,0.9)', fontSize: 14.5, lineHeight: 21, flex: 1, letterSpacing: 0.1 }} />
+                <FactText text={bullet.trim()} color={accent} numberOfLines={3} style={{ color: 'rgba(255,255,255,0.9)', fontSize: 14.5, lineHeight: 21, flex: 1, letterSpacing: 0.1 }} />
               </View>
             ))}
             {quote && (

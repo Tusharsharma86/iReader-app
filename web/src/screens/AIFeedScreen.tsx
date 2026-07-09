@@ -225,6 +225,20 @@ function FactText({ text, color }: { text: string; color: string }) {
 const SOURCE_COVERAGE_RE = /no other sources? (were|was) provided|only one (source|article)|no sources? (were|was) provided|single (source|article)|The article from \S+ highlights/i;
 function isSourcePara(p: string): boolean { return SOURCE_COVERAGE_RE.test(p); }
 
+// Image/text split adapts to content length so long headlines/bullets/quotes
+// get more room instead of overflowing the fixed-height card (CSS scroll-snap
+// needs each card's actual height to stay uniform, so only the internal
+// image-vs-text split changes, not the total card height).
+function imageHeightPct(headline: string, bullets: string[] | null, quoteText?: string): number {
+  const bulletChars = (bullets ?? []).slice(0, 3).reduce((sum, b) => sum + b.length, 0);
+  const weight = (headline?.length ?? 0) + bulletChars + (quoteText?.length ?? 0);
+  if (weight < 220) return 0.44;
+  if (weight < 320) return 0.40;
+  if (weight < 420) return 0.35;
+  if (weight < 520) return 0.30;
+  return 0.26;
+}
+
 function splitToBullets(text: string, count = 4): string[] {
   const clean = text.replace(/\.{2,}$/, '').trim();
   const cap = (s: string) => { const w = s.trim().split(/\s+/); return w.length > 13 ? w.slice(0, 13).join(' ') + '…' : s.trim(); };
@@ -693,6 +707,9 @@ function FullPreviewCard({ item, index, total, onOpen }: {
     onOpen();
   }, [onOpen]);
 
+  const bullets = aiBullets ?? (story.summary ? splitToBullets(story.summary) : null);
+  const imgHeightPct = imageHeightPct(story.headline, bullets, quote?.text);
+
   return (
     <div
       ref={cardRef}
@@ -706,9 +723,10 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         position: 'relative',
         overflow: 'hidden',
         borderRadius: 20,
-        // Vibrant card body — image bleeds into solid dominant at 44%, then the
-        // colour deepens toward the bottom (main-feed card treatment).
-        background: `linear-gradient(180deg, ${dominant} 44%, ${darken(dominant, 0.45)} 78%, ${darken(dominant, 0.7)} 100%)`,
+        // Vibrant card body — image bleeds into solid dominant at imgHeightPct
+        // (dynamic — see imageHeightPct), then the colour deepens toward the
+        // bottom (main-feed card treatment).
+        background: `linear-gradient(180deg, ${dominant} ${imgHeightPct * 100}%, ${darken(dominant, 0.45)} 78%, ${darken(dominant, 0.7)} 100%)`,
         cursor: 'pointer',
         userSelect: 'none',
         WebkitTapHighlightColor: 'transparent',
@@ -718,7 +736,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
       {/* Image block on TOP (main-feed card style) — natural cover crop at a
           fixed height instead of stretching full-bleed behind the text. The
           bottom of the image bleeds into the card colour like feed cards. */}
-      <div style={{ position: 'relative', height: '44%', flexShrink: 0 }}>
+      <div style={{ position: 'relative', height: `${imgHeightPct * 100}%`, flexShrink: 0 }}>
         <img
           src={story.imageUrl || FALLBACK_IMG}
           alt=""
@@ -789,10 +807,10 @@ function FullPreviewCard({ item, index, total, onOpen }: {
           margin: 0, color: '#fff', fontSize: 26, fontWeight: 800,
           lineHeight: 1.2, letterSpacing: -0.5,
           textShadow: '0 4px 24px rgba(0,0,0,0.7)',
+          display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
         }}>{story.headline}</h2>
 
         {(() => {
-          const bullets = aiBullets ?? (story.summary ? splitToBullets(story.summary) : null);
           if (bullets?.length) return (
             <div style={{
               background: 'rgba(0,0,0,0.45)',
