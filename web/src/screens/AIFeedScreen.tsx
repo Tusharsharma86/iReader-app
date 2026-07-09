@@ -401,6 +401,45 @@ export default function AIFeedScreen() {
     } catch { /* keep showing cached items */ }
   }, [activeSources]);
 
+  // Default loader — trusts server clusters, ranks by freshness + importance.
+  // Fetches the current topic (breaking by default), no client-side cap.
+  // Ported from native (screens/AIFeedScreen.tsx): initial "breaking" load
+  // must NOT go through loadTopic's 30-item slice (that cap exists only to
+  // bound load-more appends) — routing initial load through it here was the
+  // bug capping the breaking feed at 30 cards on first open and on
+  // pull-to-refresh, even when the server clustered far more than 30.
+  const loadClusterForward = useCallback(async (mode: 'initial' | 'refresh' | 'silent') => {
+    if (mode === 'initial') setLoading(true);
+    else if (mode === 'refresh') setRefreshing(true);
+    try {
+      const r = await fetch(`${FEED_API_BASE}?topic=breaking`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const raw = await r.json();
+      const rawItems: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
+      const next = rankFeedItems(
+        parseServerFeed(rawItems)
+          .filter(it => !it.collection)
+          .filter(it => it.primary.headline && it.primary.publishedAt)
+          .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded))
+          .filter(it => activeSources[it.primary.sources?.[0]?.name ?? ''] !== false)
+      );
+      if (next.length > 0) {
+        setItems(next);
+        try { localStorage.setItem(FEED_LIST_CACHE, JSON.stringify({ items: next, at: Date.now() })); } catch {}
+        if (mode === 'refresh') scrollRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+        setError(null);
+      } else if (mode === 'initial') {
+        await loadTopic(0, true);
+      }
+    } catch (e) {
+      if (mode === 'initial') setError(String(e));
+    } finally {
+      if (mode === 'initial') setLoading(false);
+      else if (mode === 'refresh') setRefreshing(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSources]);
+
   // Load one topic — same as main feed: trust the server's clusters as-is,
   // dedupe only by article ID (so the same article doesn't appear twice on
   // load-more), drop theme collections (browse rails don't fit the AI Feed UX).
@@ -455,8 +494,8 @@ export default function AIFeedScreen() {
         }
       }
     } catch {}
-    loadTopic(0, true);
-  }, [loadTopic, silentRefresh]);
+    loadClusterForward('initial');
+  }, [loadClusterForward, silentRefresh]);
 
   // ── Pull-to-refresh ─────────────────────────────────────────────────────
   const PULL_THRESHOLD = 80;
@@ -491,14 +530,18 @@ export default function AIFeedScreen() {
     pullStartY.current = null;
     if (triggered) {
       setExhausted(false);
-      setRefreshing(true);
-      setItems([]);
       const idx = Math.max(0, TOPIC_QUEUE.indexOf(activeTopic));
-      await loadTopic(idx, true);
-      setRefreshing(false);
+      if (idx === 0) {
+        await loadClusterForward('refresh'); // default view: re-gather cross-topic clusters, uncapped
+      } else {
+        setRefreshing(true);
+        setItems([]);
+        await loadTopic(idx, true);
+        setRefreshing(false);
+      }
     }
     setPull(0);
-  }, [pull, loadTopic, activeTopic]);
+  }, [pull, loadTopic, loadClusterForward, activeTopic]);
 
   // Tab-bar visibility runs every frame (cheap — stable callback, no rerenders).
   // Infinite-scroll bottom check throttled to 200ms.
