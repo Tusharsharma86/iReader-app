@@ -776,13 +776,16 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         </div>
       )}
 
-      {/* Text — flows below the image like a main-feed card. Centered (not
-          top-anchored) so short content doesn't leave a big dead gap only at
-          the bottom — the empty space splits above/below instead. */}
+      {/* Text — flows below the image like a main-feed card. Top-anchored:
+          centering was tried but pushes the whole block (including the
+          headline) up when content is long, clipping/overlapping the
+          headline's later lines under the bullets box. Top-anchored only
+          ever clips trailing content (the least important part) if content
+          truly overflows — never the headline. */}
       <div className="aif-text-bounce" style={{
         flex: 1, minHeight: 0,
         padding: '4px 22px 44px',
-        display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 12,
+        display: 'flex', flexDirection: 'column', gap: 12,
         zIndex: 2, overflow: 'hidden',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: 800, letterSpacing: 1.4 }}>

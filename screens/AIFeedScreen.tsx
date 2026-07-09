@@ -945,12 +945,15 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
         </View>
       )}
 
-      {/* ── Text section — flows below the image like a main-feed card. Centered
-          (not top-anchored) so short content doesn't leave a big dead gap only
-          at the bottom — the empty space splits above/below instead. ── */}
+      {/* ── Text section — flows below the image like a main-feed card. Top-
+          anchored: centering was tried but pushes the whole block (including
+          the headline) up when content is long, clipping/overlapping the
+          headline's later lines under the bullets box. Top-anchored only
+          ever clips trailing content (the least important part) if content
+          truly overflows — never the headline. ── */}
       <Animated.View
         style={{
-          flex: 1, overflow: 'hidden', justifyContent: 'center',
+          flex: 1, overflow: 'hidden',
           paddingHorizontal: 20, paddingBottom: 30, paddingTop: 10,
           opacity: textOp, transform: [{ translateY: textTy }],
         }}
