@@ -11,6 +11,7 @@ import { trackVisit } from '../utils/usageTracker';
 import { annotateUpdates, unfollow, markSeen } from '../utils/followStore';
 import { TOPIC_SUBTOPICS, storyMatchesSubTopic } from '../utils/topics';
 import { getCached, setCached, TTL } from '../utils/cache';
+import { isBlockedHeadline } from '../utils/contentFilters';
 
 const API_BASE = 'https://ireader.onrender.com/api/news/feed';
 const CARD_GAP = 12;
@@ -85,11 +86,6 @@ const SOURCE_DOMAINS: Record<string, string> = {
 };
 function faviconUrl(name: string) { return `https://www.google.com/s2/favicons?domain=${SOURCE_DOMAINS[name] ?? 'google.com'}&sz=64`; }
 
-const DEVANAGARI_RE = /[ऀ-ॿ]/;
-const NYT_BRIEFING_RE = /nyt|new york times/i;
-const BLOCKED_ALWAYS_RE = /\b(promo.?codes?|coupons?|discount.?codes?|cashback|voucher|sale.?offer|deal.?alert|exclusive.?deal|special.?offer|affiliate|referral.?codes?|invite.?codes?|offer.?codes?|redeem.?codes?|flat \d+%|flash sale|best deals?|top deals?|today.{0,8}deals?|today.{0,8}offers?|limited.{0,8}offer|get \d+% off|save \d+%|\d+%\s*off|phone price|smartphone price|price drops?|price cut|price hike|lowest price|best price|launched at|starts at rs|starts at \$|goes on sale|specs leak|hands.?on review|camera test|(?:cpu|gpu|phone|device|gaming|graphics|processor)\s+benchmark|unboxing|vs comparison|budget phone|flagship phone|gadget deal|record low price|all.?time low|exchange offer)\b/i;
-const BLOCKED_SPORTS_RE = /\b(cricket|ipl|bcci|test match|odi|t20i?|football|fifa|tennis|wimbledon|formula[- ]1|f1 race|chess|olympics|hockey|badminton|icc|world cup|fantasy cricket|dream11|match report|scorecard|batting|bowling|wicket|wickets|run chase|penalty kick|goal scored|transfer window)\b/i;
-const BLOCKED_ENTERTAINMENT_RE = /\b(bollywood|tollywood|kollywood|movie|film|actor|actress|celebrity|box office|trailer|oscar|grammy|award show|web series|ott platform|music video|item song|album launch|concert tour|celebrity gossip|entertainment news|celebrity wedding|star spotted)\b/i;
 
 function greeting() { const h = new Date().getHours(); if (h < 12) return 'Good Morning'; if (h < 17) return 'Good Afternoon'; return 'Good Evening'; }
 
@@ -497,14 +493,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   }, [isVisible]);
 
   function isBlocked(headline: string, source?: string): boolean {
-    if (DEVANAGARI_RE.test(headline)) return true;
-    if (BLOCKED_ALWAYS_RE.test(headline)) return true;
-    if (!showSports && BLOCKED_SPORTS_RE.test(headline)) return true;
-    if (!showEntertainment && BLOCKED_ENTERTAINMENT_RE.test(headline)) return true;
-    if (source === 'India Today' && /\bdiscount\b/i.test(headline)) return true;
-    // NYT recurring "Here's the Latest" live-briefing roundup — not a story.
-    if (NYT_BRIEFING_RE.test(source ?? '') && /here.?s the latest|here are the latest/i.test(headline)) return true;
-    return false;
+    return isBlockedHeadline(headline, source, { allowSports: showSports, allowEntertainment: showEntertainment });
   }
 
   function filterFeedItems(feed: ServerFeedItem[], topic: CategoryTopic): ServerFeedItem[] {

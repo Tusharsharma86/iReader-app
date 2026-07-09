@@ -36,6 +36,7 @@ import { scoreClusterInterest } from '../utils/interestTopics';
 import { TOPIC_SUBTOPICS, storyMatchesSubTopic } from '../utils/topics';
 import { getUsageStats, trackVisit, checkStreakMilestone } from '../utils/usageTracker';
 import { loadFollowed, annotateUpdates, markSeen, toggleFollow as toggleFollowStory } from '../utils/followStore';
+import { isBlockedHeadline } from '../utils/contentFilters';
 import { loadBreakingThemeMutes, matchesMutedBreakingTheme } from '../utils/breakingThemes';
 import { pushNotifHistory } from '../utils/notifHistory';
 import { getArticleColor } from '../utils/colors';
@@ -157,13 +158,6 @@ function formattedDate(): string {
   });
 }
 
-const DEVANAGARI_RE = /[ऀ-ॿ]/;
-// Always-blocked: deals, promo codes, phone prices
-const BLOCKED_ALWAYS_RE = /\b(promo.?codes?|coupons?|discount.?codes?|cashback|voucher|sale.?offer|deal.?alert|exclusive.?deal|special.?offer|affiliate|referral.?codes?|invite.?codes?|offer.?codes?|redeem.?codes?|flat \d+%|flash sale|best deals?|top deals?|today.{0,8}deals?|today.{0,8}offers?|limited.{0,8}offer|get \d+% off|save \d+%|\d+%\s*off|phone price|smartphone price|price drops?|price cut|price hike|lowest price|best price|now cheaper|gets? cheaper|launched at|starts at rs|starts at \$|goes on sale|now available (for|in india|at)|available (for purchase|to buy)|specs leak|hands.?on review|camera test|(?:cpu|gpu|phone|device|gaming|graphics|processor)\s+benchmark|unboxing|vs comparison|budget phone|flagship phone|gadget deal|record low price|all.?time low|exchange offer)\b/i;
-// Sports — blocked unless user enables in settings
-const BLOCKED_SPORTS_RE = /\b(cricket|ipl|bcci|test match|odi|t20i?|football|fifa|tennis|wimbledon|formula[- ]1|f1 race|chess|olympics|hockey|badminton|icc|world cup|fantasy cricket|dream11|match report|scorecard|batting|bowling|wicket|wickets|run chase|penalty kick|goal scored|transfer window)\b/i;
-// Entertainment/Bollywood — blocked unless user enables in settings
-const BLOCKED_ENTERTAINMENT_RE = /\b(bollywood|tollywood|kollywood|movie|film|actor|actress|celebrity|box office|trailer|oscar|grammy|award show|web series|ott platform|music video|item song|album launch|concert tour|celebrity gossip|entertainment news|celebrity wedding|star spotted)\b/i;
 
 const TAG_COLORS = [
   { bg: 'rgba(255,107,107,0.18)', text: '#FF6B6B' },
@@ -599,14 +593,7 @@ export default function FeedScreen() {
   }, [activeTopic]);
 
   function isBlocked(headline: string, source?: string): boolean {
-    if (DEVANAGARI_RE.test(headline)) return true;
-    if (BLOCKED_ALWAYS_RE.test(headline)) return true;
-    if (!showSports && BLOCKED_SPORTS_RE.test(headline)) return true;
-    if (!showEntertainment && BLOCKED_ENTERTAINMENT_RE.test(headline)) return true;
-    if (source === 'India Today' && /\bdiscount\b/i.test(headline)) return true;
-    // NYT recurring "Here's the Latest" live-briefing roundup — not a story.
-    if (/nyt|new york times/i.test(source ?? '') && /here.?s the latest|here are the latest/i.test(headline)) return true;
-    return false;
+    return isBlockedHeadline(headline, source, { allowSports: showSports, allowEntertainment: showEntertainment });
   }
 
   function filterFeedItems(feed: ApiFeedItem[]): ApiFeedItem[] {

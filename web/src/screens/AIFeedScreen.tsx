@@ -8,6 +8,7 @@ import { FALLBACK_IMG } from '../utils/fallback';
 import { trackDeepDive } from '../utils/personalization';
 import { toggleFollow, isFollowing } from '../utils/followStore';
 import { toggleFollowEntity, getFollowedEntities, clearFollowedEntities, entityBoostScore } from '../utils/entityFollowStore';
+import { isBlockedHeadline } from '../utils/contentFilters';
 
 const FEED_API_BASE = 'https://ireader.onrender.com/api/news/feed';
 // Topic rotation for infinite scroll — once we run low on cards we pull the
@@ -146,16 +147,17 @@ function timeAgo(iso: string): string {
 
 interface ApiItem { type?: string; articles?: Story[]; topicTitle?: string; collection?: boolean; }
 
-// Drop Hindi/Devanagari headlines and mobile-phone discount/deal stories.
-const PHONE_RE = /\b(phone|smartphone|mobile|iphone|android|samsung|xiaomi|redmi|oneplus|oppo|vivo|realme|motorola|moto|nokia|pixel|infinix|tecno|poco|nothing phone)\b/i;
-const DEAL_RE = /\b(discount|deal|deals|offer|offers|sale|price drop|price cut|cashback|emi|exchange offer|bank offer|coupon|lowest price|best price|under ₹|under rs\.?|under inr|% off|percent off|flat \d+|flipkart|amazon (sale|prime day|great)|big billion)\b/i;
+// Extra deal/discount vocabulary specific to Indian-market e-commerce
+// promos, not covered by the shared isBlockedHeadline (which is tuned for
+// Digest's Breaking/India/World/Markets/Tech/Business categories).
+const INDIA_DEAL_RE = /\b(emi|bank offer|under ₹|under rs\.?|under inr|percent off|flipkart|amazon (sale|prime day|great)|big billion)\b/i;
 function isExcluded(s?: { headline?: string; summary?: string; sources?: { name?: string }[] }): boolean {
   if (!s) return false;
-  const text = `${s.headline || ''} ${s.summary || ''}`;
-  if (/[ऀ-ॿ]/.test(text)) return true; // Devanagari (Hindi)
-  if (PHONE_RE.test(text) && DEAL_RE.test(text)) return true;
-  // NYT recurring "Here's the Latest" live-briefing roundup — not a story.
-  if (/nyt|new york times/i.test(s.sources?.[0]?.name ?? '') && /here.?s the latest|here are the latest/i.test(s.headline ?? '')) return true;
+  const source = s.sources?.[0]?.name;
+  const opts = { allowSports: true, allowEntertainment: true };
+  if (isBlockedHeadline(s.headline ?? '', source, opts)) return true;
+  if (s.summary && isBlockedHeadline(s.summary, source, opts)) return true;
+  if (INDIA_DEAL_RE.test(`${s.headline || ''} ${s.summary || ''}`)) return true;
   return false;
 }
 

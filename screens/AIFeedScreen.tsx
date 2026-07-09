@@ -32,6 +32,7 @@ import { toggleFollow, isFollowing, loadFollowed } from '../utils/followStore';
 import { toggleFollowEntity, getFollowedEntities, clearFollowedEntities, entityBoostScore } from '../utils/entityFollowStore';
 import { FALLBACK_IMG } from '../utils/fallback';
 import { darken, lighten, getArticleColor } from '../utils/colors';
+import { isBlockedHeadline } from '../utils/contentFilters';
 
 const FEED_API_BASE = 'https://ireader.onrender.com/api/news/feed';
 const DEEPDIVE_API = 'https://ireader.onrender.com/api/news/deepdive';
@@ -102,14 +103,17 @@ function dedupeSources(arr: { name: string; url: string }[]): { name: string; ur
   return out;
 }
 
-const PHONE_RE = /\b(phone|smartphone|mobile|iphone|android|samsung|xiaomi|redmi|oneplus|oppo|vivo|realme|motorola|moto|nokia|pixel|infinix|tecno|poco|nothing phone)\b/i;
-const DEAL_RE = /\b(discount|deal|deals|offer|offers|sale|price drop|price cut|cashback|emi|exchange offer|bank offer|coupon|lowest price|best price|under ₹|under rs\.?|under inr|% off|percent off|flat \d+|flipkart|amazon (sale|prime day|great)|big billion)\b/i;
+// Extra deal/discount vocabulary specific to Indian-market e-commerce
+// promos, not covered by the shared isBlockedHeadline (which is tuned for
+// Digest's Breaking/India/World/Markets/Tech/Business categories).
+const INDIA_DEAL_RE = /\b(emi|bank offer|under ₹|under rs\.?|under inr|percent off|flipkart|amazon (sale|prime day|great)|big billion)\b/i;
 function isExcluded(s?: { headline?: string; summary?: string; sources?: { name?: string }[] }): boolean {
   if (!s) return false;
-  const text = `${s.headline || ''} ${s.summary || ''}`;
-  if (/[ऀ-ॿ]/.test(text)) return true;
-  if (PHONE_RE.test(text) && DEAL_RE.test(text)) return true;
-  if (/nyt|new york times/i.test(s.sources?.[0]?.name ?? '') && /here.?s the latest|here are the latest/i.test(s.headline ?? '')) return true;
+  const source = s.sources?.[0]?.name;
+  const opts = { allowSports: true, allowEntertainment: true };
+  if (isBlockedHeadline(s.headline ?? '', source, opts)) return true;
+  if (s.summary && isBlockedHeadline(s.summary, source, opts)) return true;
+  if (INDIA_DEAL_RE.test(`${s.headline || ''} ${s.summary || ''}`)) return true;
   return false;
 }
 
