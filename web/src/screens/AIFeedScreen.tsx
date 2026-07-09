@@ -8,7 +8,6 @@ import { FALLBACK_IMG } from '../utils/fallback';
 import { trackDeepDive } from '../utils/personalization';
 import { toggleFollow, isFollowing } from '../utils/followStore';
 import { toggleFollowEntity, getFollowedEntities, clearFollowedEntities, entityBoostScore } from '../utils/entityFollowStore';
-import { isBlockedHeadline } from '../utils/contentFilters';
 
 const FEED_API_BASE = 'https://ireader.onrender.com/api/news/feed';
 // Topic rotation for infinite scroll — once we run low on cards we pull the
@@ -144,47 +143,20 @@ function timeAgo(iso: string): string {
     return `${Math.round(hrs / 24)}D AGO`;
   } catch { return ''; }
 }
-function timeAbs(iso: string): string {
-  try { return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
-  catch { return ''; }
-}
 
 interface ApiItem { type?: string; articles?: Story[]; topicTitle?: string; collection?: boolean; }
 
-// Extra deal/discount vocabulary specific to Indian-market e-commerce
-// promos, not covered by the shared isBlockedHeadline (which is tuned for
-// Digest's Breaking/India/World/Markets/Tech/Business categories).
-const INDIA_DEAL_RE = /\b(emi|bank offer|under ₹|under rs\.?|under inr|percent off|flipkart|amazon (sale|prime day|great)|big billion)\b/i;
+// Drop Hindi/Devanagari headlines and mobile-phone discount/deal stories.
+const PHONE_RE = /\b(phone|smartphone|mobile|iphone|android|samsung|xiaomi|redmi|oneplus|oppo|vivo|realme|motorola|moto|nokia|pixel|infinix|tecno|poco|nothing phone)\b/i;
+const DEAL_RE = /\b(discount|deal|deals|offer|offers|sale|price drop|price cut|cashback|emi|exchange offer|bank offer|coupon|lowest price|best price|under ₹|under rs\.?|under inr|% off|percent off|flat \d+|flipkart|amazon (sale|prime day|great)|big billion)\b/i;
 function isExcluded(s?: { headline?: string; summary?: string; sources?: { name?: string }[] }): boolean {
   if (!s) return false;
-  const source = s.sources?.[0]?.name;
-  const opts = { allowSports: true, allowEntertainment: true };
-  if (isBlockedHeadline(s.headline ?? '', source, opts)) return true;
-  if (s.summary && isBlockedHeadline(s.summary, source, opts)) return true;
-  if (INDIA_DEAL_RE.test(`${s.headline || ''} ${s.summary || ''}`)) return true;
+  const text = `${s.headline || ''} ${s.summary || ''}`;
+  if (/[ऀ-ॿ]/.test(text)) return true; // Devanagari (Hindi)
+  if (PHONE_RE.test(text) && DEAL_RE.test(text)) return true;
+  // NYT recurring "Here's the Latest" live-briefing roundup — not a story.
+  if (/nyt|new york times/i.test(s.sources?.[0]?.name ?? '') && /here.?s the latest|here are the latest/i.test(s.headline ?? '')) return true;
   return false;
-}
-
-// Ported from native (screens/AIFeedScreen.tsx) — web previously just took
-// articles[0] as the cluster's primary/lead article with no scoring, so a
-// live-blog roundup or a thin single-source pickup could lead a cluster
-// that had a much better-covered article available.
-const LIVE_BLOG_RE = /\b(live( blog| updates?)?|live:|\s[-–]\s*live\s*$|rolling coverage|as it happens)\b/i;
-
-function topicMatchScore(headline: string, topicTitle: string): number {
-  if (!topicTitle || !headline) return 0;
-  const topicWords = new Set((topicTitle.toLowerCase().match(/[a-z]{4,}/g) ?? []));
-  return (headline.toLowerCase().match(/[a-z]{4,}/g) ?? []).filter(w => topicWords.has(w)).length;
-}
-
-function pickPrimary(articles: Story[], topicTitle: string): Story {
-  const nonLive = articles.filter(s => !LIVE_BLOG_RE.test(s.headline ?? ''));
-  const pool = nonLive.length > 0 ? nonLive : articles;
-  return pool.slice().sort((a, b) => {
-    const aScore = (a.sources?.length ?? 0) * 2 + topicMatchScore(a.headline ?? '', topicTitle);
-    const bScore = (b.sources?.length ?? 0) * 2 + topicMatchScore(b.headline ?? '', topicTitle);
-    return bScore - aScore;
-  })[0];
 }
 
 // Trust the server — same clustering logic as the main feed. A server cluster
@@ -197,15 +169,12 @@ function parseServerFeed(items: ApiItem[]): FeedItem[] {
   const out: FeedItem[] = [];
   for (const it of items) {
     if (it.type === 'cluster' && Array.isArray(it.articles) && it.articles.length > 0) {
-      const primary = pickPrimary(it.articles, it.topicTitle ?? '');
+      const primary = it.articles[0];
       const sources = dedupeSources(it.articles.flatMap(a => a.sources ?? []));
       out.push({ primary, allStories: it.articles, sources, collection: Boolean(it.collection) });
     } else {
       const s = it as unknown as Story;
-      // Single articles: skip live blogs only.
-      if (s.headline && !LIVE_BLOG_RE.test(s.headline)) {
-        out.push({ primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []), collection: false });
-      }
+      if (s.headline) out.push({ primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []), collection: false });
     }
   }
   return out;
@@ -372,85 +341,6 @@ export default function AIFeedScreen() {
   const itemsRef = useRef<FeedItem[]>([]);
   itemsRef.current = items;
 
-  // Silent background refresh for stale-while-revalidate: fetch the current
-  // topic and REPLACE + re-rank items, no loading/skeleton flicker. Only
-  // swaps in fresh data if the fetch actually returned something (never
-  // blanks the feed on a failed/empty response). Ported from native
-  // (screens/AIFeedScreen.tsx) — previously this used the append-only
-  // loadTopic(0,false) path, which just tacked new items onto the bottom
-  // instead of surfacing freshly-ranked top stories.
-  const silentRefresh = useCallback(async (topicIdx: number) => {
-    const topic = TOPIC_QUEUE[topicIdx % TOPIC_QUEUE.length];
-    try {
-      const r = await fetch(`${FEED_API_BASE}?topic=${topic}`);
-      if (!r.ok) return;
-      const raw = await r.json();
-      const rawItems: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
-      const fresh = rankFeedItems(
-        parseServerFeed(rawItems)
-          .filter(it => !it.collection)
-          .filter(it => it.primary.headline && it.primary.publishedAt)
-          .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded))
-          .filter(it => activeSources[it.primary.sources?.[0]?.name ?? ''] !== false)
-      );
-      if (fresh.length > 0) {
-        setItems(fresh);
-        scrollRef.current?.scrollTo({ top: 0, behavior: 'auto' });
-        setError(null);
-      }
-    } catch { /* keep showing cached items */ }
-  }, [activeSources]);
-
-  // Default loader — trusts server clusters, ranks by freshness + importance.
-  // Fetches the current topic (breaking by default), no client-side cap.
-  // Ported from native (screens/AIFeedScreen.tsx): initial "breaking" load
-  // must NOT go through loadTopic's 30-item slice (that cap exists only to
-  // bound load-more appends) — routing initial load through it here was the
-  // bug capping the breaking feed at 30 cards on first open and on
-  // pull-to-refresh, even when the server clustered far more than 30.
-  const loadClusterForward = useCallback(async (mode: 'initial' | 'refresh' | 'silent') => {
-    if (mode === 'initial') setLoading(true);
-    else if (mode === 'refresh') setRefreshing(true);
-    try {
-      const r = await fetch(`${FEED_API_BASE}?topic=breaking`);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const raw = await r.json();
-      const rawItems: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
-      const next = rankFeedItems(
-        parseServerFeed(rawItems)
-          .filter(it => !it.collection)
-          .filter(it => it.primary.headline && it.primary.publishedAt)
-          .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded))
-          .filter(it => activeSources[it.primary.sources?.[0]?.name ?? ''] !== false)
-      );
-      if (next.length > 0) {
-        setItems(next);
-        try { localStorage.setItem(FEED_LIST_CACHE, JSON.stringify({ items: next, at: Date.now(), topicCursor: 0 })); } catch {}
-        if (mode === 'refresh') scrollRef.current?.scrollTo({ top: 0, behavior: 'auto' });
-        setError(null);
-      } else if (mode === 'initial' || mode === 'refresh') {
-        // Empty cluster response — fall back to the plain per-topic loader
-        // instead of a bare no-op. Previously 'refresh' just let the pull
-        // spinner spin down with nothing changed and no explanation, which
-        // read as "pull-to-refresh is broken".
-        await loadTopic(0, true);
-      }
-    } catch (e) {
-      if (mode === 'initial') {
-        setError(String(e));
-      } else if (mode === 'refresh') {
-        // Same fallback on a hard failure (network/HTTP error) — give the
-        // pull-to-refresh a real second attempt via the per-topic endpoint
-        // before giving up silently.
-        try { await loadTopic(0, true); } catch { /* keep showing what's on screen */ }
-      }
-    } finally {
-      if (mode === 'initial') setLoading(false);
-      else if (mode === 'refresh') setRefreshing(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSources]);
-
   // Load one topic — same as main feed: trust the server's clusters as-is,
   // dedupe only by article ID (so the same article doesn't appear twice on
   // load-more), drop theme collections (browse rails don't fit the AI Feed UX).
@@ -470,14 +360,12 @@ export default function AIFeedScreen() {
         .filter(it => activeSources[it.primary.sources?.[0]?.name ?? ''] !== false);
 
       const existingIds = new Set(itemsRef.current.map(it => it.primary.id));
-      // Capped to match native (screens/AIFeedScreen.tsx) — an unbounded list
-      // during a long scroll session was a real memory/perf risk on web too.
-      const newOnes = incoming.filter(it => !existingIds.has(it.primary.id)).slice(0, 30);
+      const newOnes = incoming.filter(it => !existingIds.has(it.primary.id));
       if (newOnes.length === 0 && !isInitial) { setExhausted(true); return; }
 
       setItems(prev => {
-        const next = isInitial ? rankFeedItems(newOnes) : [...prev, ...newOnes].slice(0, 120);
-        if (isInitial) { try { localStorage.setItem(FEED_LIST_CACHE, JSON.stringify({ items: next, at: Date.now(), topicCursor: topicIdx % TOPIC_QUEUE.length })); } catch {} }
+        const next = isInitial ? rankFeedItems(newOnes) : [...prev, ...newOnes];
+        if (isInitial) { try { localStorage.setItem(FEED_LIST_CACHE, JSON.stringify({ items: next, at: Date.now() })); } catch {} }
         return next;
       });
       if (isInitial) setError(null);
@@ -496,27 +384,17 @@ export default function AIFeedScreen() {
     try {
       const raw = localStorage.getItem(FEED_LIST_CACHE);
       if (raw) {
-        const c = JSON.parse(raw) as { items: FeedItem[]; at: number; topicCursor?: number };
+        const c = JSON.parse(raw) as { items: FeedItem[]; at: number };
         if (Array.isArray(c.items) && c.items.length > 0) {
-          // Cache didn't used to record which topic the cached items belonged
-          // to — activeTopic/topicCursor always defaulted back to "breaking"
-          // (component state doesn't survive a remount) while the displayed
-          // cards could be from whatever topic was last viewed. A pull-to-
-          // refresh then read the (wrong) "breaking" topicCursor and swapped
-          // in real breaking content — looked like "refresh reset me to the
-          // main feed" when really the label/content just never matched.
-          const cursor = Number.isInteger(c.topicCursor) ? (c.topicCursor as number) % TOPIC_QUEUE.length : 0;
-          setItems(c.items.slice(0, 50)); // capped to match native's cache-restore cap
-          setTopicCursor(cursor);
-          setActiveTopic(TOPIC_QUEUE[cursor]);
+          setItems(c.items);
           setLoading(false);
-          if (Date.now() - c.at > 10 * 60_000) setTimeout(() => silentRefresh(cursor), 300);
+          if (Date.now() - c.at > 10 * 60_000) setTimeout(() => loadTopic(0, false), 300);
           return;
         }
       }
     } catch {}
-    loadClusterForward('initial');
-  }, [loadClusterForward, silentRefresh]);
+    loadTopic(0, true);
+  }, [loadTopic]);
 
   // ── Pull-to-refresh ─────────────────────────────────────────────────────
   const PULL_THRESHOLD = 80;
@@ -551,18 +429,14 @@ export default function AIFeedScreen() {
     pullStartY.current = null;
     if (triggered) {
       setExhausted(false);
+      setRefreshing(true);
+      setItems([]);
       const idx = Math.max(0, TOPIC_QUEUE.indexOf(activeTopic));
-      if (idx === 0) {
-        await loadClusterForward('refresh'); // default view: re-gather cross-topic clusters, uncapped
-      } else {
-        setRefreshing(true);
-        setItems([]);
-        await loadTopic(idx, true);
-        setRefreshing(false);
-      }
+      await loadTopic(idx, true);
+      setRefreshing(false);
     }
     setPull(0);
-  }, [pull, loadTopic, loadClusterForward, activeTopic]);
+  }, [pull, loadTopic, activeTopic]);
 
   // Tab-bar visibility runs every frame (cheap — stable callback, no rerenders).
   // Infinite-scroll bottom check throttled to 200ms.
@@ -754,27 +628,13 @@ function FullPreviewCard({ item, index, total, onOpen }: {
   const accent = useMemo(() => lighten(dominant, 0.55), [dominant]);
   const sourceName = item.sources[0]?.name ?? story.sources?.[0]?.name ?? 'Unknown';
   const extraSources = Math.max(0, item.sources.length - 1);
-  const { deepDiveDepth, timeFormat } = useSettings();
-  const [hasCachedDeepDive, setHasCachedDeepDive] = useState(() => !!readCache(story.id, deepDiveDepth));
+  const { deepDiveDepth } = useSettings();
+  const hasCachedDeepDive = !!readCache(story.id, deepDiveDepth);
   const [aiBullets, setAiBullets] = useState<string[] | null>(null);
   const [quote, setQuote] = useState<{ text: string; by: string } | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
-  // Card preview used to fire its own network call every time, ignoring the
-  // fact that opening the full Deep Dive for this same story may already have
-  // written a cache entry (and vice versa) — that's why Deep Dive could "work"
-  // while the card right next to it stayed on the plain-text fallback. Check
-  // cache first (instant), only hit the network on a genuine miss, and persist
-  // a successful preview response so the full Deep Dive (or a revisit of this
-  // card) doesn't re-pay for the same generation.
   useEffect(() => {
-    const cached = readCache(story.id, deepDiveDepth);
-    if (cached) {
-      setHasCachedDeepDive(true);
-      if (cached.tldr?.length) setAiBullets(cached.tldr.slice(0, 4));
-      if (cached.quote?.text) setQuote(cached.quote);
-      return;
-    }
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
     const observer = new IntersectionObserver(([entry]) => {
@@ -799,8 +659,6 @@ function FullPreviewCard({ item, index, total, onOpen }: {
             if (cancelled) return;
             if (json.tldr?.length) setAiBullets(json.tldr.slice(0, 4)); // keep ** — FactText renders them in accent colour
             if (json.quote?.text) setQuote(json.quote);
-            writeCache(story.id, json, deepDiveDepth);
-            setHasCachedDeepDive(true);
           } catch {}
         }, 300);
       } else {
@@ -834,8 +692,6 @@ function FullPreviewCard({ item, index, total, onOpen }: {
     try { navigator.vibrate?.(10); } catch {}
     onOpen();
   }, [onOpen]);
-
-  const bullets = aiBullets ?? (story.summary ? splitToBullets(story.summary) : null);
 
   return (
     <div
@@ -916,12 +772,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         </div>
       )}
 
-      {/* Text — flows below the image like a main-feed card. Top-anchored:
-          centering was tried but pushes the whole block (including the
-          headline) up when content is long, clipping/overlapping the
-          headline's later lines under the bullets box. Top-anchored only
-          ever clips trailing content (the least important part) if content
-          truly overflows — never the headline. */}
+      {/* Text — flows below the image like a main-feed card */}
       <div className="aif-text-bounce" style={{
         flex: 1, minHeight: 0,
         padding: '4px 22px 44px',
@@ -929,7 +780,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         zIndex: 2, overflow: 'hidden',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: 800, letterSpacing: 1.4 }}>
-          <span>{timeFormat === 'absolute' ? timeAbs(story.publishedAt) : timeAgo(story.publishedAt)}</span>
+          <span>{timeAgo(story.publishedAt)}</span>
           <span style={{ opacity: 0.5 }}>·</span>
           <span>{sourceName}{extraSources > 0 ? ` +${extraSources}` : ''}</span>
         </div>
@@ -938,10 +789,10 @@ function FullPreviewCard({ item, index, total, onOpen }: {
           margin: 0, color: '#fff', fontSize: 26, fontWeight: 800,
           lineHeight: 1.2, letterSpacing: -0.5,
           textShadow: '0 4px 24px rgba(0,0,0,0.7)',
-          display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
         }}>{story.headline}</h2>
 
         {(() => {
+          const bullets = aiBullets ?? (story.summary ? splitToBullets(story.summary) : null);
           if (bullets?.length) return (
             <div style={{
               background: 'rgba(0,0,0,0.45)',
@@ -1089,7 +940,7 @@ function RelatedStoryCard({ s, onPress }: { s: Story; onPress: () => void }) {
 function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onClose: () => void; onOpenRelated?: (s: Story) => void }) {
   const story = item.primary;
   // Customize → Deep Dive section toggles + depth.
-  const { showDeepDiveEntities, showDeepDiveCurious, deepDiveDepth, fontSize: globalFontSize, timeFormat } = useSettings();
+  const { showDeepDiveEntities, showDeepDiveCurious, deepDiveDepth, fontSize: globalFontSize } = useSettings();
   // Scale Deep Dive body text by the user's Article font size. Headers/labels
   // stay branded; only reading content scales.
   const ddScale = globalFontSize === 'Small' ? 0.88
@@ -1216,7 +1067,7 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
               paragraphs,
               // For event clusters: read every source in full. For theme collections:
               // only the lead article (others are different stories on the same topic).
-              sourceUrls: (item.sources ?? []).map(s => s.url).filter(Boolean) as string[],
+              sourceUrls: [story.sources?.[0]?.url].filter(Boolean) as string[],
               depth: deepDiveDepth,
               publishedAt: story.publishedAt,
               systemPrompt: DEEPDIVE_SYSTEM_PROMPT,
@@ -1434,7 +1285,7 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, color: accent, fontSize: 10, fontWeight: 800, letterSpacing: 1.4 }}>
           <span>{sourceName.toUpperCase()}</span>
           <span style={{ color: 'rgba(255,255,255,0.3)' }}>·</span>
-          <span>{timeFormat === 'absolute' ? timeAbs(story.publishedAt) : timeAgo(story.publishedAt)}</span>
+          <span>{timeAgo(story.publishedAt)}</span>
         </div>
 
         {stage === 'generating' ? (
