@@ -20,12 +20,14 @@ export type ColumnWidth = 'narrow' | 'medium' | 'wide';
 export type Eli5Tone = 'kid' | 'casual' | 'plain';
 export type DeepDiveDepth = 'quick' | 'standard' | 'deep';
 export type TimeFormat = 'relative' | 'absolute';
+export type BreakingSensitivity = 'all' | 'important' | 'critical';
 
 interface SettingsCtx {
   fontSize: FontSize;
   setFontSize: (fs: FontSize) => void;
   notifBreaking: boolean; setNotifBreaking: (v: boolean) => void;
   notifAiFeed: boolean; setNotifAiFeed: (v: boolean) => void;
+  breakingSensitivity: BreakingSensitivity; setBreakingSensitivity: (v: BreakingSensitivity) => void;
   notifTech: boolean; setNotifTech: (v: boolean) => void;
   notifDigest: boolean; setNotifDigest: (v: boolean) => void;
   notifSources: boolean; setNotifSources: (v: boolean) => void;
@@ -101,6 +103,7 @@ const STORAGE_KEY = '@ireader_settings';
 const DEFAULTS = {
   fontSize: 'Medium' as FontSize,
   notifBreaking: true, notifAiFeed: true, notifTech: true, notifDigest: false, notifSources: false,
+  breakingSensitivity: 'important' as BreakingSensitivity,
   showSports: false, showEntertainment: false,
   activeTopics: DEFAULT_ACTIVE_TOPICS,
 
@@ -146,7 +149,7 @@ const DEFAULTS = {
 const noop = () => {};
 const SettingsContext = createContext<SettingsCtx>({
   ...DEFAULTS, activeSubTopics: {}, favSources: [], favTopics: [],
-  setFontSize: noop, setNotifBreaking: noop, setNotifAiFeed: noop, setNotifTech: noop, setNotifDigest: noop, setNotifSources: noop,
+  setFontSize: noop, setNotifBreaking: noop, setNotifAiFeed: noop, setBreakingSensitivity: noop, setNotifTech: noop, setNotifDigest: noop, setNotifSources: noop,
   setShowSports: noop, setShowEntertainment: noop,
   toggleFavSource: noop, toggleFavTopic: noop,
   toggleTopic: noop, toggleSubTopic: noop,
@@ -169,6 +172,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [fontSize, setFontSizeS] = useState<FontSize>(DEFAULTS.fontSize);
   const [notifBreaking, setNotifBreakingS] = useState(DEFAULTS.notifBreaking);
   const [notifAiFeed, setNotifAiFeedS] = useState(DEFAULTS.notifAiFeed);
+  const [breakingSensitivity, setBreakingSensitivityS] = useState<BreakingSensitivity>(DEFAULTS.breakingSensitivity);
   const [notifTech, setNotifTechS] = useState(DEFAULTS.notifTech);
   const [notifDigest, setNotifDigestS] = useState(DEFAULTS.notifDigest);
   const [notifSources, setNotifSourcesS] = useState(DEFAULTS.notifSources);
@@ -228,6 +232,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         if (s.fontSize) setFontSizeS(s.fontSize);
         if (typeof s.notifBreaking === 'boolean') setNotifBreakingS(s.notifBreaking);
         if (typeof s.notifAiFeed === 'boolean') setNotifAiFeedS(s.notifAiFeed);
+        if (['all','important','critical'].includes(s.breakingSensitivity)) setBreakingSensitivityS(s.breakingSensitivity);
         if (typeof s.notifTech === 'boolean') setNotifTechS(s.notifTech);
         if (typeof s.notifDigest === 'boolean') setNotifDigestS(s.notifDigest);
         if (typeof s.notifSources === 'boolean') setNotifSourcesS(s.notifSources);
@@ -285,7 +290,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     if (!loaded) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        fontSize, notifBreaking, notifAiFeed, notifTech, notifDigest, notifSources,
+        fontSize, notifBreaking, notifAiFeed, breakingSensitivity, notifTech, notifDigest, notifSources,
         showSports, showEntertainment, activeTopics, activeSubTopics, favSources, favTopics,
         topicInterests,
         showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity,
@@ -299,11 +304,12 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         hiddenTabs, hiddenTopics, autoMarkRead, keyboardShortcuts,
       }));
     } catch {}
-  }, [loaded, fontSize, notifBreaking, notifAiFeed, notifTech, notifDigest, notifSources, showSports, showEntertainment, activeTopics, activeSubTopics, favSources, favTopics, topicInterests, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showArticleRssSummary, showVerifyDedup, showReferencedSources, summaryLength, summaryFormat, keyPointsCount, showKeyPoints, defaultTopic, linkOpen, pullToRefresh, themeMode, showEntityHighlights, showQuoteHighlights, showReadingDifficulty, timeFormat, fontFamily, lineHeightMode, columnWidth, eli5Tone, deepDiveDepth, showDeepDiveQA, showDeepDiveEntities, showDeepDiveCurious, hiddenTabs, hiddenTopics, autoMarkRead, keyboardShortcuts]);
+  }, [loaded, fontSize, notifBreaking, notifAiFeed, breakingSensitivity, notifTech, notifDigest, notifSources, showSports, showEntertainment, activeTopics, activeSubTopics, favSources, favTopics, topicInterests, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showArticleRssSummary, showVerifyDedup, showReferencedSources, summaryLength, summaryFormat, keyPointsCount, showKeyPoints, defaultTopic, linkOpen, pullToRefresh, themeMode, showEntityHighlights, showQuoteHighlights, showReadingDifficulty, timeFormat, fontFamily, lineHeightMode, columnWidth, eli5Tone, deepDiveDepth, showDeepDiveQA, showDeepDiveEntities, showDeepDiveCurious, hiddenTabs, hiddenTopics, autoMarkRead, keyboardShortcuts]);
 
   const setFontSize = useCallback((fs: FontSize) => setFontSizeS(fs), []);
   const setNotifBreaking = useCallback((v: boolean) => setNotifBreakingS(v), []);
   const setNotifAiFeed = useCallback((v: boolean) => setNotifAiFeedS(v), []);
+  const setBreakingSensitivity = useCallback((v: BreakingSensitivity) => setBreakingSensitivityS(v), []);
   const setNotifTech = useCallback((v: boolean) => setNotifTechS(v), []);
   const setNotifDigest = useCallback((v: boolean) => setNotifDigestS(v), []);
   const setNotifSources = useCallback((v: boolean) => setNotifSourcesS(v), []);
@@ -368,7 +374,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo(() => ({
-    fontSize, setFontSize, notifBreaking, setNotifBreaking, notifAiFeed, setNotifAiFeed, notifTech, setNotifTech,
+    fontSize, setFontSize, notifBreaking, setNotifBreaking, notifAiFeed, setNotifAiFeed, breakingSensitivity, setBreakingSensitivity, notifTech, setNotifTech,
     notifDigest, setNotifDigest, notifSources, setNotifSources,
     showSports, setShowSports, showEntertainment, setShowEntertainment,
     favSources, toggleFavSource, favTopics, toggleFavTopic,
@@ -411,7 +417,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     autoMarkRead, setAutoMarkRead,
     keyboardShortcuts, setKeyboardShortcuts,
     resetCustomize,
-  }), [fontSize, notifBreaking, notifAiFeed, notifTech, notifDigest, notifSources, showSports, showEntertainment, favSources, favTopics, activeTopics, activeSubTopics, topicInterests, setFontSize, setNotifBreaking, setNotifAiFeed, setNotifTech, setNotifDigest, setNotifSources, setShowSports, setShowEntertainment, toggleFavSource, toggleFavTopic, toggleTopic, toggleSubTopic, setTopicInterest, resetSettings, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showArticleRssSummary, showVerifyDedup, showReferencedSources, summaryLength, summaryFormat, keyPointsCount, showKeyPoints, defaultTopic, linkOpen, pullToRefresh, themeMode, showEntityHighlights, showQuoteHighlights, showReadingDifficulty, timeFormat, fontFamily, lineHeightMode, columnWidth, eli5Tone, deepDiveDepth, showDeepDiveQA, showDeepDiveEntities, showDeepDiveCurious, hiddenTabs, hiddenTopics, autoMarkRead, keyboardShortcuts, toggleHiddenTab, toggleHiddenTopic, resetCustomize]);
+  }), [fontSize, notifBreaking, notifAiFeed, breakingSensitivity, notifTech, notifDigest, notifSources, showSports, showEntertainment, favSources, favTopics, activeTopics, activeSubTopics, topicInterests, setFontSize, setNotifBreaking, setNotifAiFeed, setBreakingSensitivity, setNotifTech, setNotifDigest, setNotifSources, setShowSports, setShowEntertainment, toggleFavSource, toggleFavTopic, toggleTopic, toggleSubTopic, setTopicInterest, resetSettings, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showArticleRssSummary, showVerifyDedup, showReferencedSources, summaryLength, summaryFormat, keyPointsCount, showKeyPoints, defaultTopic, linkOpen, pullToRefresh, themeMode, showEntityHighlights, showQuoteHighlights, showReadingDifficulty, timeFormat, fontFamily, lineHeightMode, columnWidth, eli5Tone, deepDiveDepth, showDeepDiveQA, showDeepDiveEntities, showDeepDiveCurious, hiddenTabs, hiddenTopics, autoMarkRead, keyboardShortcuts, toggleHiddenTab, toggleHiddenTopic, resetCustomize]);
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }

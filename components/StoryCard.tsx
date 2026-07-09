@@ -9,6 +9,7 @@ import { FeedStackParamList } from '../types/navigation';
 import { useSettings } from '../contexts/SettingsContext';
 import { trackArticleOpen } from '../utils/personalization';
 import { FALLBACK_IMG } from '../utils/fallback';
+import { isRead, markRead, subscribeRead } from '../utils/readStore';
 
 function breakingTier(publishedAt: string, isBreaking: boolean): 'live' | 'breaking' | 'developing' | null {
   if (!isBreaking) return null;
@@ -165,7 +166,7 @@ interface Props {
 function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight: imageHeightProp, allStories, suppressBreaking }: Props) {
   // Customize options — gate UI elements per user preference.
   const {
-    showClusterSummary, showBiasDots, showCardImages, cardDensity, timeFormat,
+    showClusterSummary, showBiasDots, showCardImages, cardDensity, timeFormat, autoMarkRead,
   } = useSettings();
   const { width: hookWidth } = useWindowDimensions();
   const [dimWidth, setDimWidth] = useState(() => Dimensions.get('window').width);
@@ -201,8 +202,25 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight:
   const isTrending = story.isTrending ?? sourceCount >= 3;
   const isBreakingBadge = story.isBreaking ?? false;
   const isOngoing = story.isDeveloping ?? (sourceCount >= 4 && ageMs < 6 * 60 * 60 * 1000);
+  // Customize → autoMarkRead. Visited stories are always marked read on tap
+  // (unconditional); when the setting is ON, stories are also marked read
+  // after sitting on screen ~1.2s (a mount-dwell timer — RN has no built-in
+  // scroll-visibility API like the web IntersectionObserver version uses,
+  // so this is a reasonable proxy rather than true 80%-visible tracking).
+  const [readState, setReadState] = useState<boolean>(() => isRead(story.id));
+  useEffect(() => {
+    const unsub = subscribeRead(() => setReadState(isRead(story.id)));
+    return unsub;
+  }, [story.id]);
+  useEffect(() => {
+    if (!autoMarkRead || readState) return;
+    const t = setTimeout(() => markRead(story.id), 1200);
+    return () => clearTimeout(t);
+  }, [autoMarkRead, readState, story.id]);
+
   const handlePress = useCallback(() => {
     trackArticleOpen(story);
+    markRead(story.id);
     navigation.navigate('Article', {
       id: story.id,
       url: story.sources?.[0]?.url ?? '',
@@ -229,6 +247,7 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight:
           shadowOpacity: pressed ? 0.9 : 0.55,
           shadowRadius: pressed ? 28 : 18,
           transform: [{ scale: pressed ? 0.97 : 1 }],
+          opacity: readState ? 0.55 : 1,
         },
       ]}
       onPress={handlePress}

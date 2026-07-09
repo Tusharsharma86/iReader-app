@@ -9,7 +9,7 @@
 // on the mobile app. UI parity is the goal.
 import React from 'react';
 import { useRouter } from '../contexts/RouterContext';
-import { useSettings } from '../contexts/SettingsContext';
+import { useSettings, type BreakingSensitivity } from '../contexts/SettingsContext';
 
 const VIOLET = '#b994ff';
 const BLUE = '#4A90D9';
@@ -36,6 +36,7 @@ export default function NotificationSettingsScreen() {
   const {
     notifBreaking, setNotifBreaking,
     notifAiFeed, setNotifAiFeed,
+    breakingSensitivity, setBreakingSensitivity,
     notifTech, setNotifTech,
     notifDigest, setNotifDigest,
     favSources,
@@ -72,6 +73,36 @@ export default function NotificationSettingsScreen() {
             <div style={rowSub}>Tap opens Deep Dive</div>
           </div>
           <Toggle value={notifAiFeed} onChange={setNotifAiFeed} accent={VIOLET} />
+        </div>
+        {/* Sensitivity picker — stored for parity with native; web doesn't fire
+            local notifications itself (see file header), same as the toggles
+            above, but this keeps the setting available for whenever push
+            delivery lands on web too. */}
+        <div style={{ ...rowBorder, flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+          <div style={{ ...rowLabel, fontSize: 13 }}>Sensitivity</div>
+          <div style={{ display: 'flex', gap: 6, width: '100%' }}>
+            {([
+              { key: 'all' as BreakingSensitivity, label: 'All', desc: 'Every breaking story' },
+              { key: 'important' as BreakingSensitivity, label: 'Important', desc: '2+ sources confirming' },
+              { key: 'critical' as BreakingSensitivity, label: 'Critical', desc: '3+ sources confirming' },
+            ]).map(opt => {
+              const active = breakingSensitivity === opt.key;
+              return (
+                <div
+                  key={opt.key}
+                  onClick={() => setBreakingSensitivity(opt.key)}
+                  style={{
+                    flex: 1, padding: '8px 0', borderRadius: 8,
+                    background: active ? '#1C3A6A' : '#1A1A1A',
+                    textAlign: 'center', cursor: 'pointer',
+                  }}
+                >
+                  <div style={{ color: active ? '#FFF' : '#888', fontSize: 12, fontWeight: 700 }}>{opt.label}</div>
+                  <div style={{ color: active ? '#AAC' : '#555', fontSize: 9, marginTop: 2 }}>{opt.desc}</div>
+                </div>
+              );
+            })}
+          </div>
         </div>
         <div onClick={() => navigate({ name: 'BreakingThemes' })} style={{ ...rowBorder, paddingLeft: 36, cursor: 'pointer' }}>
           <div style={{ flex: 1 }}>

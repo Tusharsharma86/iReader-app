@@ -456,7 +456,7 @@ export default function ArticleScreen() {
     showStatsCard, showArticleRssSummary, showVerifyDedup: showVerifyDedupSetting,
     showReferencedSources, showKeyPoints,
     summaryLength, summaryFormat, keyPointsCount, eli5Tone,
-    showEntityHighlights, showReadingDifficulty,
+    showEntityHighlights, showQuoteHighlights, showReadingDifficulty,
   } = useSettings();
   const { isSaved, toggleSave } = useSaved();
   const fontSizePx = FONT_SIZE_MAP[fontSizeName] ?? 17;
@@ -823,7 +823,8 @@ export default function ArticleScreen() {
         fontSize={fontSizePx}
         url={params.url}
         accentColor={accent}
-        highlights={showEntityHighlights}
+        showEntityHighlights={showEntityHighlights}
+        showQuoteHighlights={showQuoteHighlights}
       />
     );
 
@@ -842,7 +843,7 @@ export default function ArticleScreen() {
       switch (activeTab) {
         case 'Summary':
           // Summary prose matches KEY POINTS sizing (13.5) — parity with web.
-          aiContent = <SummaryTab loading={aiLoading} result={aiResult} error={aiError} accentColor={dominant} fontSize={13.5} showKeyPoints={showKeyPoints} highlights={showEntityHighlights} summaryFormat={summaryFormat} />;
+          aiContent = <SummaryTab loading={aiLoading} result={aiResult} error={aiError} accentColor={dominant} fontSize={13.5} showKeyPoints={showKeyPoints} showEntityHighlights={showEntityHighlights} showQuoteHighlights={showQuoteHighlights} summaryFormat={summaryFormat} />;
           break;
         case '5 Ws':
           aiContent = <FiveWsTab loading={aiLoading} result={aiResult} error={aiError} accentColor={accent} />;
@@ -1433,14 +1434,16 @@ function tokenize(text: string): Seg[] {
   return out;
 }
 
-function RichParagraph({ text, fontSize, accentColor, highlights = true }: { text: string; fontSize: number; accentColor: string; highlights?: boolean }) {
+function RichParagraph({ text, fontSize, accentColor, showEntityHighlights = true, showQuoteHighlights = true }: { text: string; fontSize: number; accentColor: string; showEntityHighlights?: boolean; showQuoteHighlights?: boolean }) {
   const segs = useMemo(() => tokenize(text), [text]);
   return (
     <Text style={[styles.paragraph, { fontSize, lineHeight: fontSize * 1.65 }]}>
       {segs.map((seg, i) => {
-        if (!highlights) return <Text key={i}>{seg.text}</Text>;
-        if (seg.kind === 'quote')
+        if (seg.kind === 'quote') {
+          if (!showQuoteHighlights) return <Text key={i}>{seg.text}</Text>;
           return <Text key={i} style={{ color: '#FFD166', fontStyle: 'italic' }}>{seg.text}</Text>;
+        }
+        if (!showEntityHighlights) return <Text key={i}>{seg.text}</Text>;
         if (seg.kind === 'stat')
           return <Text key={i} style={{ color: '#4ECDC4', fontWeight: '700' }}>{seg.text}</Text>;
         if (seg.kind === 'kw')
@@ -1453,9 +1456,9 @@ function RichParagraph({ text, fontSize, accentColor, highlights = true }: { tex
   );
 }
 
-function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accentColor, borderColor, showVerifyDedup, onVerifyDedup, highlights = true }: {
+function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accentColor, borderColor, showVerifyDedup, onVerifyDedup, showEntityHighlights = true, showQuoteHighlights = true }: {
   loading: boolean; paragraphs: string[]; error: string | null; summary: string; fontSize: number; url?: string; accentColor: string;
-  borderColor?: string; showVerifyDedup?: boolean; onVerifyDedup?: () => void; highlights?: boolean;
+  borderColor?: string; showVerifyDedup?: boolean; onVerifyDedup?: () => void; showEntityHighlights?: boolean; showQuoteHighlights?: boolean;
 }) {
   if (loading) return <Spinner />;
 
@@ -1479,7 +1482,7 @@ function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accen
       <View>
         <Text style={styles.errorHint}>Full text unavailable from this publisher</Text>
         {summary ? (
-          <RichParagraph text={summary} fontSize={fontSize} accentColor={accentColor} highlights={highlights} />
+          <RichParagraph text={summary} fontSize={fontSize} accentColor={accentColor} showEntityHighlights={showEntityHighlights} showQuoteHighlights={showQuoteHighlights} />
         ) : (
           <ErrorMsg msg="No content available." />
         )}
@@ -1498,7 +1501,7 @@ function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accen
 
   return (
     <View>
-      {paragraphs.map((p, i) => <RichParagraph key={i} text={p} fontSize={fontSize} accentColor={accentColor} highlights={highlights} />)}
+      {paragraphs.map((p, i) => <RichParagraph key={i} text={p} fontSize={fontSize} accentColor={accentColor} showEntityHighlights={showEntityHighlights} showQuoteHighlights={showQuoteHighlights} />)}
       {url ? (
         <TouchableOpacity
           style={styles.readFullBtn}
@@ -1512,7 +1515,7 @@ function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accen
   );
 }
 
-function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoints = true, highlights = true, summaryFormat = 'paragraph' }: { loading: boolean; result: AiResult | null; error: string | null; accentColor: string; fontSize: number; showKeyPoints?: boolean; highlights?: boolean; summaryFormat?: SummaryFormat }) {
+function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoints = true, showEntityHighlights = true, showQuoteHighlights = true, summaryFormat = 'paragraph' }: { loading: boolean; result: AiResult | null; error: string | null; accentColor: string; fontSize: number; showKeyPoints?: boolean; showEntityHighlights?: boolean; showQuoteHighlights?: boolean; summaryFormat?: SummaryFormat }) {
   if (loading) return <Spinner />;
   if (error) return <ErrorMsg msg={error} />;
   if (!result) return <ErrorMsg msg="No summary available." />;
@@ -1558,7 +1561,7 @@ function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoin
   return (
     <View>
       {paragraphs.map((p, i) => (
-        <RichParagraph key={i} text={p} fontSize={fontSize} accentColor={accentColor} highlights={highlights} />
+        <RichParagraph key={i} text={p} fontSize={fontSize} accentColor={accentColor} showEntityHighlights={showEntityHighlights} showQuoteHighlights={showQuoteHighlights} />
       ))}
       {showKeyPoints && bullets.length > 0 && rawSummary ? (
         <View style={{ marginTop: 18, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.08)' }}>
