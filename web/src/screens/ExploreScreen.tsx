@@ -85,7 +85,7 @@ function toStory(item: FeedItem): Story {
   if (item.type === 'cluster' && item.articles?.length) {
     const primary = item.articles[0];
     const withImage = item.articles.find(a => a.imageUrl) ?? primary;
-    const sources = normalizeSources(item.articles.flatMap(a => a.sources ?? []), primary.publishedAt ?? now);
+    const sources = normalizeSources(item.articles.flatMap(a => a.sources ?? []), primary.publishedAt || now);
     return {
       id: primary.id || label,
       headline: label,
@@ -93,7 +93,7 @@ function toStory(item: FeedItem): Story {
       aiSummary: item.topicSummary || primary.aiSummary,
       publishedAt: primary.publishedAt || now,
       imageUrl: withImage.imageUrl || '',
-      sources: sources.length ? sources : normalizeSources(primary.sources ?? [], primary.publishedAt ?? now),
+      sources: sources.length ? sources : normalizeSources(primary.sources ?? [], primary.publishedAt || now),
       isTrending: item.articles.length >= 3 || primary.isTrending,
       isBreaking: primary.isBreaking,
       isDeveloping: primary.isDeveloping,
@@ -107,7 +107,7 @@ function toStory(item: FeedItem): Story {
     aiSummary: item.aiSummary,
     publishedAt: item.publishedAt || now,
     imageUrl: item.imageUrl || '',
-    sources: normalizeSources(item.sources ?? [], item.publishedAt ?? now),
+    sources: normalizeSources(item.sources ?? [], item.publishedAt || now),
     isTrending: item.sourceCount ? item.sourceCount >= 3 : undefined,
     isBreaking: item.isBreaking,
     isDeveloping: item.isDeveloping,
@@ -465,6 +465,22 @@ function SearchStoryCard({ item, onOpen }: { item: FeedItem; onOpen: (item: Feed
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
+// Module-level (survives unmount/remount across tab switches, unlike
+// component state) — App.tsx unmounts ExploreScreen on every tab-away,
+// so without this every visit re-flashed the loading skeleton and re-hit
+// the API even seconds after the last load. Mirrors native's useFocusEffect
+// staleness gate (contexts/ExploreScreen.tsx REFRESH_STALE_MS) so a quick
+// tab switch shows the cached view instantly; only a genuinely stale (5+
+// min old) cache triggers a fresh fetch + skeleton.
+interface ExploreCache {
+  trendingStories: FeedItem[]; catchUpStories: FeedItem[]; deepDives: FeedItem[];
+  companies: EntityCard[]; people: EntityCard[]; places: EntityCard[];
+  emergingTopics: EntityCard[]; sources: SourceCard[]; allItems: FeedItem[];
+  timestamp: number;
+}
+let exploreCache: ExploreCache | null = null;
+const EXPLORE_STALE_MS = 5 * 60 * 1000;
+
 export default function ExploreScreen() {
   const { navigate } = useRouter();
   const { show: showTabBar } = useTabBar();
@@ -473,15 +489,15 @@ export default function ExploreScreen() {
   // so Explore's story lists read identically dense/spaced.
   const cardGap = cardDensity === 'compact' ? 14 : cardDensity === 'spacious' ? 44 : 28;
 
-  const [trendingStories, setTrendingStories] = useState<FeedItem[]>([]);
-  const [catchUpStories, setCatchUpStories] = useState<FeedItem[]>([]);
-  const [deepDives, setDeepDives] = useState<FeedItem[]>([]);
-  const [companies, setCompanies] = useState<EntityCard[]>([]);
-  const [people, setPeople] = useState<EntityCard[]>([]);
-  const [places, setPlaces] = useState<EntityCard[]>([]);
-  const [emergingTopics, setEmergingTopics] = useState<EntityCard[]>([]);
-  const [sources, setSources] = useState<SourceCard[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [trendingStories, setTrendingStories] = useState<FeedItem[]>(() => exploreCache?.trendingStories ?? []);
+  const [catchUpStories, setCatchUpStories] = useState<FeedItem[]>(() => exploreCache?.catchUpStories ?? []);
+  const [deepDives, setDeepDives] = useState<FeedItem[]>(() => exploreCache?.deepDives ?? []);
+  const [companies, setCompanies] = useState<EntityCard[]>(() => exploreCache?.companies ?? []);
+  const [people, setPeople] = useState<EntityCard[]>(() => exploreCache?.people ?? []);
+  const [places, setPlaces] = useState<EntityCard[]>(() => exploreCache?.places ?? []);
+  const [emergingTopics, setEmergingTopics] = useState<EntityCard[]>(() => exploreCache?.emergingTopics ?? []);
+  const [sources, setSources] = useState<SourceCard[]>(() => exploreCache?.sources ?? []);
+  const [loading, setLoading] = useState(() => !exploreCache || Date.now() - exploreCache.timestamp > EXPLORE_STALE_MS);
 
   const [searchText, setSearchText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -489,7 +505,7 @@ export default function ExploreScreen() {
   const [searchLoading, setSearchLoading] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const allItemsRef = useRef<FeedItem[]>([]);
+  const allItemsRef = useRef<FeedItem[]>(exploreCache?.allItems ?? []);
 
   // Scroll-position memory — same pattern as FeedScreen.tsx. Explore/Digest
   // unmount when you tap into an Article and remount on back, so without
@@ -642,19 +658,30 @@ export default function ExploreScreen() {
         .slice(0, 18)
         .map(([name, { domain, count }]) => ({ name, domain, count }));
 
+      const cappedCompanies = compList.slice(0, 24);
+      const cappedPeople = personList.slice(0, 24);
+      const cappedPlaces = placeList.slice(0, 20);
       setTrendingStories(trending);
       setCatchUpStories(catchUp);
       setDeepDives(ddItems);
-      setCompanies(compList.slice(0, 24));
-      setPeople(personList.slice(0, 24));
-      setPlaces(placeList.slice(0, 20));
+      setCompanies(cappedCompanies);
+      setPeople(cappedPeople);
+      setPlaces(cappedPlaces);
       setEmergingTopics(emerging);
       setSources(srcList);
       setLoading(false);
+      exploreCache = {
+        trendingStories: trending, catchUpStories: catchUp, deepDives: ddItems,
+        companies: cappedCompanies, people: cappedPeople, places: cappedPlaces,
+        emergingTopics: emerging, sources: srcList, allItems,
+        timestamp: Date.now(),
+      };
     }).catch(() => { if (isMountedRef.current) setLoading(false); });
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    if (!exploreCache || Date.now() - exploreCache.timestamp > EXPLORE_STALE_MS) loadData();
+  }, [loadData]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

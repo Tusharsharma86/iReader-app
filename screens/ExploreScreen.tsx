@@ -412,6 +412,8 @@ function SkeletonBox({ height, style }: { height: number; style?: object }) {
 // (cardWidth * densityScale, plus the text section) so the loading state
 // doesn't visibly jump in size once real cards land.
 const CARD_SKELETON_HEIGHT: Record<string, number> = { compact: 280, comfortable: 360, spacious: 440 };
+// Matches web's cardGap formula (web/src/screens/ExploreScreen.tsx:474).
+const CARD_GAP: Record<string, number> = { compact: 14, comfortable: 28, spacious: 44 };
 
 // Trending Stories, Don't Miss, and AI Deep Dives all render the actual
 // main-feed StoryCard component (via toStory()) instead of the bespoke
@@ -423,14 +425,15 @@ const TrendingSection = memo(function TrendingSection({ loading, stories, cardDe
   loading: boolean; stories: FeedItem[]; cardDensity: string;
 }) {
   const h = CARD_SKELETON_HEIGHT[cardDensity] ?? 360;
+  const gap = CARD_GAP[cardDensity] ?? 28;
   return (
     <View style={s.section}>
       <SectionLabel text="Trending Stories" />
       {loading ? (
-        <><SkeletonBox height={h} style={{ marginBottom: 14, alignSelf: 'center', width: CONTENT_W }} /><SkeletonBox height={h} style={{ marginBottom: 14, alignSelf: 'center', width: CONTENT_W }} /></>
+        <><SkeletonBox height={h} style={{ marginBottom: gap, alignSelf: 'center', width: CONTENT_W }} /><SkeletonBox height={h} style={{ marginBottom: gap, alignSelf: 'center', width: CONTENT_W }} /></>
       ) : stories.slice(0, 8).map((item, i) => {
         const story = toStory(item);
-        return <View key={story.id || i} style={{ marginBottom: 14, alignItems: 'center' }}><StoryCard story={story} allStories={item.articles} /></View>;
+        return <View key={story.id || i} style={{ marginBottom: gap, alignItems: 'center' }}><StoryCard story={story} allStories={item.articles} /></View>;
       })}
     </View>
   );
@@ -443,14 +446,15 @@ const DontMissSection = memo(function DontMissSection({ loading, stories, cardDe
   loading: boolean; stories: FeedItem[]; cardDensity: string;
 }) {
   const h = CARD_SKELETON_HEIGHT[cardDensity] ?? 360;
+  const gap = CARD_GAP[cardDensity] ?? 28;
   return (
     <View style={s.section}>
       <SectionLabel text="Don't Miss · Last 7 Days" />
       {loading ? (
-        <SkeletonBox height={h} style={{ marginBottom: 14, alignSelf: 'center', width: CONTENT_W }} />
+        <SkeletonBox height={h} style={{ marginBottom: gap, alignSelf: 'center', width: CONTENT_W }} />
       ) : stories.map((item, i) => {
         const story = toStory(item);
-        return <View key={story.id || i} style={{ marginBottom: 14, alignItems: 'center' }}><StoryCard story={story} /></View>;
+        return <View key={story.id || i} style={{ marginBottom: gap, alignItems: 'center' }}><StoryCard story={story} /></View>;
       })}
     </View>
   );
@@ -460,14 +464,15 @@ const DeepDivesSection = memo(function DeepDivesSection({ loading, stories, card
   loading: boolean; stories: FeedItem[]; cardDensity: string;
 }) {
   const h = CARD_SKELETON_HEIGHT[cardDensity] ?? 360;
+  const gap = CARD_GAP[cardDensity] ?? 28;
   return (
     <View style={s.section}>
       <SectionLabel text="AI Deep Dives" />
       {loading ? (
-        <><SkeletonBox height={h} style={{ marginBottom: 14, alignSelf: 'center', width: CONTENT_W }} /><SkeletonBox height={h} style={{ marginBottom: 14, alignSelf: 'center', width: CONTENT_W }} /></>
-      ) : stories.slice(0, 4).map((item, i) => {
+        <><SkeletonBox height={h} style={{ marginBottom: gap, alignSelf: 'center', width: CONTENT_W }} /><SkeletonBox height={h} style={{ marginBottom: gap, alignSelf: 'center', width: CONTENT_W }} /></>
+      ) : stories.slice(0, 5).map((item, i) => {
         const story = toStory(item);
-        return <View key={story.id || i} style={{ marginBottom: 14, alignItems: 'center' }}><StoryCard story={story} allStories={item.articles} /></View>;
+        return <View key={story.id || i} style={{ marginBottom: gap, alignItems: 'center' }}><StoryCard story={story} allStories={item.articles} /></View>;
       })}
     </View>
   );
@@ -481,7 +486,7 @@ const CompaniesSection = memo(function CompaniesSection({ loading, companies, on
       <SectionLabel text="Companies" />
       {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={108} style={{ width: TILE_W }} />)}</View> : (
         <View style={s.grid2}>
-          {companies.slice(0, 8).map((c, i) => <EntityTile key={i} entity={c} accent="#0A84FF" bgColor={COMPANY_BGS[i % 4]} onTap={onTap} />)}
+          {companies.slice(0, 10).map((c, i) => <EntityTile key={i} entity={c} accent="#0A84FF" bgColor={COMPANY_BGS[i % 4]} onTap={onTap} />)}
         </View>
       )}
     </View>
@@ -496,7 +501,7 @@ const PeopleSection = memo(function PeopleSection({ loading, people, onTap }: {
       <SectionLabel text="People" />
       {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={108} style={{ width: TILE_W }} />)}</View> : (
         <View style={s.grid2}>
-          {people.slice(0, 8).map((p, i) => <EntityTile key={i} entity={p} accent="#FF9F0A" bgColor={PEOPLE_BGS[i % 4]} onTap={onTap} />)}
+          {people.slice(0, 10).map((p, i) => <EntityTile key={i} entity={p} accent="#FF9F0A" bgColor={PEOPLE_BGS[i % 4]} onTap={onTap} />)}
         </View>
       )}
     </View>
@@ -511,7 +516,7 @@ const PlacesSection = memo(function PlacesSection({ loading, places, onTap }: {
       <SectionLabel text="Places" />
       {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={108} style={{ width: TILE_W }} />)}</View> : (
         <View style={s.grid2}>
-          {places.slice(0, 8).map((p, i) => <EntityTile key={i} entity={p} accent="#30D158" bgColor={PLACE_BGS[i % 4]} onTap={onTap} />)}
+          {places.slice(0, 10).map((p, i) => <EntityTile key={i} entity={p} accent="#30D158" bgColor={PLACE_BGS[i % 4]} onTap={onTap} />)}
         </View>
       )}
     </View>
@@ -544,7 +549,7 @@ const SourcesSection = memo(function SourcesSection({ loading, sources, onTap }:
       <SectionLabel text="Source Explorer" />
       {loading ? <View style={s.grid3}>{[0,1,2,3,4,5].map(i => <SkeletonBox key={i} height={88} style={{ width: CHIP_W }} />)}</View> : (
         <View style={s.grid3}>
-          {sources.slice(0, 9).map((src, i) => <SourceChip key={i} src={src} onTap={onTap} />)}
+          {sources.slice(0, 12).map((src, i) => <SourceChip key={i} src={src} onTap={onTap} />)}
         </View>
       )}
     </View>
@@ -559,7 +564,7 @@ const EmergingSection = memo(function EmergingSection({ loading, emergingTopics,
       <SectionLabel text="Emerging Topics" />
       {loading ? <View style={s.grid2}>{[0,1,2,3].map(i => <SkeletonBox key={i} height={108} style={{ width: TILE_W }} />)}</View> : (
         <View style={s.grid2}>
-          {emergingTopics.slice(0, 8).map((t, i) => <EntityTile key={i} entity={t} accent="#64D2FF" bgColor={EMERGE_BGS[i % 4]} onTap={onTap} />)}
+          {emergingTopics.slice(0, 10).map((t, i) => <EntityTile key={i} entity={t} accent="#64D2FF" bgColor={EMERGE_BGS[i % 4]} onTap={onTap} />)}
         </View>
       )}
     </View>
@@ -876,7 +881,7 @@ export default function ExploreScreen() {
     const allSources = (primary?.sources?.length ? primary.sources : item.sources) ?? [];
     const url = allSources[0]?.url ?? '';
     if (!headline) return;
-    trackArticleOpen({ headline, id: '', summary: '', publishedAt: '', imageUrl: '', sources: [] } as never);
+    trackArticleOpen({ ...(primary as object), headline } as never);
     navigation.navigate('Article', {
       id: (primary as { id?: string })?.id ?? '',
       url,
@@ -887,6 +892,7 @@ export default function ExploreScreen() {
       publishedAt: primary?.publishedAt ?? item.publishedAt ?? '',
       dominantColor: getArticleColor(headline),
       sources: JSON.stringify(allSources),
+      allStories: JSON.stringify(item.articles ?? [primary].filter(Boolean)),
     });
   }, [navigation]);
 
