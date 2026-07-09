@@ -734,12 +734,26 @@ function FullPreviewCard({ item, index, total, onOpen }: {
   const sourceName = item.sources[0]?.name ?? story.sources?.[0]?.name ?? 'Unknown';
   const extraSources = Math.max(0, item.sources.length - 1);
   const { deepDiveDepth, timeFormat } = useSettings();
-  const hasCachedDeepDive = !!readCache(story.id, deepDiveDepth);
+  const [hasCachedDeepDive, setHasCachedDeepDive] = useState(() => !!readCache(story.id, deepDiveDepth));
   const [aiBullets, setAiBullets] = useState<string[] | null>(null);
   const [quote, setQuote] = useState<{ text: string; by: string } | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
+  // Card preview used to fire its own network call every time, ignoring the
+  // fact that opening the full Deep Dive for this same story may already have
+  // written a cache entry (and vice versa) — that's why Deep Dive could "work"
+  // while the card right next to it stayed on the plain-text fallback. Check
+  // cache first (instant), only hit the network on a genuine miss, and persist
+  // a successful preview response so the full Deep Dive (or a revisit of this
+  // card) doesn't re-pay for the same generation.
   useEffect(() => {
+    const cached = readCache(story.id, deepDiveDepth);
+    if (cached) {
+      setHasCachedDeepDive(true);
+      if (cached.tldr?.length) setAiBullets(cached.tldr.slice(0, 4));
+      if (cached.quote?.text) setQuote(cached.quote);
+      return;
+    }
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
     const observer = new IntersectionObserver(([entry]) => {
@@ -764,6 +778,8 @@ function FullPreviewCard({ item, index, total, onOpen }: {
             if (cancelled) return;
             if (json.tldr?.length) setAiBullets(json.tldr.slice(0, 4)); // keep ** — FactText renders them in accent colour
             if (json.quote?.text) setQuote(json.quote);
+            writeCache(story.id, json, deepDiveDepth);
+            setHasCachedDeepDive(true);
           } catch {}
         }, 300);
       } else {
