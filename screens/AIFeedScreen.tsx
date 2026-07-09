@@ -11,6 +11,7 @@ import {
   Dimensions,
   FlatList,
   Modal,
+  PanResponder,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -1184,6 +1185,34 @@ function dedupeMetrics(items: string[]): string[] {
     setReloadKey(k => k + 1);
   }, []);
 
+  // Swipe-down-to-close: track drag only when scroll is at top. Ported from
+  // web (web/src/screens/AIFeedScreen.tsx) — native previously only had
+  // pull-to-retry in the error state via RefreshControl, no drag-dismiss.
+  const scrollYRef = useRef(0);
+  const [dragY, setDragY] = useState(0);
+  const dragYRef = useRef(0);
+  const draggingRef = useRef(false);
+  const panResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_evt, g) =>
+      scrollYRef.current <= 0 && g.dy > 8 && Math.abs(g.dy) > Math.abs(g.dx),
+    onPanResponderGrant: () => { draggingRef.current = true; },
+    onPanResponderMove: (_evt, g) => {
+      if (g.dy > 0) { dragYRef.current = g.dy; setDragY(g.dy); }
+    },
+    onPanResponderRelease: () => {
+      draggingRef.current = false;
+      if (dragYRef.current > 130) {
+        // On a failed Deep Dive, pull-down RETRIES instead of closing.
+        if (stage === 'error') { setDragY(0); dragYRef.current = 0; reload(); }
+        else onClose();
+      } else { setDragY(0); dragYRef.current = 0; }
+    },
+    onPanResponderTerminate: () => { draggingRef.current = false; setDragY(0); dragYRef.current = 0; },
+  }), [stage, onClose, reload]);
+  const dragOpacity = stage === 'error' ? 1 : Math.max(0, 1 - dragY / 500);
+  const dragScale = stage === 'error' ? 1 : Math.max(0.92, 1 - dragY / 1800);
+
   // Android back closes overlay
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => { onClose(); return true; });
@@ -1260,9 +1289,21 @@ function dedupeMetrics(items: string[]): string[] {
 
   return (
     <Modal visible animationType={restored ? 'none' : 'slide'} onRequestClose={onClose} statusBarTranslucent>
-      <View style={{ flex: 1, backgroundColor: '#050507' }}>
+      <View
+        style={{
+          flex: 1, backgroundColor: '#050507',
+          transform: [{ translateY: dragY }, { scale: dragScale }],
+          opacity: dragOpacity,
+          borderRadius: dragY > 8 ? 24 : 0,
+          overflow: dragY > 8 ? 'hidden' : 'visible',
+        }}
+        {...panResponder.panHandlers}
+      >
         {/* No top SafeAreaView — image goes edge-to-edge under status bar. */}
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 60 }} showsVerticalScrollIndicator={false}
+          onScroll={e => { scrollYRef.current = e.nativeEvent.contentOffset.y; }}
+          scrollEventThrottle={16}
+          scrollEnabled={dragY === 0}
           refreshControl={stage === 'error'
             ? <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); reload(); }} tintColor={accent} colors={[accent]} />
             : undefined}

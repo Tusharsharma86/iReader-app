@@ -165,6 +165,28 @@ function isExcluded(s?: { headline?: string; summary?: string; sources?: { name?
   return false;
 }
 
+// Ported from native (screens/AIFeedScreen.tsx) — web previously just took
+// articles[0] as the cluster's primary/lead article with no scoring, so a
+// live-blog roundup or a thin single-source pickup could lead a cluster
+// that had a much better-covered article available.
+const LIVE_BLOG_RE = /\b(live( blog| updates?)?|live:|\s[-–]\s*live\s*$|rolling coverage|as it happens)\b/i;
+
+function topicMatchScore(headline: string, topicTitle: string): number {
+  if (!topicTitle || !headline) return 0;
+  const topicWords = new Set((topicTitle.toLowerCase().match(/[a-z]{4,}/g) ?? []));
+  return (headline.toLowerCase().match(/[a-z]{4,}/g) ?? []).filter(w => topicWords.has(w)).length;
+}
+
+function pickPrimary(articles: Story[], topicTitle: string): Story {
+  const nonLive = articles.filter(s => !LIVE_BLOG_RE.test(s.headline ?? ''));
+  const pool = nonLive.length > 0 ? nonLive : articles;
+  return pool.slice().sort((a, b) => {
+    const aScore = (a.sources?.length ?? 0) * 2 + topicMatchScore(a.headline ?? '', topicTitle);
+    const bScore = (b.sources?.length ?? 0) * 2 + topicMatchScore(b.headline ?? '', topicTitle);
+    return bScore - aScore;
+  })[0];
+}
+
 // Trust the server — same clustering logic as the main feed. A server cluster
 // (multiple outlets on one event) becomes one card with its articles intact.
 // A singleton article becomes one card. NO client-side merging, no headline-
@@ -175,12 +197,15 @@ function parseServerFeed(items: ApiItem[]): FeedItem[] {
   const out: FeedItem[] = [];
   for (const it of items) {
     if (it.type === 'cluster' && Array.isArray(it.articles) && it.articles.length > 0) {
-      const primary = it.articles[0];
+      const primary = pickPrimary(it.articles, it.topicTitle ?? '');
       const sources = dedupeSources(it.articles.flatMap(a => a.sources ?? []));
       out.push({ primary, allStories: it.articles, sources, collection: Boolean(it.collection) });
     } else {
       const s = it as unknown as Story;
-      if (s.headline) out.push({ primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []), collection: false });
+      // Single articles: skip live blogs only.
+      if (s.headline && !LIVE_BLOG_RE.test(s.headline)) {
+        out.push({ primary: s, allStories: [s], sources: dedupeSources(s.sources ?? []), collection: false });
+      }
     }
   }
   return out;
