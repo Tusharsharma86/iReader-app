@@ -530,13 +530,20 @@ export default function AIFeedScreen() {
           // older than 10 min. Makes every open after the first feel instant.
           // Cap restore to 50 so label always matches content (prevents showing
           // 300 multi-topic items under the "BREAKING" label).
+          // Restore the ACTUAL cached topic instead of forcing 0 — forcing
+          // breaking here while showing cached items from a different topic
+          // (e.g. technology) made the topic pill lie about what's on screen,
+          // and a subsequent pull-to-refresh would read that wrong cursor and
+          // silently swap in real breaking content, looking like "refresh
+          // dumped me back on the main feed".
+          const cursor = Number.isInteger(c.topicCursor) ? c.topicCursor % TOPIC_QUEUE.length : 0;
           setItems(c.items.slice(0, 50));
-          setTopicCursor(0); // always start at breaking on open
+          setTopicCursor(cursor);
           setActiveIdx(0);
           setLoading(false);
           setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: false }), 0);
           if (Date.now() - c.at > 10 * 60_000) {
-            setTimeout(() => loadClusterForward('silent'), 400);
+            setTimeout(() => silentRefresh(cursor), 400);
           }
           return;
         }

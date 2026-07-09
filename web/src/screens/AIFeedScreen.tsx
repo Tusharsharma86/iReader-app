@@ -425,7 +425,7 @@ export default function AIFeedScreen() {
       );
       if (next.length > 0) {
         setItems(next);
-        try { localStorage.setItem(FEED_LIST_CACHE, JSON.stringify({ items: next, at: Date.now() })); } catch {}
+        try { localStorage.setItem(FEED_LIST_CACHE, JSON.stringify({ items: next, at: Date.now(), topicCursor: 0 })); } catch {}
         if (mode === 'refresh') scrollRef.current?.scrollTo({ top: 0, behavior: 'auto' });
         setError(null);
       } else if (mode === 'initial' || mode === 'refresh') {
@@ -477,7 +477,7 @@ export default function AIFeedScreen() {
 
       setItems(prev => {
         const next = isInitial ? rankFeedItems(newOnes) : [...prev, ...newOnes].slice(0, 120);
-        if (isInitial) { try { localStorage.setItem(FEED_LIST_CACHE, JSON.stringify({ items: next, at: Date.now() })); } catch {} }
+        if (isInitial) { try { localStorage.setItem(FEED_LIST_CACHE, JSON.stringify({ items: next, at: Date.now(), topicCursor: topicIdx % TOPIC_QUEUE.length })); } catch {} }
         return next;
       });
       if (isInitial) setError(null);
@@ -496,11 +496,21 @@ export default function AIFeedScreen() {
     try {
       const raw = localStorage.getItem(FEED_LIST_CACHE);
       if (raw) {
-        const c = JSON.parse(raw) as { items: FeedItem[]; at: number };
+        const c = JSON.parse(raw) as { items: FeedItem[]; at: number; topicCursor?: number };
         if (Array.isArray(c.items) && c.items.length > 0) {
+          // Cache didn't used to record which topic the cached items belonged
+          // to — activeTopic/topicCursor always defaulted back to "breaking"
+          // (component state doesn't survive a remount) while the displayed
+          // cards could be from whatever topic was last viewed. A pull-to-
+          // refresh then read the (wrong) "breaking" topicCursor and swapped
+          // in real breaking content — looked like "refresh reset me to the
+          // main feed" when really the label/content just never matched.
+          const cursor = Number.isInteger(c.topicCursor) ? (c.topicCursor as number) % TOPIC_QUEUE.length : 0;
           setItems(c.items.slice(0, 50)); // capped to match native's cache-restore cap
+          setTopicCursor(cursor);
+          setActiveTopic(TOPIC_QUEUE[cursor]);
           setLoading(false);
-          if (Date.now() - c.at > 10 * 60_000) setTimeout(() => silentRefresh(0), 300);
+          if (Date.now() - c.at > 10 * 60_000) setTimeout(() => silentRefresh(cursor), 300);
           return;
         }
       }
