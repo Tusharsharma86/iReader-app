@@ -330,13 +330,15 @@ export default function SettingsScreen() {
             icon: '✦',
             label: 'Deep Dive',
             model: 'Llama 4 Scout 17B',
-            why: 'Multi-source narrative synthesis — flagship quality, dedicated daily budget',
+            why: 'Multi-source narrative synthesis — migrating to Qwen 3.6 27B',
+            warn: true,
           },
           {
             icon: '⚡',
             label: 'Summaries & Q&A',
             model: 'Llama 3.1 8B',
-            why: 'High-volume feed processing, article tools, Ask — fast & efficient',
+            why: 'High-volume feed processing, article tools, Ask — migrating to GPT-OSS 20B',
+            warn: true,
           },
         ].map((item, i) => (
           <div key={i} style={{ padding: '14px 16px', borderTop: i > 0 ? '1px solid #1A1A1A' : 'none' }}>
@@ -345,7 +347,7 @@ export default function SettingsScreen() {
                 <span style={{ color: '#b994ff', fontSize: 14 }}>{item.icon}</span>
                 <span style={{ color: '#DDD', fontSize: 14, fontWeight: 600 }}>{item.label}</span>
               </div>
-              <span style={{ color: '#b994ff', fontSize: 11, fontWeight: 700, background: 'rgba(185,148,255,0.1)', borderRadius: 6, padding: '2px 8px' }}>{item.model}</span>
+              <span style={{ color: (item as any).warn ? '#F59E0B' : '#b994ff', fontSize: 11, fontWeight: 700, background: (item as any).warn ? 'rgba(245,158,11,0.1)' : 'rgba(185,148,255,0.1)', borderRadius: 6, padding: '2px 8px' }}>{item.model}{(item as any).warn ? ' ⚠' : ''}</span>
             </div>
             <div style={{ color: '#555', fontSize: 12, lineHeight: 1.5 }}>{item.why}</div>
           </div>

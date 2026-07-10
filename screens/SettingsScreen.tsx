@@ -531,13 +531,15 @@ export default function SettingsScreen() {
               icon: '✦',
               label: 'Deep Dive',
               model: 'Llama 4 Scout 17B',
-              why: 'Multi-source narrative synthesis — flagship quality, dedicated daily budget',
+              why: 'Multi-source narrative synthesis — migrating to Qwen 3.6 27B',
+              warn: true,
             },
             {
               icon: '⚡',
               label: 'Summaries & Q&A',
               model: 'Llama 3.1 8B',
-              why: 'High-volume feed processing, article tools, Ask — fast & efficient',
+              why: 'High-volume feed processing, article tools, Ask — migrating to GPT-OSS 20B',
+              warn: true,
             },
           ].map((item, i) => (
             <View key={i} style={[{ paddingHorizontal: 16, paddingVertical: 14 }, i > 0 && styles.rowBorder]}>
@@ -546,8 +548,8 @@ export default function SettingsScreen() {
                   <Text style={{ color: '#b994ff', fontSize: 14 }}>{item.icon}</Text>
                   <Text style={{ color: '#DDD', fontSize: 14, fontWeight: '600' }}>{item.label}</Text>
                 </View>
-                <View style={{ backgroundColor: 'rgba(185,148,255,0.1)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 }}>
-                  <Text style={{ color: '#b994ff', fontSize: 11, fontWeight: '700' }}>{item.model}</Text>
+                <View style={{ backgroundColor: item.warn ? 'rgba(245,158,11,0.1)' : 'rgba(185,148,255,0.1)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 }}>
+                  <Text style={{ color: item.warn ? '#F59E0B' : '#b994ff', fontSize: 11, fontWeight: '700' }}>{item.model}{item.warn ? ' ⚠' : ''}</Text>
                 </View>
               </View>
               <Text style={{ color: '#555', fontSize: 12, lineHeight: 18 }}>{item.why}</Text>
