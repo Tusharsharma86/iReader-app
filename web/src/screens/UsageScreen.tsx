@@ -111,6 +111,10 @@ export default function UsageScreen() {
                 <div style={{ color: '#444', fontSize: 10, lineHeight: 1.5 }}>
                   Live from Groq · per-model daily token budgets are independent · figures reset on server restart (approx).
                 </div>
+                <a href="https://console.groq.com/usage" target="_blank" rel="noopener noreferrer"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#b994ff', fontSize: 12, fontWeight: 600, textDecoration: 'none', marginTop: 4 }}>
+                  ↗ View Groq Console
+                </a>
               </div>
             )}
           </Section>
@@ -137,7 +141,7 @@ function Bar({ pct, color }: { pct: number; color: string }) {
 }
 
 function shortModel(m: string): string {
-  return m.replace(/^meta-llama\//, '').replace(/^openai\//, '');
+  return m.replace(/^[a-z0-9_-]+\//, ''); // strip any provider/ prefix
 }
 function AiModelBlock({ m }: { m: AiModel }) {
   const pct = m.pct ?? 0;
