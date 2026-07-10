@@ -801,25 +801,21 @@ function FullPreviewCard({ item, index, total, onOpen }: {
               border: '1px solid rgba(255,255,255,0.09)',
               display: 'flex', flexDirection: 'column', gap: 6,
             }}>
-              {bullets.slice(0, 3).map((bullet, bi) => (
+              {/* 2 bullets shown full-length (no WebkitLineClamp) instead of
+                  3 clamped to 3 lines each — AI bullets run 30-45 words, way
+                  past 3 lines at this font size, so the old clamp cut every
+                  bullet off mid-sentence. Dropped the quote from the compact
+                  card too (least essential, most likely to get cut) — fewer,
+                  complete sentences beats more, truncated ones. */}
+              {bullets.slice(0, 2).map((bullet, bi) => (
                 <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                   <div style={{ width: 5, height: 5, borderRadius: 2.5, marginTop: 8, background: aiBullets ? VIOLET : 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
                   <p style={{
                     margin: 0, color: '#e9e9e9', fontSize: 14.5, lineHeight: 1.5,
-                    display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
                     textShadow: '0 2px 12px rgba(0,0,0,0.55)',
                   }}><FactText text={bullet.trim()} color={accent} /></p>
                 </div>
               ))}
-              {quote && (
-                <div style={{ borderLeft: `3px solid ${accent}`, padding: '2px 0 2px 12px', marginTop: 4 }}>
-                  <p style={{
-                    margin: 0, color: '#fff', fontSize: 13.5, fontStyle: 'italic', lineHeight: 1.5,
-                    display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-                  }}>“{quote.text}”</p>
-                  {quote.by && <p style={{ margin: '4px 0 0', color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: 700 }}>— {quote.by}</p>}
-                </div>
-              )}
             </div>
           );
           return (
