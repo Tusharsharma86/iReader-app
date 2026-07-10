@@ -642,18 +642,23 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         timer = setTimeout(async () => {  // small tick to avoid fetch on quick swipe-through
           if (cancelled) return;
           try {
-            const res = await fetch(DEEPDIVE_API, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                url: story.sources?.[0]?.url ?? '',
-                headline: story.headline,
-                paragraphs: [story.headline + '. ' + (story.summary ?? story.headline)],
-                sourceUrls: [story.sources?.[0]?.url].filter(Boolean) as string[],
-                depth: deepDiveDepth,
-                publishedAt: story.publishedAt,
-              }),
+            const body = JSON.stringify({
+              url: story.sources?.[0]?.url ?? '',
+              headline: story.headline,
+              paragraphs: [story.headline + '. ' + (story.summary ?? story.headline)],
+              sourceUrls: [story.sources?.[0]?.url].filter(Boolean) as string[],
+              depth: deepDiveDepth,
+              publishedAt: story.publishedAt,
             });
+            const doFetch = () => fetch(DEEPDIVE_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+            let res = await doFetch();
+            // Render free-tier cold start returns 502/503 — retry once after a
+            // short wait instead of giving up immediately.
+            if (!res.ok && (res.status === 502 || res.status === 503) && !cancelled) {
+              await new Promise(r => setTimeout(r, 12000));
+              if (cancelled) return;
+              res = await doFetch();
+            }
             if (!res.ok || cancelled) return;
             const json: DeepDiveData = await res.json();
             if (cancelled) return;
@@ -1051,25 +1056,39 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
         // the SAME story) feed all sources to the synthesis.
         const paragraphs = [story.headline + '. ' + (story.summary ?? story.headline)];
         const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 95000);
+        // Budget covers up to 2 cold-start retries (15s + 30s wait) plus real
+        // generation time on each attempt — a flat 95s ceiling could fire
+        // mid-retry-wait and poison every subsequent attempt on this signal.
+        const t = setTimeout(() => ctrl.abort(), 180000);
+        const fetchBody = JSON.stringify({
+          url: story.sources?.[0]?.url ?? '',
+          headline: story.headline,
+          paragraphs,
+          // For event clusters: read every source in full. For theme collections:
+          // only the lead article (others are different stories on the same topic).
+          sourceUrls: [story.sources?.[0]?.url].filter(Boolean) as string[],
+          depth: deepDiveDepth,
+          publishedAt: story.publishedAt,
+          systemPrompt: DEEPDIVE_SYSTEM_PROMPT,
+        });
+        const doFetch = () => fetch(DEEPDIVE_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: fetchBody,
+          signal: ctrl.signal,
+        });
         let dd: Response;
         try {
-          dd = await fetch(DEEPDIVE_API, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              url: story.sources?.[0]?.url ?? '',
-              headline: story.headline,
-              paragraphs,
-              // For event clusters: read every source in full. For theme collections:
-              // only the lead article (others are different stories on the same topic).
-              sourceUrls: [story.sources?.[0]?.url].filter(Boolean) as string[],
-              depth: deepDiveDepth,
-              publishedAt: story.publishedAt,
-              systemPrompt: DEEPDIVE_SYSTEM_PROMPT,
-            }),
-            signal: ctrl.signal,
-          });
+          dd = await doFetch();
+          // Render free-tier cold start returns 502/503 — a full cold start
+          // (container was asleep) can take 30-60s, not just a few seconds,
+          // so retry twice with a growing wait.
+          for (const waitMs of [15000, 30000]) {
+            if (dd.ok || (dd.status !== 502 && dd.status !== 503)) break;
+            await new Promise(r => setTimeout(r, waitMs));
+            if (cancelled) return;
+            dd = await doFetch();
+          }
         } finally { clearTimeout(t); }
         // eslint-disable-next-line no-console
         console.log('[AIFeed] response', dd.status, `${Date.now() - startedAt}ms`);

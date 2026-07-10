@@ -929,18 +929,24 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
         return;
       }
       try {
-        const res = await fetch(DEEPDIVE_API, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            url: story.sources?.[0]?.url ?? '',
-            headline: story.headline,
-            paragraphs: [story.headline + '. ' + (story.summary ?? story.headline)],
-            sourceUrls: [story.sources?.[0]?.url].filter(Boolean) as string[],
-            depth: deepDiveDepth,
-            publishedAt: story.publishedAt,
-          }),
+        const body = JSON.stringify({
+          url: story.sources?.[0]?.url ?? '',
+          headline: story.headline,
+          paragraphs: [story.headline + '. ' + (story.summary ?? story.headline)],
+          sourceUrls: [story.sources?.[0]?.url].filter(Boolean) as string[],
+          depth: deepDiveDepth,
+          publishedAt: story.publishedAt,
         });
+        const doFetch = () => fetch(DEEPDIVE_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+        let res = await doFetch();
+        // Render free-tier cold start returns 502/503 — same one-retry pattern
+        // as the full Deep Dive open flow, just a shorter wait since this is
+        // a best-effort preview, not a screen the user is staring at loading.
+        if (!res.ok && (res.status === 502 || res.status === 503) && !cancelled) {
+          await new Promise(r => setTimeout(r, 12000));
+          if (cancelled) return;
+          res = await doFetch();
+        }
         if (!res.ok || cancelled) return;
         const json: DeepDiveData = await res.json();
         if (cancelled) return;
@@ -1265,7 +1271,11 @@ function dedupeMetrics(items: string[]): string[] {
           story.headline + '. ' + (story.summary ?? story.headline),
         ];
         const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 95000);
+        // Budget covers up to 2 cold-start retries (15s + 30s wait) plus real
+        // generation time on each attempt — the old 95s ceiling could fire
+        // mid-retry-wait and silently poison every subsequent doFetch() call
+        // on this same aborted signal.
+        const t = setTimeout(() => ctrl.abort(), 180000);
         const fetchBody = JSON.stringify({
           url: story.sources?.[0]?.url ?? '',
           headline: story.headline,
@@ -1284,9 +1294,13 @@ function dedupeMetrics(items: string[]): string[] {
         let dd: Response;
         try {
           dd = await doFetch();
-          // Render free-tier cold start returns 502/503 — wait for warmup and retry once
-          if (!dd.ok && (dd.status === 502 || dd.status === 503)) {
-            await new Promise(r => setTimeout(r, 22000));
+          // Render free-tier cold start returns 502/503 — a full cold start
+          // (container was asleep) can take 30-60s, not just a few seconds,
+          // so one short retry wasn't always enough. Two retries with a
+          // growing wait covers both a quick blip and a genuine cold start.
+          for (const waitMs of [15000, 30000]) {
+            if (dd.ok || (dd.status !== 502 && dd.status !== 503)) break;
+            await new Promise(r => setTimeout(r, waitMs));
             if (cancelled) return;
             dd = await doFetch();
           }
