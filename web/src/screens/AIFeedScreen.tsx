@@ -130,6 +130,11 @@ function readStaleCache(id: string): DeepDiveData | null {
 function writeCache(id: string, data: DeepDiveData, depth = 'standard') {
   try { localStorage.setItem(CACHE_PREFIX + depth + ':' + id, JSON.stringify({ ...data, at: Date.now() })); } catch {}
 }
+
+const preWarmData = new Map<string, { tldr: string[]; quote?: { text: string; by: string } | null }>();
+const preWarmListeners = new Set<() => void>();
+function onPreWarmUpdate(fn: () => void) { preWarmListeners.add(fn); return () => { preWarmListeners.delete(fn); }; }
+function notifyPreWarm() { preWarmListeners.forEach(fn => fn()); }
 function buildSyntheticFallback(item: { allStories: Story[]; primary?: Story }, lead: Story): DeepDiveData {
   const summaries = item.allStories
     .map(s => s.aiSummary || s.summary).filter(Boolean) as string[];
@@ -291,7 +296,7 @@ export default function AIFeedScreen() {
     let cancelled = false;
     const warmStory = async (s: Story) => {
       try {
-        await fetch(DEEPDIVE_API, {
+        const res = await fetch(DEEPDIVE_API, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -303,7 +308,14 @@ export default function AIFeedScreen() {
             publishedAt: s.publishedAt,
           }),
         });
-      } catch { /* best-effort warm */ }
+        if (!res.ok) return;
+        const json: DeepDiveData = await res.json();
+        if (json.tldr?.length) {
+          preWarmData.set(s.id, { tldr: json.tldr, quote: json.quote });
+          writeCache(s.id, json, deepDiveDepth);
+          notifyPreWarm();
+        }
+      } catch {}
     };
     const timer = setTimeout(async () => {
       // Gather all six category top-10 lists first (feed responses are
@@ -332,10 +344,10 @@ export default function AIFeedScreen() {
           if (!s || ddPrewarmedRef.current.has(s.id)) continue;
           ddPrewarmedRef.current.add(s.id);
           await warmStory(s);
-          if (!cancelled) await new Promise(res => setTimeout(res, 4000));
+          if (!cancelled) await new Promise(res => setTimeout(res, 1200));
         }
       }
-    }, 3000);
+    }, 500);
     return () => { cancelled = true; clearTimeout(timer); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -651,49 +663,31 @@ function FullPreviewCard({ item, index, total, onOpen }: {
   const extraSources = Math.max(0, item.sources.length - 1);
   const { deepDiveDepth } = useSettings();
   const hasCachedDeepDive = !!readCache(story.id, deepDiveDepth);
-  const [aiBullets, setAiBullets] = useState<string[] | null>(null);
-  const [quote, setQuote] = useState<{ text: string; by: string } | null>(null);
-  const cardRef = useRef<HTMLDivElement>(null);
+  const [aiBullets, setAiBullets] = useState<string[] | null>(() => {
+    const warm = preWarmData.get(story.id);
+    if (warm?.tldr?.length) return warm.tldr.slice(0, 4);
+    const cached = readCache(story.id, deepDiveDepth);
+    if (cached?.tldr?.length) return cached.tldr.slice(0, 4);
+    return null;
+  });
+  const [quote, setQuote] = useState<{ text: string; by: string } | null>(() => {
+    const warm = preWarmData.get(story.id);
+    if (warm?.quote?.text) return warm.quote;
+    const cached = readCache(story.id, deepDiveDepth);
+    if (cached?.quote?.text) return cached.quote ?? null;
+    return null;
+  });
 
   useEffect(() => {
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) {
-        timer = setTimeout(async () => {  // small tick to avoid fetch on quick swipe-through
-          if (cancelled) return;
-          try {
-            const body = JSON.stringify({
-              url: story.sources?.[0]?.url ?? '',
-              headline: story.headline,
-              paragraphs: [story.headline + '. ' + (story.summary ?? story.headline)],
-              sourceUrls: [story.sources?.[0]?.url].filter(Boolean) as string[],
-              depth: deepDiveDepth,
-              publishedAt: story.publishedAt,
-            });
-            const doFetch = () => fetch(DEEPDIVE_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
-            let res = await doFetch();
-            // Render free-tier cold start returns 502/503 — retry once after a
-            // short wait instead of giving up immediately.
-            if (!res.ok && (res.status === 502 || res.status === 503) && !cancelled) {
-              await new Promise(r => setTimeout(r, 12000));
-              if (cancelled) return;
-              res = await doFetch();
-            }
-            if (!res.ok || cancelled) return;
-            const json: DeepDiveData = await res.json();
-            if (cancelled) return;
-            if (json.tldr?.length) setAiBullets(json.tldr.slice(0, 4)); // keep ** — FactText renders them in accent colour
-            if (json.quote?.text) setQuote(json.quote);
-          } catch {}
-        }, 300);
-      } else {
-        clearTimeout(timer);
+    if (aiBullets) return;
+    return onPreWarmUpdate(() => {
+      const warm = preWarmData.get(story.id);
+      if (warm?.tldr?.length) {
+        setAiBullets(warm.tldr.slice(0, 4));
+        if (warm.quote?.text) setQuote(warm.quote);
       }
-    }, { threshold: 0.8 });
-    if (cardRef.current) observer.observe(cardRef.current);
-    return () => { cancelled = true; clearTimeout(timer); observer.disconnect(); };
-  }, [story.id, deepDiveDepth]);
+    });
+  }, [story.id, aiBullets]);
 
   // Track touch displacement so a vertical swipe doesn't fire a tap.
   const touchRef = useRef<{ x: number; y: number; moved: boolean } | null>(null);
@@ -721,7 +715,6 @@ function FullPreviewCard({ item, index, total, onOpen }: {
 
   return (
     <div
-      ref={cardRef}
       onClick={handleClick}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
@@ -1365,6 +1358,34 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
                   margin: 0, color: '#fff', fontSize: 15.5 * ddScale, lineHeight: 1.55,
                   fontWeight: 500, fontStyle: 'italic',
                 }}>{data.insight}</p>
+              </div>
+            )}
+
+            {data.quote && data.quote.text && (
+              <div style={{
+                position: 'relative',
+                padding: '20px 20px 20px 26px',
+                borderRadius: 14,
+                background: 'rgba(185,148,255,0.06)',
+                border: '1px solid rgba(185,148,255,0.18)',
+                backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+              }}>
+                <div style={{
+                  position: 'absolute', left: 0, top: 14, bottom: 14, width: 3,
+                  background: VIOLET, borderRadius: 999,
+                }} />
+                <div style={{ color: VIOLET, fontSize: 9, fontWeight: 800, letterSpacing: 1.6, marginBottom: 8 }}>
+                  KEY QUOTE
+                </div>
+                <p style={{
+                  margin: 0, color: '#e8e8ee', fontSize: 15 * ddScale, lineHeight: 1.6,
+                  fontWeight: 500, fontStyle: 'italic',
+                }}>{'“'}{data.quote.text}{'”'}</p>
+                {data.quote.by && (
+                  <p style={{ margin: '10px 0 0', color: '#888', fontSize: 12 * ddScale, fontWeight: 600 }}>
+                    — {data.quote.by}
+                  </p>
+                )}
               </div>
             )}
 
