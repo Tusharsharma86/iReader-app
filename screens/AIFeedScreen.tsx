@@ -99,7 +99,6 @@ interface DeepDiveData {
   storySections?: StorySection[];
   degraded?: boolean;
   insight: string;
-  quote?: { text: string; by: string } | null;
   keyMetrics?: string[];
   questions: string[];
   tags: string[];
