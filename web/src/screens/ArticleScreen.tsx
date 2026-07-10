@@ -53,7 +53,7 @@ function renderParagraphHighlights(
   });
 }
 
-function renderEntities(text: string, entities: string[]): React.ReactNode {
+function renderEntities(text: string, entities: string[], color: string = '#fff'): React.ReactNode {
   if (!entities || entities.length === 0) return text;
   const escaped = [...new Set(entities)]
     .filter(e => e && e.length > 2)
@@ -63,7 +63,7 @@ function renderEntities(text: string, entities: string[]): React.ReactNode {
   const re = new RegExp(`\\b(${escaped.join('|')})\\b`, 'g');
   const parts = text.split(re);
   return parts.map((p, i) => i % 2 === 1
-    ? <strong key={i} className="entity-pulse" style={{ color: '#fff', fontWeight: 700 }}>{p}</strong>
+    ? <strong key={i} className="entity-pulse" style={{ color, fontWeight: 700 }}>{p}</strong>
     : <React.Fragment key={i}>{p}</React.Fragment>);
 }
 
@@ -427,25 +427,27 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
         // mode) into one bullet per sentence — do NOT use the short
         // `bullets` (KEY POINTS) array here, that's capped independently by
         // keyPointsCount and reads noticeably shorter than the narrative.
+        const summaryEntities = [...entities.people, ...entities.companies];
         const lines = rawSummary ? splitToSingleSentences(rawSummary) : bullets;
         aiContent = (
           <div>
             {lines.map((line, i) => (
               <div key={i} style={{ display: 'flex', gap: 14, marginBottom: 18, alignItems: 'flex-start' }}>
                 <div style={{ width: 8, height: 8, borderRadius: 4, background: dominant, flexShrink: 0, marginTop: 7 }} />
-                <p style={{ color: '#DDD', fontSize: 15, lineHeight: 1.6, margin: 0 }}>{line}</p>
+                <p style={{ color: '#DDD', fontSize: 15, lineHeight: 1.6, fontFamily: fontFamilyCss, margin: 0 }}>{renderEntities(line, summaryEntities, accent)}</p>
               </div>
             ))}
           </div>
         );
       } else if (rawSummary) {
+        const summaryEntities = [...entities.people, ...entities.companies];
         const paragraphs = rawSummary.includes('\n\n')
           ? rawSummary.split(/\n{2,}/).map(p => p.trim()).filter(Boolean)
           : splitSentences(rawSummary);
         aiContent = (
           <div>
             {paragraphs.map((p, i) => (
-              <p key={i} style={{ color: '#BBB', fontSize: 13.5, lineHeight: 1.55, fontFamily: fontFamilyCss, margin: '0 0 14px 0' }}>{p}</p>
+              <p key={i} style={{ color: '#BBB', fontSize: 13.5, lineHeight: 1.55, fontFamily: fontFamilyCss, margin: '0 0 14px 0' }}>{renderEntities(p, summaryEntities, accent)}</p>
             ))}
             {showKeyPoints && bullets.length > 0 && (
               <div style={{ marginTop: 14, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
@@ -453,7 +455,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
                 {bullets.map((line, i) => (
                   <div key={i} style={{ display: 'flex', gap: 12, marginBottom: 10, alignItems: 'flex-start' }}>
                     <div style={{ width: 6, height: 6, borderRadius: 3, background: dominant, flexShrink: 0, marginTop: 7 }} />
-                    <p style={{ color: '#BBB', fontSize: 13.5, lineHeight: 1.55, margin: 0 }}>{line}</p>
+                    <p style={{ color: '#BBB', fontSize: 13.5, lineHeight: 1.55, fontFamily: fontFamilyCss, margin: 0 }}>{renderEntities(line, summaryEntities, accent)}</p>
                   </div>
                 ))}
               </div>
@@ -461,12 +463,13 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
           </div>
         );
       } else if (bullets.length > 0) {
+        const summaryEntities = [...entities.people, ...entities.companies];
         aiContent = (
           <div>
             {bullets.map((line, i) => (
               <div key={i} style={{ display: 'flex', gap: 14, marginBottom: 18, alignItems: 'flex-start' }}>
                 <div style={{ width: 8, height: 8, borderRadius: 4, background: dominant, flexShrink: 0, marginTop: 7 }} />
-                <p style={{ color: '#DDD', fontSize: 15, lineHeight: 1.6, margin: 0 }}>{line}</p>
+                <p style={{ color: '#DDD', fontSize: 15, lineHeight: 1.6, fontFamily: fontFamilyCss, margin: 0 }}>{renderEntities(line, summaryEntities, accent)}</p>
               </div>
             ))}
           </div>
@@ -496,8 +499,8 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
       <div>
         <div style={{
           padding: '14px 14px', borderRadius: 12, marginBottom: 20,
-          background: isLimitedSource ? 'rgba(245,158,11,0.06)' : 'rgba(255,255,255,0.04)',
-          border: `1px solid ${isLimitedSource ? 'rgba(245,158,11,0.25)' : 'rgba(255,255,255,0.07)'}`,
+          background: isLimitedSource ? 'rgba(245,158,11,0.06)' : 'rgba(0,0,0,0.3)',
+          border: `1px solid ${isLimitedSource ? 'rgba(245,158,11,0.25)' : 'rgba(255,255,255,0.08)'}`,
         }}>
           {!paragraphsLoading && inputWords > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 12 }}>
