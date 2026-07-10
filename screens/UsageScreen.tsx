@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { getUsageStats, nextStreakMilestone, type UsageStats, type DayData, type NotifBreakdown, type AiBreakdown } from '../utils/usageTracker';
@@ -155,6 +155,10 @@ export default function UsageScreen() {
               <View style={{ gap: 16 }}>
                 {ai.models.map(m => <AiModelBlock key={m.model} m={m} />)}
                 <Text style={styles.aiFootnote}>Live from Groq · per-model daily token budgets are independent · figures reset on server restart (approx).</Text>
+                <Pressable onPress={() => Linking.openURL('https://console.groq.com/usage')} style={styles.groqLink}>
+                  <Ionicons name="open-outline" size={13} color={VIOLET} />
+                  <Text style={styles.groqLinkText}>View Groq Console</Text>
+                </Pressable>
               </View>
             )}
           </Section>
@@ -313,7 +317,7 @@ function RankedList({ items, color }: { items: { name: string; count: number }[]
 }
 
 function shortModel(m: string): string {
-  return m.replace(/^meta-llama\//, '').replace(/^openai\//, '');
+  return m.replace(/^[a-z0-9_-]+\//, ''); // strip any provider/ prefix
 }
 
 function Bar({ pct, color }: { pct: number; color: string }) {
@@ -438,6 +442,8 @@ const styles = StyleSheet.create({
   // AI engine dashboard
   aiMutedText: { color: MUTED, fontSize: 12 },
   aiFootnote: { color: '#444', fontSize: 10, lineHeight: 15 },
+  groqLink: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start' },
+  groqLinkText: { color: '#b994ff', fontSize: 12, fontWeight: '600' },
   aiModelCard: { backgroundColor: '#121218', borderRadius: 12, borderWidth: 1, borderColor: BORDER, padding: 14 },
   aiModelHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
   aiModelName: { color: '#FFF', fontSize: 13.5, fontWeight: '800' },

@@ -523,6 +523,44 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* AI ENGINE */}
+        <Text style={styles.sectionHeader}>AI ENGINE</Text>
+        <View style={styles.card}>
+          {[
+            {
+              icon: '✦',
+              label: 'Deep Dive',
+              model: 'Llama 4 Scout 17B',
+              why: 'Multi-source narrative synthesis — migrating to Qwen 3.6 27B',
+              warn: true,
+            },
+            {
+              icon: '⚡',
+              label: 'Summaries & Q&A',
+              model: 'Llama 3.1 8B',
+              why: 'High-volume feed processing, article tools, Ask — migrating to GPT-OSS 20B',
+              warn: true,
+            },
+          ].map((item, i) => (
+            <View key={i} style={[{ paddingHorizontal: 16, paddingVertical: 14 }, i > 0 && styles.rowBorder]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={{ color: '#b994ff', fontSize: 14 }}>{item.icon}</Text>
+                  <Text style={{ color: '#DDD', fontSize: 14, fontWeight: '600' }}>{item.label}</Text>
+                </View>
+                <View style={{ backgroundColor: item.warn ? 'rgba(245,158,11,0.1)' : 'rgba(185,148,255,0.1)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 }}>
+                  <Text style={{ color: item.warn ? '#F59E0B' : '#b994ff', fontSize: 11, fontWeight: '700' }}>{item.model}{item.warn ? ' ⚠' : ''}</Text>
+                </View>
+              </View>
+              <Text style={{ color: '#555', fontSize: 12, lineHeight: 18 }}>{item.why}</Text>
+            </View>
+          ))}
+          <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12 }, styles.rowBorder]}>
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#34D399' }} />
+            <Text style={{ color: '#555', fontSize: 12 }}>Provider: Groq · free tier · resets daily (UTC)</Text>
+          </View>
+        </View>
+
         {/* ABOUT */}
         <Text style={styles.sectionHeader}>ABOUT</Text>
         <View style={styles.card}>

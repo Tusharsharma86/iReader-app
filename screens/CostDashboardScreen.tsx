@@ -5,7 +5,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview';
 
-const DASHBOARD_URL = 'https://platform.claude.com/cost?range=mtd';
+const DASHBOARD_URL = 'https://console.groq.com/usage';
 
 export default function CostDashboardScreen() {
   const navigation = useNavigation();
@@ -29,7 +29,7 @@ export default function CostDashboardScreen() {
           <Ionicons name="chevron-back" size={20} color="#fff" />
         </Pressable>
         <View style={{ flex: 1, marginHorizontal: 12 }}>
-          <Text style={styles.title}>Anthropic Console</Text>
+          <Text style={styles.title}>Groq Console</Text>
           <Text style={styles.subtitle} numberOfLines={1}>{DASHBOARD_URL.replace(/^https:\/\//, '')}</Text>
         </View>
         <Pressable

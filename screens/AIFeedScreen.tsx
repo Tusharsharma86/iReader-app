@@ -99,6 +99,7 @@ interface DeepDiveData {
   storySections?: StorySection[];
   degraded?: boolean;
   insight: string;
+  quote?: { text: string; by: string } | null;
   keyMetrics?: string[];
   questions: string[];
   tags: string[];
@@ -275,6 +276,26 @@ async function readDeepDiveCache(id: string, depth = 'standard'): Promise<DeepDi
 }
 async function writeDeepDiveCache(id: string, data: DeepDiveData, depth = 'standard') {
   try { await AsyncStorage.setItem(CACHE_PREFIX + depth + ':' + id, JSON.stringify({ ...data, at: Date.now() })); } catch {}
+}
+// Ignores TTL — last-resort fallback when backend is down or quota exhausted.
+async function readStaleDiveCache(id: string): Promise<DeepDiveData | null> {
+  for (const depth of ['standard', 'quick', 'deep']) {
+    try {
+      const raw = await AsyncStorage.getItem(CACHE_PREFIX + depth + ':' + id);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+  }
+  return null;
+}
+function buildSyntheticFallbackRN(stories: Story[], lead: Story): DeepDiveData {
+  const summaries = stories.map(s => s.aiSummary || s.summary).filter(Boolean) as string[];
+  return {
+    narrative: summaries.join('\n\n') || lead.headline,
+    tldr: summaries.slice(0, 3),
+    insight: lead.headline,
+    keyMetrics: [], questions: [], tags: [], keyPeople: [], keyCompanies: [], topics: [],
+    degraded: true,
+  };
 }
 
 // ── Main Screen ─────────────────────────────────────────────────────────────
@@ -1294,13 +1315,10 @@ function dedupeMetrics(items: string[]): string[] {
         let dd: Response;
         try {
           dd = await doFetch();
-          // Render free-tier cold start returns 502/503 — a full cold start
-          // (container was asleep) can take 30-60s, not just a few seconds,
-          // so one short retry wasn't always enough. Two retries with a
-          // growing wait covers both a quick blip and a genuine cold start.
+          // Retry on 502/503 (cold start) and 429 (rate limit / quota exhausted).
           for (const waitMs of [15000, 30000]) {
-            if (dd.ok || (dd.status !== 502 && dd.status !== 503)) break;
-            await new Promise(r => setTimeout(r, waitMs));
+            if (dd.ok || (dd.status !== 502 && dd.status !== 503 && dd.status !== 429)) break;
+            await new Promise(r => setTimeout(r, dd.status === 429 ? 8000 : waitMs));
             if (cancelled) return;
             dd = await doFetch();
           }
@@ -1313,8 +1331,12 @@ function dedupeMetrics(items: string[]): string[] {
         setStage('done');
       } catch (e) {
         if (cancelled) return;
-        setError(String(e instanceof Error ? e.message : e));
-        setStage('error');
+        // Prefer stale cache over error screen — yesterday's AI beats nothing.
+        const stale = await readStaleDiveCache(story.id);
+        if (stale) { setData({ ...stale, degraded: true }); setStage('done'); return; }
+        // Last resort: stitch together raw article summaries already on device.
+        setData(buildSyntheticFallbackRN(item.allStories, story));
+        setStage('done');
       } finally {
         if (!cancelled) setRefreshing(false);
       }
@@ -1437,6 +1459,20 @@ function dedupeMetrics(items: string[]): string[] {
                       <View style={overlayStyles.insightBar} />
                       <Text style={overlayStyles.insightLabel}>KEY INSIGHT</Text>
                       <Text style={[overlayStyles.insightText, { fontSize: 15.5 * ddScale, lineHeight: 24 * ddScale }]}>{data.insight.replace(/\*\*/g, '')}</Text>
+                    </View></Stagger>
+                  )}
+
+                  {/* Key Quote */}
+                  {data.quote && data.quote.text && (
+                    <Stagger delay={100}><View style={overlayStyles.quoteCard}>
+                      <View style={overlayStyles.quoteBar} />
+                      <Text style={overlayStyles.quoteLabel}>KEY QUOTE</Text>
+                      <Text style={[overlayStyles.quoteText, { fontSize: 15 * ddScale, lineHeight: 24 * ddScale }]}>
+                        &ldquo;{data.quote.text}&rdquo;
+                      </Text>
+                      {data.quote.by ? (
+                        <Text style={[overlayStyles.quoteAttr, { fontSize: 12 * ddScale }]}>— {data.quote.by}</Text>
+                      ) : null}
                     </View></Stagger>
                   )}
 
@@ -2123,6 +2159,20 @@ const overlayStyles = StyleSheet.create({
   },
   insightLabel: { color: GOLD, fontSize: 10, fontWeight: '800', letterSpacing: 1.6, marginBottom: 8 },
   insightText: { color: '#fff', fontSize: 15.5, lineHeight: 24, fontWeight: '500', fontStyle: 'italic' },
+
+  quoteCard: {
+    position: 'relative', padding: 22, paddingLeft: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(185,148,255,0.06)',
+    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(185,148,255,0.18)',
+  },
+  quoteBar: {
+    position: 'absolute', left: 0, top: 14, bottom: 14, width: 3,
+    backgroundColor: VIOLET, borderRadius: 999,
+  },
+  quoteLabel: { color: VIOLET, fontSize: 10, fontWeight: '800', letterSpacing: 1.6, marginBottom: 8 },
+  quoteText: { color: '#e8e8ee', fontSize: 15, lineHeight: 24, fontWeight: '500', fontStyle: 'italic' },
+  quoteAttr: { color: '#888', fontSize: 12, fontWeight: '600', marginTop: 10 },
 
   narrativePara: { color: '#c8c8d4', fontSize: 16, lineHeight: 27, marginBottom: 16 },
   storyHeading: { color: VIOLET, fontSize: 11, fontWeight: '800', letterSpacing: 1.6, marginBottom: 10, textTransform: 'uppercase' },
