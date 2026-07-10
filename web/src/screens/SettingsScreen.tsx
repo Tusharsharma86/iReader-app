@@ -322,6 +322,40 @@ export default function SettingsScreen() {
         </div>
       </div>
 
+      {/* AI ENGINE */}
+      <div style={{ ...sectionHeader, marginTop: 14 }}>AI ENGINE</div>
+      <div style={{ margin: '0 16px 18px', background: '#0E0E0E', borderRadius: 14, border: '1px solid #1A1A1A', overflow: 'hidden' }}>
+        {[
+          {
+            icon: '✦',
+            label: 'Deep Dive',
+            model: 'Llama 4 Scout 17B',
+            why: 'Multi-source narrative synthesis — flagship quality, dedicated daily budget',
+          },
+          {
+            icon: '⚡',
+            label: 'Summaries & Q&A',
+            model: 'Llama 3.1 8B',
+            why: 'High-volume feed processing, article tools, Ask — fast & efficient',
+          },
+        ].map((item, i) => (
+          <div key={i} style={{ padding: '14px 16px', borderTop: i > 0 ? '1px solid #1A1A1A' : 'none' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: '#b994ff', fontSize: 14 }}>{item.icon}</span>
+                <span style={{ color: '#DDD', fontSize: 14, fontWeight: 600 }}>{item.label}</span>
+              </div>
+              <span style={{ color: '#b994ff', fontSize: 11, fontWeight: 700, background: 'rgba(185,148,255,0.1)', borderRadius: 6, padding: '2px 8px' }}>{item.model}</span>
+            </div>
+            <div style={{ color: '#555', fontSize: 12, lineHeight: 1.5 }}>{item.why}</div>
+          </div>
+        ))}
+        <div style={{ padding: '12px 16px', borderTop: '1px solid #1A1A1A', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 8, height: 8, borderRadius: 4, background: '#34D399', flexShrink: 0 }} />
+          <span style={{ color: '#555', fontSize: 12 }}>Provider: Groq · free tier · resets daily (UTC)</span>
+        </div>
+      </div>
+
       {/* ABOUT */}
       <div style={{ ...sectionHeader, marginTop: 14 }}>ABOUT</div>
       <div style={card}>
