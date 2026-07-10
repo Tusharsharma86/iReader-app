@@ -117,8 +117,29 @@ function readCache(id: string, depth = 'standard'): DeepDiveData | null {
     return parsed;
   } catch { return null; }
 }
+function readStaleCache(id: string): DeepDiveData | null {
+  // Ignores TTL — used as last-resort fallback when backend is down/deprecated.
+  for (const depth of ['standard', 'quick', 'deep']) {
+    try {
+      const raw = localStorage.getItem(CACHE_PREFIX + depth + ':' + id);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+  }
+  return null;
+}
 function writeCache(id: string, data: DeepDiveData, depth = 'standard') {
   try { localStorage.setItem(CACHE_PREFIX + depth + ':' + id, JSON.stringify({ ...data, at: Date.now() })); } catch {}
+}
+function buildSyntheticFallback(item: { allStories: Story[]; primary?: Story }, lead: Story): DeepDiveData {
+  const summaries = item.allStories
+    .map(s => s.aiSummary || s.summary).filter(Boolean) as string[];
+  return {
+    narrative: summaries.join('\n\n') || lead.headline,
+    tldr: summaries.slice(0, 3),
+    insight: lead.headline,
+    keyMetrics: [], questions: [], tags: [], keyPeople: [], keyCompanies: [], topics: [],
+    degraded: true,
+  };
 }
 
 // Favicon URL from source name (mapped) or first article URL.
@@ -1080,12 +1101,11 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
         let dd: Response;
         try {
           dd = await doFetch();
-          // Render free-tier cold start returns 502/503 — a full cold start
-          // (container was asleep) can take 30-60s, not just a few seconds,
-          // so retry twice with a growing wait.
+          // Retry on 502/503 (cold start) and 429 (rate limit / quota exhausted).
+          // Cold starts need 15-30s; 429s need a brief back-off before Groq resets.
           for (const waitMs of [15000, 30000]) {
-            if (dd.ok || (dd.status !== 502 && dd.status !== 503)) break;
-            await new Promise(r => setTimeout(r, waitMs));
+            if (dd.ok || (dd.status !== 502 && dd.status !== 503 && dd.status !== 429)) break;
+            await new Promise(r => setTimeout(r, dd.status === 429 ? 8000 : waitMs));
             if (cancelled) return;
             dd = await doFetch();
           }
@@ -1100,11 +1120,12 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
         setStage('done');
       } catch (e) {
         if (cancelled) return;
-        const msg = e instanceof Error && e.name === 'AbortError'
-          ? 'Timed out. Backend may be warming up — try again in a few seconds.'
-          : String(e instanceof Error ? e.message : e);
-        setError(msg);
-        setStage('error');
+        // Prefer stale cache over an error screen — AI content from yesterday beats nothing.
+        const stale = readStaleCache(story.id);
+        if (stale) { setData({ ...stale, degraded: true }); setStage('done'); return; }
+        // Last resort: stitch together the raw article summaries already on device.
+        setData(buildSyntheticFallback(item, story));
+        setStage('done');
       }
     })();
     return () => { cancelled = true; };

@@ -276,6 +276,26 @@ async function readDeepDiveCache(id: string, depth = 'standard'): Promise<DeepDi
 async function writeDeepDiveCache(id: string, data: DeepDiveData, depth = 'standard') {
   try { await AsyncStorage.setItem(CACHE_PREFIX + depth + ':' + id, JSON.stringify({ ...data, at: Date.now() })); } catch {}
 }
+// Ignores TTL — last-resort fallback when backend is down or quota exhausted.
+async function readStaleDiveCache(id: string): Promise<DeepDiveData | null> {
+  for (const depth of ['standard', 'quick', 'deep']) {
+    try {
+      const raw = await AsyncStorage.getItem(CACHE_PREFIX + depth + ':' + id);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+  }
+  return null;
+}
+function buildSyntheticFallbackRN(stories: Story[], lead: Story): DeepDiveData {
+  const summaries = stories.map(s => s.aiSummary || s.summary).filter(Boolean) as string[];
+  return {
+    narrative: summaries.join('\n\n') || lead.headline,
+    tldr: summaries.slice(0, 3),
+    insight: lead.headline,
+    keyMetrics: [], questions: [], tags: [], keyPeople: [], keyCompanies: [], topics: [],
+    degraded: true,
+  };
+}
 
 // ── Main Screen ─────────────────────────────────────────────────────────────
 export default function AIFeedScreen() {
@@ -1294,13 +1314,10 @@ function dedupeMetrics(items: string[]): string[] {
         let dd: Response;
         try {
           dd = await doFetch();
-          // Render free-tier cold start returns 502/503 — a full cold start
-          // (container was asleep) can take 30-60s, not just a few seconds,
-          // so one short retry wasn't always enough. Two retries with a
-          // growing wait covers both a quick blip and a genuine cold start.
+          // Retry on 502/503 (cold start) and 429 (rate limit / quota exhausted).
           for (const waitMs of [15000, 30000]) {
-            if (dd.ok || (dd.status !== 502 && dd.status !== 503)) break;
-            await new Promise(r => setTimeout(r, waitMs));
+            if (dd.ok || (dd.status !== 502 && dd.status !== 503 && dd.status !== 429)) break;
+            await new Promise(r => setTimeout(r, dd.status === 429 ? 8000 : waitMs));
             if (cancelled) return;
             dd = await doFetch();
           }
@@ -1313,8 +1330,12 @@ function dedupeMetrics(items: string[]): string[] {
         setStage('done');
       } catch (e) {
         if (cancelled) return;
-        setError(String(e instanceof Error ? e.message : e));
-        setStage('error');
+        // Prefer stale cache over error screen — yesterday's AI beats nothing.
+        const stale = await readStaleDiveCache(story.id);
+        if (stale) { setData({ ...stale, degraded: true }); setStage('done'); return; }
+        // Last resort: stitch together raw article summaries already on device.
+        setData(buildSyntheticFallbackRN(item.allStories, story));
+        setStage('done');
       } finally {
         if (!cancelled) setRefreshing(false);
       }
