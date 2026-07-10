@@ -99,6 +99,7 @@ interface DeepDiveData {
   storySections?: StorySection[];
   degraded?: boolean;
   insight: string;
+  quote?: { text: string; by: string } | null;
   keyMetrics?: string[];
   questions: string[];
   tags: string[];
@@ -1461,6 +1462,20 @@ function dedupeMetrics(items: string[]): string[] {
                     </View></Stagger>
                   )}
 
+                  {/* Key Quote */}
+                  {data.quote && data.quote.text && (
+                    <Stagger delay={100}><View style={overlayStyles.quoteCard}>
+                      <View style={overlayStyles.quoteBar} />
+                      <Text style={overlayStyles.quoteLabel}>KEY QUOTE</Text>
+                      <Text style={[overlayStyles.quoteText, { fontSize: 15 * ddScale, lineHeight: 24 * ddScale }]}>
+                        &ldquo;{data.quote.text}&rdquo;
+                      </Text>
+                      {data.quote.by ? (
+                        <Text style={[overlayStyles.quoteAttr, { fontSize: 12 * ddScale }]}>— {data.quote.by}</Text>
+                      ) : null}
+                    </View></Stagger>
+                  )}
+
                   {/* Key Metrics */}
                   {metrics.length > 0 && (
                     <Stagger delay={120}><View style={[overlayStyles.card, { borderTopColor: '#4A90D9', borderTopWidth: 2 }]}>
@@ -2144,6 +2159,20 @@ const overlayStyles = StyleSheet.create({
   },
   insightLabel: { color: GOLD, fontSize: 10, fontWeight: '800', letterSpacing: 1.6, marginBottom: 8 },
   insightText: { color: '#fff', fontSize: 15.5, lineHeight: 24, fontWeight: '500', fontStyle: 'italic' },
+
+  quoteCard: {
+    position: 'relative', padding: 22, paddingLeft: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(185,148,255,0.06)',
+    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(185,148,255,0.18)',
+  },
+  quoteBar: {
+    position: 'absolute', left: 0, top: 14, bottom: 14, width: 3,
+    backgroundColor: VIOLET, borderRadius: 999,
+  },
+  quoteLabel: { color: VIOLET, fontSize: 10, fontWeight: '800', letterSpacing: 1.6, marginBottom: 8 },
+  quoteText: { color: '#e8e8ee', fontSize: 15, lineHeight: 24, fontWeight: '500', fontStyle: 'italic' },
+  quoteAttr: { color: '#888', fontSize: 12, fontWeight: '600', marginTop: 10 },
 
   narrativePara: { color: '#c8c8d4', fontSize: 16, lineHeight: 27, marginBottom: 16 },
   storyHeading: { color: VIOLET, fontSize: 11, fontWeight: '800', letterSpacing: 1.6, marginBottom: 10, textTransform: 'uppercase' },
