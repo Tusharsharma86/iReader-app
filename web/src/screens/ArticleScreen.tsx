@@ -264,7 +264,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
   useEffect(() => { if (hasBeenRead) return; const t = setTimeout(() => setHasBeenRead(true), 5000); return () => clearTimeout(t); }, []);
   // If Summary pre-warmed in cache: skip 5s gate + seed AI entities immediately
   useEffect(() => {
-    const lengthMap: Record<string, number> = { short: 150, medium: 250, long: 400 };
+    const lengthMap: Record<string, number> = { short: 200, medium: 350, long: 550 };
     const maxWords = lengthMap[summaryLength] ?? 250;
     const cacheKey = `summary_v5_${params.id ?? params.url}_summary_${maxWords}_${keyPointsCount}_${eli5Tone}`;
     const hit = getCached(cacheKey, TTL.AI_SUMMARY) as { keyPeople?: string[]; keyCompanies?: string[] } | null;
@@ -323,7 +323,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     // empty-cache guard letting bullets-only responses through.
     // Customize: summary length → backend maxWords. Cache key includes the
     // length so different settings don't collide on cached responses.
-    const lengthMap: Record<typeof summaryLength, number> = { short: 150, medium: 250, long: 400 };
+    const lengthMap: Record<typeof summaryLength, number> = { short: 200, medium: 350, long: 550 };
     const maxWordsForType = activeTab === 'ELI5' ? 100 : lengthMap[summaryLength];
     const cacheKey = `summary_v5_${params.id ?? params.url}_${aiType}_${maxWordsForType}_${keyPointsCount}_${eli5Tone}`;
     // Session tab-cache must be keyed by settings too — keyed by tab alone it
