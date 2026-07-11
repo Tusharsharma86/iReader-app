@@ -643,6 +643,8 @@ export default function AIFeedScreen() {
         .aif-celebrate { animation: aifCelebrate 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
         @keyframes aifCounterPop { 0% { transform: scale(0.85); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
         .aif-counter-pop { animation: aifCounterPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        @keyframes aifPulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+        .aif-pulse { animation: aifPulse 1.8s ease-in-out infinite; }
       `}</style>
     </div>
   );
@@ -837,15 +839,23 @@ function FullPreviewCard({ item, index, total, onOpen }: {
               </div>
             )}
           </div>
-        ) : story.summary ? (
-          <p style={{
-            margin: 0, color: '#d0d0d0', fontSize: 14, lineHeight: 1.55,
-            textShadow: '0 2px 12px rgba(0,0,0,0.55)',
-          }}>{story.summary}</p>
         ) : (
-          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <SparkleIcon color={VIOLET} size={12} />
-            <span style={{ color: VIOLET, fontSize: 11, fontWeight: 800, letterSpacing: 0.8 }}>TAP FOR AI DEEP DIVE</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {story.summary && story.summary.toLowerCase().trim() !== story.headline.toLowerCase().trim() && (
+              <p style={{
+                margin: 0, color: '#d0d0d0', fontSize: 14, lineHeight: 1.55,
+                textShadow: '0 2px 12px rgba(0,0,0,0.55)',
+              }}>{story.summary}</p>
+            )}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8, marginTop: 2,
+              padding: '8px 12px', borderRadius: 10,
+              background: 'rgba(185,148,255,0.06)',
+              border: '1px solid rgba(185,148,255,0.12)',
+            }}>
+              <span className="aif-pulse" style={{ color: VIOLET, fontSize: 13 }}>✦</span>
+              <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: 600 }}>Generating AI insights…</span>
+            </div>
           </div>
         )}
 
