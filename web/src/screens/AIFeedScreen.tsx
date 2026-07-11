@@ -142,6 +142,18 @@ export function startAIFeedPreWarm(depth = 'standard') {
   if (preWarmStarted.current) return;
   preWarmStarted.current = true;
   const warmStory = async (s: { id: string; headline: string; summary?: string; sources?: { url?: string }[]; publishedAt?: string }) => {
+    // Skip if already cached in localStorage
+    try {
+      const cached = localStorage.getItem(CACHE_PREFIX + depth + ':' + s.id);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.tldr?.length) {
+          preWarmData.set(s.id, { tldr: parsed.tldr, quote: parsed.quote });
+          notifyPreWarm();
+          return;
+        }
+      }
+    } catch {}
     try {
       const res = await fetch(DEEPDIVE_API, {
         method: 'POST',
@@ -175,11 +187,11 @@ export function startAIFeedPreWarm(depth = 'standard') {
         const rawItems: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
         perTopic.push(parseServerFeed(rawItems)
           .filter(it => !it.collection && it.primary.sources?.[0]?.url)
-          .slice(0, 10)
+          .slice(0, 5)
           .map(it => it.primary));
       } catch { perTopic.push([]); }
     }
-    for (let rank = 0; rank < 10; rank++) {
+    for (let rank = 0; rank < 5; rank++) {
       for (const list of perTopic) {
         const s = list[rank];
         if (!s || preWarmedIds.has(s.id)) continue;
