@@ -253,7 +253,12 @@ function isSourcePara(p: string): boolean { return SOURCE_COVERAGE_RE.test(p); }
 
 function splitToBullets(text: string, count = 4): string[] {
   const clean = text.replace(/\.{2,}$/, '').trim();
-  const cap = (s: string) => { const w = s.trim().split(/\s+/); return w.length > 13 ? w.slice(0, 13).join(' ') + '…' : s.trim(); };
+  // story.summary is already a ~25-word backend-capped (clampWords25) blob —
+  // re-truncating to 13 words here cut an already-short summary down to
+  // barely half, ending every fallback bullet in a jarring "…" mid-thought.
+  // 35 comfortably holds the full backend summary uncut; still guards
+  // against a pathologically long single "sentence".
+  const cap = (s: string) => { const w = s.trim().split(/\s+/); return w.length > 35 ? w.slice(0, 35).join(' ') + '…' : s.trim(); };
   let parts = clean.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 30);
   if (parts.length >= 2) return parts.slice(0, count).map(cap);
   parts = clean.split(/\s+[–—;]\s+/).filter(s => s.trim().length > 30);
