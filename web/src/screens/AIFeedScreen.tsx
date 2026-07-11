@@ -349,7 +349,7 @@ export default function AIFeedScreen() {
           if (!s || ddPrewarmedRef.current.has(s.id)) continue;
           ddPrewarmedRef.current.add(s.id);
           await warmStory(s);
-          if (!cancelled) await new Promise(res => setTimeout(res, 1200));
+          if (!cancelled) await new Promise(res => setTimeout(res, 2200));
         }
       }
     }, 500);
