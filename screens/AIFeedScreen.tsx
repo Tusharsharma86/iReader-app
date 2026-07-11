@@ -1069,18 +1069,24 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
             gap: 7,
           }}>
             {/* 2 bullets shown full-length (no numberOfLines clamp) instead of
-                3 clamped to 3 lines each — AI bullets run 30-45 words, way
+                3 clamped to 3 lines each — AI bullets run 40-45 words, way
                 past 3 lines at this font size, so the old clamp cut every
-                bullet off mid-sentence. Dropped the quote from the compact
-                card too (least essential, most likely to get cut) — fewer,
-                complete sentences beats more, truncated ones. Container
-                below keeps overflow:'hidden' as the real safety net. */}
+                bullet off mid-sentence. Quote restored below (was dropped
+                briefly while fixing the clamp bug) — also uncapped now.
+                Container below keeps overflow:'hidden' as the real safety
+                net if content genuinely doesn't fit. */}
             {bullets.slice(0, 2).map((bullet, bi) => (
               <View key={bi} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 9 }}>
                 <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 7, backgroundColor: aiBullets ? accent : `${accent}66`, flexShrink: 0 }} />
                 <FactText text={bullet.trim()} color={accent} style={{ color: 'rgba(255,255,255,0.9)', fontSize: 14.5, lineHeight: 21, flex: 1, letterSpacing: 0.1 }} />
               </View>
             ))}
+            {quote && quote.text && (
+              <View style={{ borderLeftWidth: 3, borderLeftColor: accent, paddingLeft: 12, marginTop: 4 }}>
+                <Text style={{ color: '#fff', fontSize: 13.5, fontStyle: 'italic', lineHeight: 20 }}>“{quote.text}”</Text>
+                {!!quote.by && <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: '700', marginTop: 4 }}>— {quote.by}</Text>}
+              </View>
+            )}
           </View>
         ) : (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
