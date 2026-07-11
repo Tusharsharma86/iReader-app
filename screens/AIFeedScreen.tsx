@@ -327,28 +327,45 @@ export default function AIFeedScreen() {
   useEffect(() => {
     let cancelled = false;
     const warmStory = async (s: Story) => {
+      const body = JSON.stringify({
+        url: s.sources?.[0]?.url ?? '',
+        headline: s.headline,
+        paragraphs: [s.headline + '. ' + (s.summary ?? s.headline)],
+        sourceUrls: [s.sources?.[0]?.url].filter(Boolean) as string[],
+        depth: prewarmDepth,
+        publishedAt: s.publishedAt,
+      });
       try {
-        await fetch(DEEPDIVE_API, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            url: s.sources?.[0]?.url ?? '',
-            headline: s.headline,
-            paragraphs: [s.headline + '. ' + (s.summary ?? s.headline)],
-            sourceUrls: [s.sources?.[0]?.url].filter(Boolean) as string[],
-            depth: prewarmDepth,
-            publishedAt: s.publishedAt,
-          }),
-        });
+        const r = await fetch(DEEPDIVE_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+        // Each story only gets ONE warm attempt this session (ddPrewarmedRef
+        // marks it done before calling this) — a cold-start 502/503 with no
+        // retry meant that story silently never got pre-warmed at all.
+        if (!r.ok && (r.status === 502 || r.status === 503)) {
+          await new Promise(res => setTimeout(res, 8000));
+          await fetch(DEEPDIVE_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+        }
       } catch { /* best-effort warm */ }
     };
     const timer = setTimeout(async () => {
       const perTopic: Story[][] = [];
       for (const topic of TOPIC_QUEUE) {
         if (cancelled) return;
+        // This fetch decides WHAT gets pre-warmed — unlike the deepdive calls
+        // below (best-effort, fine to drop), a cold-start 502/503 here used
+        // to silently empty out the whole topic for the rest of the session
+        // (this loop only ever runs once, on mount, with no retry at all).
+        // One retry after a short wait covers a typical cold start.
+        let r: Response | null = null;
         try {
-          const r = await fetch(`${FEED_API_BASE}?topic=${topic}`);
-          if (!r.ok) { perTopic.push([]); continue; }
+          r = await fetch(`${FEED_API_BASE}?topic=${topic}`);
+          if (!r.ok && (r.status === 502 || r.status === 503)) {
+            await new Promise(res => setTimeout(res, 8000));
+            if (cancelled) return;
+            r = await fetch(`${FEED_API_BASE}?topic=${topic}`);
+          }
+        } catch { /* r stays null, handled below */ }
+        if (!r || !r.ok) { perTopic.push([]); continue; }
+        try {
           const raw = await r.json();
           const rawItems: ApiItem[] = (Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [])
             .filter((ri: ApiItem) => !ri.collection);
