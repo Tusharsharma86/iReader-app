@@ -459,7 +459,13 @@ export default function AIFeedScreen() {
         .filter(it => !isExcluded(it.primary) && !it.allStories.every(isExcluded))
         .filter(it => isSourceActive(it.primary));
       const existingIds = new Set(itemsRef.current.map(it => it.primary.id));
-      const newOnes = rankFeedItems(incoming.filter(it => !existingIds.has(it.primary.id))).slice(0, 30);
+      // Was .slice(0, 30) here — capped EVERY topic other than breaking to 30
+      // items total, since this same cap applied to the initial load, not
+      // just load-more pagination increments (breaking's dedicated
+      // loadClusterForward above was already uncapped, so this only ever hid
+      // on non-breaking topics). Web dropped this same cap already; matching
+      // it here for real parity instead of just the breaking-topic path.
+      const newOnes = rankFeedItems(incoming.filter(it => !existingIds.has(it.primary.id)));
       if (newOnes.length === 0 && !isInitial) {
         // Stay within the user's selected topic — no auto-cycle into others.
         // topicCursor also drives the visible topic-picker selection
@@ -469,7 +475,7 @@ export default function AIFeedScreen() {
         setExhausted(true);
         return;
       }
-      setItems(prev => isInitial ? newOnes : [...prev, ...newOnes].slice(0, 120));
+      setItems(prev => isInitial ? newOnes : [...prev, ...newOnes]);
       if (isInitial) setError(null);
     } catch (e) {
       if (isInitial) setError(String(e instanceof Error ? e.message : e));
