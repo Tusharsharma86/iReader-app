@@ -330,15 +330,22 @@ export default function SettingsScreen() {
             icon: '✦',
             label: 'Deep Dive',
             model: 'Llama 4 Scout 17B',
-            why: 'Multi-source narrative synthesis — migrating to Qwen 3.6 27B',
-            warn: true,
+            why: 'Multi-source narrative synthesis — falls back to Qwen 3 32B if Scout errors',
+            warn: false,
           },
           {
             icon: '⚡',
             label: 'Summaries & Q&A',
+            model: 'Qwen 3 32B',
+            why: 'Foreground, user-facing: article summaries, follow-up Q&A',
+            warn: false,
+          },
+          {
+            icon: '⟲',
+            label: 'Feed processing',
             model: 'Llama 3.1 8B',
-            why: 'High-volume feed processing, article tools, Ask — migrating to GPT-OSS 20B',
-            warn: true,
+            why: 'Background bulk: clustering, cluster headlines, card pre-warm, themes',
+            warn: false,
           },
         ].map((item, i) => (
           <div key={i} style={{ padding: '14px 16px', borderTop: i > 0 ? '1px solid #1A1A1A' : 'none' }}>
