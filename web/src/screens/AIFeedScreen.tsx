@@ -178,27 +178,26 @@ export function startAIFeedPreWarm(depth = 'standard') {
   };
   (async () => {
     interface ApiItem { type?: string; articles?: Story[]; [key: string]: unknown; }
-    const perTopic: Story[][] = [];
-    for (const topic of TOPIC_QUEUE) {
+    const warmTopics: [string, number][] = [['breaking', 15], ['technology', 15]];
+    const allStories: { id: string; headline: string; summary?: string; sources?: { url?: string }[]; publishedAt?: string }[] = [];
+    for (const [topic, count] of warmTopics) {
       try {
         const r = await fetch(`${FEED_API_BASE}?topic=${topic}`);
-        if (!r.ok) { perTopic.push([]); continue; }
+        if (!r.ok) continue;
         const raw = await r.json();
         const rawItems: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
-        perTopic.push(parseServerFeed(rawItems)
+        const stories = parseServerFeed(rawItems)
           .filter(it => !it.collection && it.primary.sources?.[0]?.url)
-          .slice(0, 5)
-          .map(it => it.primary));
-      } catch { perTopic.push([]); }
+          .slice(0, count)
+          .map(it => it.primary);
+        allStories.push(...stories);
+      } catch {}
     }
-    for (let rank = 0; rank < 5; rank++) {
-      for (const list of perTopic) {
-        const s = list[rank];
-        if (!s || preWarmedIds.has(s.id)) continue;
-        preWarmedIds.add(s.id);
-        await warmStory(s);
-        await new Promise(res => setTimeout(res, 2200));
-      }
+    for (const s of allStories) {
+      if (preWarmedIds.has(s.id)) continue;
+      preWarmedIds.add(s.id);
+      await warmStory(s);
+      await new Promise(res => setTimeout(res, 2200));
     }
   })();
 }
