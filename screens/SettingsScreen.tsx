@@ -530,8 +530,8 @@ export default function SettingsScreen() {
             {
               icon: '✦',
               label: 'Deep Dive',
-              model: 'Llama 4 Scout 17B',
-              why: 'Multi-source narrative synthesis — falls back to Qwen 3 32B if Scout errors',
+              model: 'Qwen 3 32B',
+              why: 'Multi-source narrative synthesis — falls back to Llama 4 Scout if Qwen errors',
               warn: false,
             },
             {
