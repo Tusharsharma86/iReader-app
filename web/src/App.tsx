@@ -5,6 +5,7 @@ import { SourceProvider } from './contexts/SourceContext';
 import { SavedProvider } from './contexts/SavedContext';
 import { TabBarProvider } from './contexts/TabBarContext';
 import { TabBar } from './components/TabBar';
+import('./screens/AIFeedScreen').then(m => m.startAIFeedPreWarm());
 
 const FeedScreen       = lazy(() => import('./screens/FeedScreen'));
 const ExploreScreen    = lazy(() => import('./screens/ExploreScreen'));

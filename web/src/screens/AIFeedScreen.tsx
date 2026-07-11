@@ -135,6 +135,61 @@ const preWarmData = new Map<string, { tldr: string[]; quote?: { text: string; by
 const preWarmListeners = new Set<() => void>();
 function onPreWarmUpdate(fn: () => void) { preWarmListeners.add(fn); return () => { preWarmListeners.delete(fn); }; }
 function notifyPreWarm() { preWarmListeners.forEach(fn => fn()); }
+
+const preWarmStarted = { current: false };
+const preWarmedIds = new Set<string>();
+export function startAIFeedPreWarm(depth = 'standard') {
+  if (preWarmStarted.current) return;
+  preWarmStarted.current = true;
+  const warmStory = async (s: { id: string; headline: string; summary?: string; sources?: { url?: string }[]; publishedAt?: string }) => {
+    try {
+      const res = await fetch(DEEPDIVE_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: s.sources?.[0]?.url ?? '',
+          headline: s.headline,
+          paragraphs: [s.headline + '. ' + (s.summary ?? s.headline)],
+          sourceUrls: [s.sources?.[0]?.url].filter(Boolean) as string[],
+          depth,
+          publishedAt: s.publishedAt,
+        }),
+      });
+      if (!res.ok) return;
+      const json = await res.json();
+      if (json.tldr?.length) {
+        preWarmData.set(s.id, { tldr: json.tldr, quote: json.quote });
+        try { localStorage.setItem(CACHE_PREFIX + depth + ':' + s.id, JSON.stringify({ ...json, at: Date.now() })); } catch {}
+        notifyPreWarm();
+      }
+    } catch {}
+  };
+  (async () => {
+    interface ApiItem { type?: string; articles?: Story[]; [key: string]: unknown; }
+    const perTopic: Story[][] = [];
+    for (const topic of TOPIC_QUEUE) {
+      try {
+        const r = await fetch(`${FEED_API_BASE}?topic=${topic}`);
+        if (!r.ok) { perTopic.push([]); continue; }
+        const raw = await r.json();
+        const rawItems: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
+        perTopic.push(parseServerFeed(rawItems)
+          .filter(it => !it.collection && it.primary.sources?.[0]?.url)
+          .slice(0, 10)
+          .map(it => it.primary));
+      } catch { perTopic.push([]); }
+    }
+    for (let rank = 0; rank < 10; rank++) {
+      for (const list of perTopic) {
+        const s = list[rank];
+        if (!s || preWarmedIds.has(s.id)) continue;
+        preWarmedIds.add(s.id);
+        await warmStory(s);
+        await new Promise(res => setTimeout(res, 2200));
+      }
+    }
+  })();
+}
 function buildSyntheticFallback(item: { allStories: Story[]; primary?: Story }, lead: Story): DeepDiveData {
   const summaries = item.allStories
     .map(s => s.aiSummary || s.summary).filter(Boolean) as string[];
@@ -292,70 +347,7 @@ export default function AIFeedScreen() {
   const { reportScroll, hide: hideTabBar, show: showTabBar } = useTabBarActions();
   const { deepDiveDepth } = useSettings();
 
-  // Pre-warm deep dives for the top 10 cards of EVERY category (like the main
-  // feed's AI-summary pre-warm) — the server caches by url+depth for 7 days,
-  // so bullets/quote land instantly on swipe and Deep Dive opens instantly,
-  // whichever category the user switches to.
-  const ddPrewarmedRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    let cancelled = false;
-    const warmStory = async (s: Story) => {
-      try {
-        const res = await fetch(DEEPDIVE_API, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            url: s.sources?.[0]?.url ?? '',
-            headline: s.headline,
-            paragraphs: [s.headline + '. ' + (s.summary ?? s.headline)],
-            sourceUrls: [s.sources?.[0]?.url].filter(Boolean) as string[],
-            depth: deepDiveDepth,
-            publishedAt: s.publishedAt,
-          }),
-        });
-        if (!res.ok) return;
-        const json: DeepDiveData = await res.json();
-        if (json.tldr?.length) {
-          preWarmData.set(s.id, { tldr: json.tldr, quote: json.quote });
-          writeCache(s.id, json, deepDiveDepth);
-          notifyPreWarm();
-        }
-      } catch {}
-    };
-    const timer = setTimeout(async () => {
-      // Gather all six category top-10 lists first (feed responses are
-      // server-cached, cheap), then warm ROUND-ROBIN — #1 of every category,
-      // then #2 of every category… Sequential-per-category meant the last
-      // category's cards only warmed ~30 min in; interleaving gets every
-      // category's top cards hot in the first minutes.
-      const perTopic: Story[][] = [];
-      for (const topic of TOPIC_QUEUE) {
-        if (cancelled) return;
-        try {
-          const r = await fetch(`${FEED_API_BASE}?topic=${topic}`);
-          if (!r.ok) { perTopic.push([]); continue; }
-          const raw = await r.json();
-          const rawItems: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
-          perTopic.push(parseServerFeed(rawItems)
-            .filter(it => !it.collection && it.primary.sources?.[0]?.url)
-            .slice(0, 10)
-            .map(it => it.primary));
-        } catch { perTopic.push([]); }
-      }
-      for (let rank = 0; rank < 10; rank++) {
-        for (const list of perTopic) {
-          if (cancelled) return;
-          const s = list[rank];
-          if (!s || ddPrewarmedRef.current.has(s.id)) continue;
-          ddPrewarmedRef.current.add(s.id);
-          await warmStory(s);
-          if (!cancelled) await new Promise(res => setTimeout(res, 2200));
-        }
-      }
-    }, 500);
-    return () => { cancelled = true; clearTimeout(timer); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Pre-warm now fires eagerly on app startup via startAIFeedPreWarm() in App.tsx.
 
 
   // Deep Dive is an in-page overlay (not a route), and its z-index can't beat
@@ -664,8 +656,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
   const story = item.primary;
   const dominant = useMemo(() => getArticleColor(story.id || story.headline), [story.id, story.headline]);
   const accent = useMemo(() => lighten(dominant, 0.55), [dominant]);
-  const sourceName = item.sources[0]?.name ?? story.sources?.[0]?.name ?? 'Unknown';
-  const extraSources = Math.max(0, item.sources.length - 1);
+  const sourceName = story.sources?.[0]?.name ?? 'Unknown';
   const { deepDiveDepth } = useSettings();
   const hasCachedDeepDive = !!readCache(story.id, deepDiveDepth);
   const [aiBullets, setAiBullets] = useState<string[] | null>(() => {
@@ -806,7 +797,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: 800, letterSpacing: 1.4 }}>
           <span>{timeAgo(story.publishedAt)}</span>
           <span style={{ opacity: 0.5 }}>·</span>
-          <span>{sourceName}{extraSources > 0 ? ` +${extraSources}` : ''}</span>
+          <span>{sourceName}</span>
         </div>
 
         <h2 style={{
@@ -815,47 +806,48 @@ function FullPreviewCard({ item, index, total, onOpen }: {
           textShadow: '0 4px 24px rgba(0,0,0,0.7)',
         }}>{story.headline}</h2>
 
-        {(() => {
-          const bullets = aiBullets ?? (story.summary ? splitToBullets(story.summary) : null);
-          if (bullets?.length) return (
-            <div style={{
-              background: 'rgba(0,0,0,0.45)',
-              borderRadius: 12,
-              padding: '10px 12px',
-              border: '1px solid rgba(255,255,255,0.09)',
-              display: 'flex', flexDirection: 'column', gap: 6,
-            }}>
-              {bullets.slice(0, 3).map((bullet, bi) => (
-                <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                  <div style={{ width: 5, height: 5, borderRadius: 2.5, marginTop: 8, background: aiBullets ? VIOLET : 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
-                  <p style={{
-                    margin: 0, color: '#e9e9e9', fontSize: 14.5, lineHeight: 1.5,
-                    textShadow: '0 2px 12px rgba(0,0,0,0.55)',
-                  }}><FactText text={bullet.trim()} color={accent} /></p>
-                </div>
-              ))}
-              {quote && (
-                <div style={{
-                  marginTop: 4, paddingLeft: 10, borderLeft: `2px solid ${VIOLET}`,
-                }}>
-                  <p style={{
-                    margin: 0, color: '#d0d0d0', fontSize: 13, lineHeight: 1.45,
-                    fontStyle: 'italic', textShadow: '0 2px 12px rgba(0,0,0,0.55)',
-                  }}>"{quote.text}"</p>
-                  <p style={{
-                    margin: '2px 0 0', color: VIOLET, fontSize: 11.5, fontWeight: 700,
-                  }}>— {quote.by}</p>
-                </div>
-              )}
-            </div>
-          );
-          return (
-            <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <SparkleIcon color={VIOLET} size={12} />
-              <span style={{ color: VIOLET, fontSize: 11, fontWeight: 800, letterSpacing: 0.8 }}>TAP FOR AI DEEP DIVE</span>
-            </div>
-          );
-        })()}
+        {aiBullets?.length ? (
+          <div style={{
+            background: 'rgba(0,0,0,0.45)',
+            borderRadius: 12,
+            padding: '10px 12px',
+            border: '1px solid rgba(255,255,255,0.09)',
+            display: 'flex', flexDirection: 'column', gap: 6,
+          }}>
+            {aiBullets.slice(0, 3).map((bullet, bi) => (
+              <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                <div style={{ width: 5, height: 5, borderRadius: 2.5, marginTop: 8, background: VIOLET, flexShrink: 0 }} />
+                <p style={{
+                  margin: 0, color: '#e9e9e9', fontSize: 14.5, lineHeight: 1.5,
+                  textShadow: '0 2px 12px rgba(0,0,0,0.55)',
+                }}><FactText text={bullet.trim()} color={accent} /></p>
+              </div>
+            ))}
+            {quote && (
+              <div style={{
+                marginTop: 4, paddingLeft: 10, borderLeft: `2px solid ${VIOLET}`,
+              }}>
+                <p style={{
+                  margin: 0, color: '#d0d0d0', fontSize: 13, lineHeight: 1.45,
+                  fontStyle: 'italic', textShadow: '0 2px 12px rgba(0,0,0,0.55)',
+                }}>"{quote.text}"</p>
+                <p style={{
+                  margin: '2px 0 0', color: VIOLET, fontSize: 11.5, fontWeight: 700,
+                }}>— {quote.by}</p>
+              </div>
+            )}
+          </div>
+        ) : story.summary ? (
+          <p style={{
+            margin: 0, color: '#d0d0d0', fontSize: 14, lineHeight: 1.55,
+            textShadow: '0 2px 12px rgba(0,0,0,0.55)',
+          }}>{story.summary}</p>
+        ) : (
+          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <SparkleIcon color={VIOLET} size={12} />
+            <span style={{ color: VIOLET, fontSize: 11, fontWeight: 800, letterSpacing: 0.8 }}>TAP FOR AI DEEP DIVE</span>
+          </div>
+        )}
 
       </div>
 
@@ -1163,8 +1155,7 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
     };
   }, [onClose]);
 
-  const sourceName = item.sources[0]?.name ?? story.sources?.[0]?.name ?? 'Unknown';
-  const extraSources = Math.max(0, item.sources.length - 1);
+  const sourceName = story.sources?.[0]?.name ?? 'Unknown';
   const bgGradient = `radial-gradient(at 0% 0%, ${dominant}55, transparent 60%), linear-gradient(180deg, #050507 0%, #08080c 50%, #050507 100%)`;
 
   // Swipe-down-to-close: track drag only when scroll is at top.
