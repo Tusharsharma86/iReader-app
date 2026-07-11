@@ -825,13 +825,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
               border: '1px solid rgba(255,255,255,0.09)',
               display: 'flex', flexDirection: 'column', gap: 6,
             }}>
-              {/* 2 bullets shown full-length (no WebkitLineClamp) instead of
-                  3 clamped to 3 lines each — AI bullets run 30-45 words, way
-                  past 3 lines at this font size, so the old clamp cut every
-                  bullet off mid-sentence. Dropped the quote from the compact
-                  card too (least essential, most likely to get cut) — fewer,
-                  complete sentences beats more, truncated ones. */}
-              {bullets.slice(0, 2).map((bullet, bi) => (
+              {bullets.slice(0, 3).map((bullet, bi) => (
                 <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                   <div style={{ width: 5, height: 5, borderRadius: 2.5, marginTop: 8, background: aiBullets ? VIOLET : 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
                   <p style={{
@@ -840,6 +834,19 @@ function FullPreviewCard({ item, index, total, onOpen }: {
                   }}><FactText text={bullet.trim()} color={accent} /></p>
                 </div>
               ))}
+              {quote && (
+                <div style={{
+                  marginTop: 4, paddingLeft: 10, borderLeft: `2px solid ${VIOLET}`,
+                }}>
+                  <p style={{
+                    margin: 0, color: '#d0d0d0', fontSize: 13, lineHeight: 1.45,
+                    fontStyle: 'italic', textShadow: '0 2px 12px rgba(0,0,0,0.55)',
+                  }}>"{quote.text}"</p>
+                  <p style={{
+                    margin: '2px 0 0', color: VIOLET, fontSize: 11.5, fontWeight: 700,
+                  }}>— {quote.by}</p>
+                </div>
+              )}
             </div>
           );
           return (
