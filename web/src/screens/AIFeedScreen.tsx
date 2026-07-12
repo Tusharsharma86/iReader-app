@@ -829,9 +829,9 @@ function FullPreviewCard({ item, index, total, onOpen }: {
           }}>
             {aiBullets.slice(0, 3).map((bullet, bi) => (
               <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                <div style={{ width: 5, height: 5, borderRadius: 2.5, marginTop: 8, background: VIOLET, flexShrink: 0 }} />
+                <div style={{ width: 5, height: 5, borderRadius: 2.5, marginTop: 9, background: VIOLET, flexShrink: 0 }} />
                 <p style={{
-                  margin: 0, color: '#e9e9e9', fontSize: 14.5, lineHeight: 1.5,
+                  margin: 0, color: '#eeeeee', fontSize: 16, lineHeight: 1.5,
                   textShadow: '0 2px 12px rgba(0,0,0,0.55)',
                 }}><FactText text={bullet.trim()} color={accent} /></p>
               </div>
@@ -841,11 +841,11 @@ function FullPreviewCard({ item, index, total, onOpen }: {
                 marginTop: 4, paddingLeft: 10, borderLeft: `2px solid ${VIOLET}`,
               }}>
                 <p style={{
-                  margin: 0, color: '#d0d0d0', fontSize: 13, lineHeight: 1.45,
+                  margin: 0, color: '#d0d0d0', fontSize: 14.5, lineHeight: 1.5,
                   fontStyle: 'italic', textShadow: '0 2px 12px rgba(0,0,0,0.55)',
                 }}>"{quote.text}"</p>
                 <p style={{
-                  margin: '2px 0 0', color: VIOLET, fontSize: 11.5, fontWeight: 700,
+                  margin: '2px 0 0', color: VIOLET, fontSize: 12, fontWeight: 700,
                 }}>— {quote.by}</p>
               </div>
             )}
@@ -870,6 +870,14 @@ function FullPreviewCard({ item, index, total, onOpen }: {
           </div>
         )}
 
+        {/* RSS summary below AI box — fills dead space, publisher's own framing */}
+        {aiBullets?.length && story.summary && story.summary.toLowerCase().trim() !== story.headline.toLowerCase().trim() ? (
+          <p style={{
+            margin: 0, color: 'rgba(255,255,255,0.72)', fontSize: 15.5, lineHeight: 1.5,
+            textShadow: '0 2px 12px rgba(0,0,0,0.55)',
+            display: '-webkit-box', WebkitLineClamp: 5, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          }}>{story.summary.replace(/<[^>]+>/g, '').trim()}</p>
+        ) : null}
       </div>
 
     </div>

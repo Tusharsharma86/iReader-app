@@ -1105,14 +1105,14 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
                 net if content genuinely doesn't fit. */}
             {bullets.slice(0, 2).map((bullet, bi) => (
               <View key={bi} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 9 }}>
-                <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 7, backgroundColor: aiBullets ? accent : `${accent}66`, flexShrink: 0 }} />
-                <FactText text={bullet.trim()} color={accent} style={{ color: 'rgba(255,255,255,0.9)', fontSize: 14.5, lineHeight: 21, flex: 1, letterSpacing: 0.1 }} />
+                <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 8, backgroundColor: aiBullets ? accent : `${accent}66`, flexShrink: 0 }} />
+                <FactText text={bullet.trim()} color={accent} style={{ color: 'rgba(255,255,255,0.92)', fontSize: 16, lineHeight: 23.5, flex: 1, letterSpacing: 0.1 }} />
               </View>
             ))}
             {quote && quote.text && (
               <View style={{ borderLeftWidth: 3, borderLeftColor: accent, paddingLeft: 12, marginTop: 4 }}>
-                <Text style={{ color: '#fff', fontSize: 13.5, fontStyle: 'italic', lineHeight: 20 }}>“{quote.text}”</Text>
-                {!!quote.by && <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: '700', marginTop: 4 }}>— {quote.by}</Text>}
+                <Text style={{ color: '#fff', fontSize: 15, fontStyle: 'italic', lineHeight: 22 }}>“{quote.text}”</Text>
+                {!!quote.by && <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12, fontWeight: '700', marginTop: 4 }}>— {quote.by}</Text>}
               </View>
             )}
           </View>
@@ -1121,6 +1121,13 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
             <Ionicons name="sparkles" size={13} color={VIOLET} />
             <Text style={{ color: VIOLET, fontSize: 12, fontWeight: '700', letterSpacing: 0.8 }}>TAP FOR AI DEEP DIVE</Text>
           </View>
+        )}
+        {/* RSS summary below the AI box — fills the dead space under short
+            bullet sets and gives the publisher's own framing of the story. */}
+        {!!story.summary?.trim() && story.summary.trim() !== story.headline.trim() && (
+          <Text numberOfLines={5} style={{ color: 'rgba(255,255,255,0.72)', fontSize: 15.5, lineHeight: 23, marginTop: 14 }}>
+            {story.summary.replace(/<[^>]+>/g, '').trim()}
+          </Text>
         )}
       </Animated.View>
     </Pressable>
