@@ -530,22 +530,22 @@ export default function SettingsScreen() {
             {
               icon: '✦',
               label: 'Deep Dive',
-              model: 'Qwen 3 32B',
-              why: 'Multi-source narrative synthesis — falls back to Llama 4 Scout if Qwen errors',
+              model: 'GPT-OSS 120B',
+              why: 'Cerebras (~3000 tok/s) — falls back to Llama 4 Scout on Groq',
               warn: false,
             },
             {
               icon: '⚡',
               label: 'Summaries & Q&A',
-              model: 'Qwen 3 32B',
-              why: 'Foreground, user-facing: article summaries, follow-up Q&A',
+              model: 'GPT-OSS 120B',
+              why: 'Article summaries on Cerebras; Q&A on Groq GPT-OSS 20B',
               warn: false,
             },
             {
               icon: '⟲',
               label: 'Feed processing',
-              model: 'Llama 3.1 8B',
-              why: 'Background bulk: clustering, cluster headlines, card pre-warm, themes',
+              model: 'GPT-OSS 20B',
+              why: 'Background bulk: clustering, cluster headlines, themes (Groq); card summaries on Cerebras',
               warn: false,
             },
           ].map((item, i) => (
@@ -564,7 +564,7 @@ export default function SettingsScreen() {
           ))}
           <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12 }, styles.rowBorder]}>
             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#34D399' }} />
-            <Text style={{ color: '#555', fontSize: 12 }}>Provider: Groq · free tier · resets daily (UTC)</Text>
+            <Text style={{ color: '#555', fontSize: 12 }}>Providers: Cerebras + Groq · free tier · resets daily (UTC)</Text>
           </View>
         </View>
 
