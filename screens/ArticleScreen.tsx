@@ -791,7 +791,10 @@ export default function ArticleScreen() {
       const fetchWithRetry = async (): Promise<unknown> => {
         let r = await doFetch();
         if (!r.ok && r.status >= 500 && r.status < 600) {
-          await new Promise(res => setTimeout(res, 2000));
+          // Honor the server's Retry-After (breaker/busy hint); cap 10s.
+          const ra = Number(r.headers.get('Retry-After'));
+          const waitMs = Number.isFinite(ra) && ra > 0 ? Math.min(ra, 10) * 1000 : 2000;
+          await new Promise(res => setTimeout(res, waitMs));
           r = await doFetch();
         }
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
