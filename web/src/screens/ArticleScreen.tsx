@@ -219,6 +219,14 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
 
   const dominant = params.dominantColor;
   const accent = lighten(dominant, 0.45);
+  // AI Summary tab: follow the same font-size customization as Long Form
+  // (was hardcoded 15/13.5px, ignoring the user's Customize setting), but
+  // keep the text visibly distinct from Long Form's plain #DDD/#BBB with a
+  // subtle per-topic tint instead of flat gray.
+  const summaryFontSizePx = fontSizePx;
+  const summarySecondaryFontSizePx = Math.max(11, fontSizePx - 1.5);
+  const summaryTextColor = lighten(dominant, 0.82);
+  const summarySecondaryTextColor = lighten(dominant, 0.68);
   const tabBg = darken(dominant, 0.3);
   const borderColor = lighten(dominant, 0.3);
   const articleCategory = deriveCategory(params.source ?? '', params.url ?? '', params.headline ?? '');
@@ -452,7 +460,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
             {lines.map((line, i) => (
               <div key={i} style={{ display: 'flex', gap: 14, marginBottom: 18, alignItems: 'flex-start' }}>
                 <div style={{ width: 8, height: 8, borderRadius: 4, background: dominant, flexShrink: 0, marginTop: 7 }} />
-                <p style={{ color: '#DDD', fontSize: 15, lineHeight: 1.6, fontFamily: fontFamilyCss, margin: 0 }}>{renderEntities(line, summaryEntities, accent)}</p>
+                <p style={{ color: summaryTextColor, fontSize: summaryFontSizePx, lineHeight: 1.6, fontFamily: fontFamilyCss, margin: 0 }}>{renderEntities(line, summaryEntities, accent)}</p>
               </div>
             ))}
           </div>
@@ -465,7 +473,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
         aiContent = (
           <div>
             {paragraphs.map((p, i) => (
-              <p key={i} style={{ color: '#BBB', fontSize: 13.5, lineHeight: 1.55, fontFamily: fontFamilyCss, margin: '0 0 14px 0' }}>{renderEntities(p, summaryEntities, accent)}</p>
+              <p key={i} style={{ color: summarySecondaryTextColor, fontSize: summarySecondaryFontSizePx, lineHeight: 1.55, fontFamily: fontFamilyCss, margin: '0 0 14px 0' }}>{renderEntities(p, summaryEntities, accent)}</p>
             ))}
             {showKeyPoints && bullets.length > 0 && (
               <div style={{ marginTop: 14, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
@@ -473,7 +481,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
                 {bullets.map((line, i) => (
                   <div key={i} style={{ display: 'flex', gap: 12, marginBottom: 10, alignItems: 'flex-start' }}>
                     <div style={{ width: 6, height: 6, borderRadius: 3, background: dominant, flexShrink: 0, marginTop: 7 }} />
-                    <p style={{ color: '#BBB', fontSize: 13.5, lineHeight: 1.55, fontFamily: fontFamilyCss, margin: 0 }}>{renderEntities(line, summaryEntities, accent)}</p>
+                    <p style={{ color: summarySecondaryTextColor, fontSize: summarySecondaryFontSizePx, lineHeight: 1.55, fontFamily: fontFamilyCss, margin: 0 }}>{renderEntities(line, summaryEntities, accent)}</p>
                   </div>
                 ))}
               </div>
@@ -487,7 +495,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
             {bullets.map((line, i) => (
               <div key={i} style={{ display: 'flex', gap: 14, marginBottom: 18, alignItems: 'flex-start' }}>
                 <div style={{ width: 8, height: 8, borderRadius: 4, background: dominant, flexShrink: 0, marginTop: 7 }} />
-                <p style={{ color: '#DDD', fontSize: 15, lineHeight: 1.6, fontFamily: fontFamilyCss, margin: 0 }}>{renderEntities(line, summaryEntities, accent)}</p>
+                <p style={{ color: summaryTextColor, fontSize: summaryFontSizePx, lineHeight: 1.6, fontFamily: fontFamilyCss, margin: 0 }}>{renderEntities(line, summaryEntities, accent)}</p>
               </div>
             ))}
           </div>
