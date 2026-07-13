@@ -12,6 +12,7 @@ import {
   FlatList,
   Modal,
   PanResponder,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -1086,7 +1087,19 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
           <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.5)' }]} numberOfLines={1}>{sourceName}</Text>
           {extraSources > 0 && <Text style={[styles.metaText, { color: 'rgba(255,255,255,0.35)' }]}>+{extraSources}</Text>}
         </View>
-        <Text style={[styles.cardHeadline, { fontSize: 24, lineHeight: 30, marginBottom: 14 }]} numberOfLines={3}>
+        {(() => {
+          // Android: adaptive type — short content leaves dead space at this
+          // card height, so scale fonts UP as content shrinks. Word/char caps
+          // keep long content at today's sizes (never overflow). iOS unchanged.
+          const isAndroid = Platform.OS === 'android';
+          const hLen = story.headline?.length ?? 0;
+          const headlineSize = !isAndroid ? 24 : hLen <= 50 ? 29 : hLen <= 80 ? 27 : hLen <= 110 ? 25.5 : 24;
+          const bulletWords = (bullets ?? []).slice(0, 2).join(' ').split(/\s+/).filter(Boolean).length;
+          const bulletSize = !isAndroid ? 16 : bulletWords <= 45 ? 18 : bulletWords <= 75 ? 17 : 16;
+          const rssSize = !isAndroid ? 15.5 : bulletWords <= 45 ? 16.5 : 16;
+          return (
+            <>
+        <Text style={[styles.cardHeadline, { fontSize: headlineSize, lineHeight: headlineSize * 1.25, marginBottom: 14 }]} numberOfLines={3}>
           {story.headline}
         </Text>
         {bullets?.length ? (
@@ -1106,7 +1119,7 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
             {bullets.slice(0, 2).map((bullet, bi) => (
               <View key={bi} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 9 }}>
                 <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 8, backgroundColor: aiBullets ? accent : `${accent}66`, flexShrink: 0 }} />
-                <FactText text={bullet.trim()} color={accent} style={{ color: 'rgba(255,255,255,0.92)', fontSize: 16, lineHeight: 23.5, flex: 1, letterSpacing: 0.1 }} />
+                <FactText text={bullet.trim()} color={accent} style={{ color: 'rgba(255,255,255,0.92)', fontSize: bulletSize, lineHeight: bulletSize * 1.47, flex: 1, letterSpacing: 0.1 }} />
               </View>
             ))}
             {quote && quote.text && (
@@ -1125,10 +1138,13 @@ function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH,
         {/* RSS summary below the AI box — fills the dead space under short
             bullet sets and gives the publisher's own framing of the story. */}
         {!!story.summary?.trim() && story.summary.trim() !== story.headline.trim() && (
-          <Text numberOfLines={5} style={{ color: 'rgba(255,255,255,0.72)', fontSize: 15.5, lineHeight: 23, marginTop: 14 }}>
+          <Text numberOfLines={5} style={{ color: 'rgba(255,255,255,0.72)', fontSize: rssSize, lineHeight: rssSize * 1.48, marginTop: 14 }}>
             {story.summary.replace(/<[^>]+>/g, '').trim()}
           </Text>
         )}
+            </>
+          );
+        })()}
       </Animated.View>
     </Pressable>
   );
