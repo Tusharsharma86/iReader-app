@@ -166,11 +166,23 @@ const ABBREV_PERIOD_RE =
   /\b(?:[A-Z]\.){2,}|\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|vs|etc|Gen|Sen|Rep|Gov|Capt|Lt|Col|Maj|Sgt|No|Co|Inc|Ltd|Corp)\.(?=\s|$)/g;
 const ABBREV_PLACEHOLDER = String.fromCharCode(1);
 function protectAbbreviationPeriods(text: string): string {
-  return text.replace(ABBREV_PERIOD_RE, m => m.split('.').join(ABBREV_PLACEHOLDER));
+  return text
+    .replace(ABBREV_PERIOD_RE, m => m.split('.').join(ABBREV_PLACEHOLDER))
+    // Decimal numbers ("8.2 kg", "67.5%") — same fragmenting problem.
+    .replace(/(\d)\.(?=\d)/g, `$1${ABBREV_PLACEHOLDER}`);
 }
 function splitIntoSentences(text: string): string[] {
-  return protectAbbreviationPeriods(text).match(/[^.!?]+[.!?]+(\s|$)/g)
+  // Trailing close-quotes belong to the sentence they end ('…resignation."')
+  // — without ["'”’]* in the match, the quote orphans onto the next bullet.
+  const parts = protectAbbreviationPeriods(text).match(/[^.!?]+[.!?]+["'”’]*(\s|$)/g)
     ?.map(s => s.trim().split(ABBREV_PLACEHOLDER).join('.')).filter(Boolean) ?? [text];
+  // Merge tiny fragments (broken splits) into the previous sentence.
+  const out: string[] = [];
+  for (const p of parts) {
+    if (out.length > 0 && p.length < 20) out[out.length - 1] += ' ' + p;
+    else out.push(p);
+  }
+  return out;
 }
 
 function extractEntityTokens(text: string): string[] {

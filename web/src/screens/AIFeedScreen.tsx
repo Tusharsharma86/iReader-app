@@ -813,8 +813,19 @@ function FullPreviewCard({ item, index, total, onOpen }: {
           <span>{sourceName}</span>
         </div>
 
+        {(() => {
+          // Adaptive type (parity with Android): short content leaves dead
+          // space at card height, so scale fonts UP as content shrinks. Caps
+          // keep long content at base sizes — no overflow.
+          const hLen = story.headline?.length ?? 0;
+          const headlineSize = hLen <= 50 ? 30 : hLen <= 80 ? 28 : hLen <= 110 ? 27 : 26;
+          const bulletWords = (aiBullets ?? []).slice(0, 3).join(' ').split(/\s+/).filter(Boolean).length;
+          const bulletSize = bulletWords <= 45 ? 18 : bulletWords <= 75 ? 17 : 16;
+          const rssSize = bulletWords <= 45 ? 16.5 : 15.5;
+          return (
+            <>
         <h2 style={{
-          margin: 0, color: '#fff', fontSize: 26, fontWeight: 800,
+          margin: 0, color: '#fff', fontSize: headlineSize, fontWeight: 800,
           lineHeight: 1.2, letterSpacing: -0.5,
           textShadow: '0 4px 24px rgba(0,0,0,0.7)',
         }}>{story.headline}</h2>
@@ -831,7 +842,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
               <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{ width: 5, height: 5, borderRadius: 2.5, marginTop: 9, background: VIOLET, flexShrink: 0 }} />
                 <p style={{
-                  margin: 0, color: '#eeeeee', fontSize: 16, lineHeight: 1.5,
+                  margin: 0, color: '#eeeeee', fontSize: bulletSize, lineHeight: 1.5,
                   textShadow: '0 2px 12px rgba(0,0,0,0.55)',
                 }}><FactText text={bullet.trim()} color={accent} /></p>
               </div>
@@ -873,11 +884,14 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         {/* RSS summary below AI box — fills dead space, publisher's own framing */}
         {aiBullets?.length && story.summary && story.summary.toLowerCase().trim() !== story.headline.toLowerCase().trim() ? (
           <p style={{
-            margin: 0, color: 'rgba(255,255,255,0.72)', fontSize: 15.5, lineHeight: 1.5,
+            margin: 0, color: 'rgba(255,255,255,0.72)', fontSize: rssSize, lineHeight: 1.5,
             textShadow: '0 2px 12px rgba(0,0,0,0.55)',
             display: '-webkit-box', WebkitLineClamp: 5, WebkitBoxOrient: 'vertical', overflow: 'hidden',
           }}>{story.summary.replace(/<[^>]+>/g, '').trim()}</p>
         ) : null}
+            </>
+          );
+        })()}
       </div>
 
     </div>
