@@ -860,8 +860,9 @@ export default function ArticleScreen() {
     } else {
       switch (activeTab) {
         case 'Summary':
-          // Summary prose matches KEY POINTS sizing (13.5) — parity with web.
-          aiContent = <SummaryTab loading={aiLoading} result={aiResult} error={aiError} accentColor={dominant} fontSize={13.5} showKeyPoints={showKeyPoints} showEntityHighlights={showEntityHighlights} showQuoteHighlights={showQuoteHighlights} summaryFormat={summaryFormat} fontFamily={articleFontFamily} />;
+          // Summary prose matches Long Form: same user font size, family and
+          // line-height from Customize settings.
+          aiContent = <SummaryTab loading={aiLoading} result={aiResult} error={aiError} accentColor={dominant} fontSize={fontSizePx} showKeyPoints={showKeyPoints} showEntityHighlights={showEntityHighlights} showQuoteHighlights={showQuoteHighlights} summaryFormat={summaryFormat} fontFamily={articleFontFamily} lineHeightMultiplier={lineHeightMultiplier} />;
           break;
         case '5 Ws':
           aiContent = <FiveWsTab loading={aiLoading} result={aiResult} error={aiError} accentColor={accent} />;
@@ -878,7 +879,7 @@ export default function ArticleScreen() {
       <View>
         <View style={{
           borderRadius: 14, marginBottom: 14,
-          backgroundColor: isLimitedSource ? 'rgba(245,158,11,0.06)' : 'rgba(255,255,255,0.04)',
+          backgroundColor: isLimitedSource ? 'rgba(245,158,11,0.06)' : 'rgba(0,0,0,0.3)',
           borderWidth: 1, borderColor: isLimitedSource ? 'rgba(245,158,11,0.30)' : 'rgba(255,255,255,0.07)',
           padding: 14,
         }}>
@@ -1535,7 +1536,7 @@ function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accen
   );
 }
 
-function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoints = true, showEntityHighlights = true, showQuoteHighlights = true, summaryFormat = 'paragraph', fontFamily }: { loading: boolean; result: AiResult | null; error: string | null; accentColor: string; fontSize: number; showKeyPoints?: boolean; showEntityHighlights?: boolean; showQuoteHighlights?: boolean; summaryFormat?: SummaryFormat; fontFamily?: string }) {
+function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoints = true, showEntityHighlights = true, showQuoteHighlights = true, summaryFormat = 'paragraph', fontFamily, lineHeightMultiplier = 1.65 }: { loading: boolean; result: AiResult | null; error: string | null; accentColor: string; fontSize: number; showKeyPoints?: boolean; showEntityHighlights?: boolean; showQuoteHighlights?: boolean; summaryFormat?: SummaryFormat; fontFamily?: string; lineHeightMultiplier?: number }) {
   if (loading) return <Spinner />;
   if (error) return <ErrorMsg msg={error} />;
   if (!result) return <ErrorMsg msg="No summary available." />;
@@ -1556,7 +1557,7 @@ function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoin
         {lines.map((line, i) => (
           <View key={i} style={styles.bulletRow}>
             <View style={[styles.bulletDot, { backgroundColor: accentColor }]} />
-            <Text style={styles.bulletText}>{line}</Text>
+            <Text style={[styles.bulletText, { fontSize, lineHeight: fontSize * lineHeightMultiplier, fontFamily }]}>{line}</Text>
           </View>
         ))}
       </View>
@@ -1581,7 +1582,7 @@ function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoin
   return (
     <View>
       {paragraphs.map((p, i) => (
-        <RichParagraph key={i} text={p} fontSize={fontSize} accentColor={accentColor} showEntityHighlights={showEntityHighlights} showQuoteHighlights={showQuoteHighlights} fontFamily={fontFamily} />
+        <RichParagraph key={i} text={p} fontSize={fontSize} accentColor={accentColor} showEntityHighlights={showEntityHighlights} showQuoteHighlights={showQuoteHighlights} fontFamily={fontFamily} lineHeightMultiplier={lineHeightMultiplier} />
       ))}
       {showKeyPoints && bullets.length > 0 && rawSummary ? (
         <View style={{ marginTop: 18, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.08)' }}>
@@ -1589,7 +1590,7 @@ function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoin
           {bullets.map((line, i) => (
             <View key={i} style={styles.bulletRow}>
               <View style={[styles.bulletDot, { backgroundColor: accentColor }]} />
-              <Text style={styles.bulletText}>{line}</Text>
+              <Text style={[styles.bulletText, { fontSize: fontSize - 1, lineHeight: (fontSize - 1) * lineHeightMultiplier, fontFamily }]}>{line}</Text>
             </View>
           ))}
         </View>
