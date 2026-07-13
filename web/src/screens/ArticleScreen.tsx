@@ -211,9 +211,14 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     eli5Tone,
   } = useSettings();
 
-  // Customize: font / line-height / column width.
+  // Customize: font / line-height / column width. Inter + Merriweather are
+  // self-hosted (see main.tsx) — actually loaded, not just named and hoped
+  // for. Georgia is a Microsoft-licensed font we can't redistribute, so
+  // serif mode uses Merriweather (SIL OFL, same screen-reading design goal)
+  // instead; it's listed as a harmless fallback for the rare device that
+  // happens to have it installed.
   const fontFamilyCss = fontFamily === 'serif'
-    ? "Georgia, 'Times New Roman', serif"
+    ? "'Merriweather', Georgia, 'Times New Roman', serif"
     : fontFamily === 'system'
       ? "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
       : "'Inter', sans-serif";

@@ -383,7 +383,7 @@ export default function CustomizeScreen() {
       <div style={sectionHeader}>READING</div>
       <div style={card}>
         <RowSegmented label="Font family"
-          sub="Inter (sans), Serif (Georgia), or System default."
+          sub="Inter (sans), Serif (Merriweather), or System default."
           options={FONT_OPTIONS}
           value={s.fontFamily} onChange={s.setFontFamily} />
         <RowSegmented border label="Line height"
