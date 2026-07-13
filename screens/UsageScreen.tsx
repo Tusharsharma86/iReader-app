@@ -154,7 +154,7 @@ export default function UsageScreen() {
             ) : (
               <View style={{ gap: 16 }}>
                 {ai.models.map(m => <AiModelBlock key={m.model} m={m} />)}
-                <Text style={styles.aiFootnote}>Live from Groq · per-model daily token budgets are independent · figures reset on server restart (approx).</Text>
+                <Text style={styles.aiFootnote}>Live from Cerebras + Groq · per-model daily token budgets are independent · figures reset on server restart (approx).</Text>
                 <Pressable onPress={() => Linking.openURL('https://console.groq.com/usage')} style={styles.groqLink}>
                   <Ionicons name="open-outline" size={13} color={VIOLET} />
                   <Text style={styles.groqLinkText}>View Groq Console</Text>

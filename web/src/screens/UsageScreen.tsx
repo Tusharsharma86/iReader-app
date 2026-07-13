@@ -109,7 +109,7 @@ export default function UsageScreen() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {ai.models.map(m => <AiModelBlock key={m.model} m={m} />)}
                 <div style={{ color: '#444', fontSize: 10, lineHeight: 1.5 }}>
-                  Live from Groq · per-model daily token budgets are independent · figures reset on server restart (approx).
+                  Live from Cerebras + Groq · per-model daily token budgets are independent · figures reset on server restart (approx).
                 </div>
                 <a href="https://console.groq.com/usage" target="_blank" rel="noopener noreferrer"
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#b994ff', fontSize: 12, fontWeight: 600, textDecoration: 'none', marginTop: 4 }}>

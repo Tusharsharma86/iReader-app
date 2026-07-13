@@ -683,7 +683,9 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   const prewarmQueuedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (allFeed.length === 0) return;
-    const lengthMap: Record<string, number> = { short: 150, medium: 250, long: 400 };
+    // Must match ArticleScreen's lengthMap exactly — mismatched maxWords made
+    // every prewarm a cache miss (client AND server key include maxWords).
+    const lengthMap: Record<string, number> = { short: 200, medium: 350, long: 550 };
     const maxWords = lengthMap[summaryLength] ?? 250;
     const API = 'https://ireader.onrender.com/api/news';
     const targets = rankedClusters.slice(0, 40).flatMap(c => {
