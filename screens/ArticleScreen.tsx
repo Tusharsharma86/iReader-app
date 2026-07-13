@@ -1595,10 +1595,23 @@ function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoin
   );
 }
 
+// Abbreviation periods ("U.S.", "U.K.", "Mr.", "Dr.", ...) look identical to
+// sentence-ending periods to a naive split — without this, "U.S. forces"
+// fragments into standalone "U." and "S." bullets. Replace their periods
+// with a placeholder before splitting, restore after.
+const ABBREV_PERIOD_RE =
+  /\b(?:[A-Z]\.){2,}|\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|vs|etc|Gen|Sen|Rep|Gov|Capt|Lt|Col|Maj|Sgt|No|Co|Inc|Ltd|Corp)\.(?=\s|$)/g;
+const ABBREV_PLACEHOLDER = String.fromCharCode(1);
+function protectAbbreviationPeriods(text: string): string {
+  return text.replace(ABBREV_PERIOD_RE, m => m.split('.').join(ABBREV_PLACEHOLDER));
+}
+
 // Splits a single paragraph string into N-sentence chunks for readability
 // when the model didn't honor the \n\n paragraph instruction.
 function sentenceParagraphs(text: string, sentencesPer: number): string[] {
-  const sentences = text.match(/[^.!?]+[.!?]+(\s|$)/g)?.map(s => s.trim()).filter(Boolean) ?? [text];
+  const sentences = protectAbbreviationPeriods(text).match(/[^.!?]+[.!?]+(\s|$)/g)
+    ?.map(s => s.trim().split(ABBREV_PLACEHOLDER).join('.'))
+    .filter(Boolean) ?? [text];
   const out: string[] = [];
   for (let i = 0; i < sentences.length; i += sentencesPer) {
     out.push(sentences.slice(i, i + sentencesPer).join(' '));

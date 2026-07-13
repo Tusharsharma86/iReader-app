@@ -158,6 +158,21 @@ function wordCount(s: string): number {
   return (s ?? '').trim().split(/\s+/).filter(Boolean).length;
 }
 
+// Abbreviation periods ("U.S.", "U.K.", "Mr.", "Dr.", ...) look identical to
+// sentence-ending periods to a naive split — without this, "U.S. forces"
+// fragments into standalone "U." and "S." bullets. Replace their periods
+// with a placeholder before splitting, restore after.
+const ABBREV_PERIOD_RE =
+  /\b(?:[A-Z]\.){2,}|\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|vs|etc|Gen|Sen|Rep|Gov|Capt|Lt|Col|Maj|Sgt|No|Co|Inc|Ltd|Corp)\.(?=\s|$)/g;
+const ABBREV_PLACEHOLDER = String.fromCharCode(1);
+function protectAbbreviationPeriods(text: string): string {
+  return text.replace(ABBREV_PERIOD_RE, m => m.split('.').join(ABBREV_PLACEHOLDER));
+}
+function splitIntoSentences(text: string): string[] {
+  return protectAbbreviationPeriods(text).match(/[^.!?]+[.!?]+(\s|$)/g)
+    ?.map(s => s.trim().split(ABBREV_PLACEHOLDER).join('.')).filter(Boolean) ?? [text];
+}
+
 function extractEntityTokens(text: string): string[] {
   if (!text) return [];
   const results: string[] = [];
@@ -414,12 +429,11 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
       // 3. Nothing → empty state.
       const splitSentences = (t: string): string[] => {
         const out: string[] = [];
-        const sents = t.match(/[^.!?]+[.!?]+(\s|$)/g)?.map(s => s.trim()).filter(Boolean) ?? [t];
+        const sents = splitIntoSentences(t);
         for (let i = 0; i < sents.length; i += 3) out.push(sents.slice(i, i + 3).join(' '));
         return out;
       };
-      const splitToSingleSentences = (t: string): string[] =>
-        t.match(/[^.!?]+[.!?]+(\s|$)/g)?.map(s => s.trim()).filter(Boolean) ?? [t];
+      const splitToSingleSentences = (t: string): string[] => splitIntoSentences(t);
       if (summaryFormat === 'bullets' && (rawSummary || bullets.length > 0)) {
         // Customize → Summary format: "Bullets" skips the narrative prose
         // entirely and shows the takeaway list on its own. Split the SAME
