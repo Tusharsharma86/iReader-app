@@ -820,8 +820,12 @@ function FullPreviewCard({ item, index, total, onOpen }: {
           const hLen = story.headline?.length ?? 0;
           const headlineSize = hLen <= 50 ? 30 : hLen <= 80 ? 28 : hLen <= 110 ? 27 : 26;
           const bulletWords = (aiBullets ?? []).slice(0, 3).join(' ').split(/\s+/).filter(Boolean).length;
-          const bulletSize = bulletWords <= 45 ? 18 : bulletWords <= 75 ? 17 : 16;
-          const rssSize = bulletWords <= 45 ? 16.5 : 15.5;
+          // 3 full-sentence bullets at 45+ words was still overflowing past
+          // the card/tab bar on real headlines (the 16px floor was too high
+          // for a 3-bullet card) — lower the floor and add finer-grained
+          // tiers so longer bullet sets actually shrink enough to fit.
+          const bulletSize = bulletWords <= 30 ? 17 : bulletWords <= 50 ? 16 : bulletWords <= 70 ? 15 : bulletWords <= 90 ? 14 : 13;
+          const rssSize = bulletWords <= 30 ? 16 : bulletWords <= 50 ? 15 : bulletWords <= 70 ? 14.5 : 14;
           return (
             <>
         <h2 style={{
