@@ -1607,15 +1607,26 @@ const ABBREV_PERIOD_RE =
   /\b(?:[A-Z]\.){2,}|\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|vs|etc|Gen|Sen|Rep|Gov|Capt|Lt|Col|Maj|Sgt|No|Co|Inc|Ltd|Corp)\.(?=\s|$)/g;
 const ABBREV_PLACEHOLDER = String.fromCharCode(1);
 function protectAbbreviationPeriods(text: string): string {
-  return text.replace(ABBREV_PERIOD_RE, m => m.split('.').join(ABBREV_PLACEHOLDER));
+  return text
+    .replace(ABBREV_PERIOD_RE, m => m.split('.').join(ABBREV_PLACEHOLDER))
+    // Decimal numbers ("8.2 kg", "67.5%") — same fragmenting problem.
+    .replace(/(\d)\.(?=\d)/g, `$1${ABBREV_PLACEHOLDER}`);
 }
 
 // Splits a single paragraph string into N-sentence chunks for readability
 // when the model didn't honor the \n\n paragraph instruction.
 function sentenceParagraphs(text: string, sentencesPer: number): string[] {
-  const sentences = protectAbbreviationPeriods(text).match(/[^.!?]+[.!?]+(\s|$)/g)
+  // Trailing close-quotes belong to the sentence they end ('…resignation."')
+  // — without ["'”’]* in the match, the quote orphans onto the next bullet.
+  const parts = protectAbbreviationPeriods(text).match(/[^.!?]+[.!?]+["'”’]*(\s|$)/g)
     ?.map(s => s.trim().split(ABBREV_PLACEHOLDER).join('.'))
     .filter(Boolean) ?? [text];
+  // Merge tiny fragments (broken splits) into the previous sentence.
+  const sentences: string[] = [];
+  for (const p of parts) {
+    if (sentences.length > 0 && p.length < 20) sentences[sentences.length - 1] += ' ' + p;
+    else sentences.push(p);
+  }
   const out: string[] = [];
   for (let i = 0; i < sentences.length; i += sentencesPer) {
     out.push(sentences.slice(i, i + sentencesPer).join(' '));
