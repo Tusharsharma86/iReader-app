@@ -292,11 +292,17 @@ async function readStaleDiveCache(id: string): Promise<DeepDiveData | null> {
   }
   return null;
 }
-function buildSyntheticFallbackRN(stories: Story[], lead: Story): DeepDiveData {
-  const summaries = stories.map(s => s.aiSummary || s.summary).filter(Boolean) as string[];
+function decodeEntities(s: string): string {
+  return s.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+}
+function buildSyntheticFallbackRN(_stories: Story[], lead: Story): DeepDiveData {
+  // LEAD story only. The cluster's other stories can be different events
+  // (theme rails like "IPO"), and stitching their summaries read as one
+  // incoherent multi-topic "story".
+  const summary = decodeEntities((lead.aiSummary || lead.summary || '').trim());
   return {
-    narrative: summaries.join('\n\n') || lead.headline,
-    tldr: summaries.slice(0, 3),
+    narrative: summary || lead.headline,
+    tldr: summary ? [summary] : [lead.headline],
     insight: lead.headline,
     keyMetrics: [], questions: [], tags: [], keyPeople: [], keyCompanies: [], topics: [],
     degraded: true,
@@ -1557,6 +1563,12 @@ function dedupeMetrics(items: string[]): string[] {
                         <Text style={overlayStyles.sectionLabel}>THE STORY</Text>
                         <View style={overlayStyles.labelDivider} />
                       </View>
+                      {data.degraded && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(245,158,11,0.08)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, marginBottom: 10 }}>
+                          <Text style={{ fontSize: 11 }}>⚠️</Text>
+                          <Text style={{ color: '#f59e0b', fontSize: 11, fontWeight: '600', flex: 1 }}>AI story unavailable right now — showing the source summary. Pull to refresh to retry.</Text>
+                        </View>
+                      )}
                       {(() => {
                         const narrativeText = data.narrative && data.narrative.trim().length > 200 ? data.narrative : null;
                         if (narrativeText) {
