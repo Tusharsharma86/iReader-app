@@ -92,7 +92,10 @@ function handleNotificationTap(data: any, attempt = 0) {
         summary: String(a.summary ?? ''),
         source: String(a.source ?? ''),
         publishedAt: String(a.publishedAt ?? ''),
-        dominantColor: '#1A1A1A',
+        // Was a flat '#1A1A1A' — every notification-opened article looked
+        // the same dark gray instead of the per-article dynamic color the
+        // main feed derives (StoryCard.tsx uses this exact same call).
+        dominantColor: getArticleColor(id || headline),
         sources: JSON.stringify(url ? [{ name: a.source ?? '', url }] : []),
       },
     } as never);

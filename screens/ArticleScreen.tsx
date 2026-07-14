@@ -1453,10 +1453,10 @@ function tokenize(text: string): Seg[] {
   return out;
 }
 
-function RichParagraph({ text, fontSize, accentColor, showEntityHighlights = true, showQuoteHighlights = true, fontFamily, lineHeightMultiplier = 1.65 }: { text: string; fontSize: number; accentColor: string; showEntityHighlights?: boolean; showQuoteHighlights?: boolean; fontFamily?: string; lineHeightMultiplier?: number }) {
+function RichParagraph({ text, fontSize, accentColor, showEntityHighlights = true, showQuoteHighlights = true, fontFamily, lineHeightMultiplier = 1.65, textColor, baseStyle }: { text: string; fontSize: number; accentColor: string; showEntityHighlights?: boolean; showQuoteHighlights?: boolean; fontFamily?: string; lineHeightMultiplier?: number; textColor?: string; baseStyle?: object }) {
   const segs = useMemo(() => tokenize(text), [text]);
   return (
-    <Text style={[styles.paragraph, { fontSize, lineHeight: fontSize * lineHeightMultiplier, fontFamily }]}>
+    <Text style={[baseStyle ?? styles.paragraph, { fontSize, lineHeight: fontSize * lineHeightMultiplier, fontFamily }, textColor ? { color: textColor } : null]}>
       {segs.map((seg, i) => {
         if (seg.kind === 'quote') {
           if (!showQuoteHighlights) return <Text key={i}>{seg.text}</Text>;
@@ -1544,6 +1544,15 @@ function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoin
   const rawSummary = (result.summary ?? '').trim();
   const bullets = result.bullets ?? [];
 
+  // Summary tab reads a bit smaller than Long Form, and off-white with a
+  // subtle per-topic tint instead of flat #DDD — keeps it visually distinct
+  // ("classy", not just a smaller Long Form) while still following the
+  // Customize font-size setting proportionally.
+  const summaryFontSize = Math.max(11, fontSize - 1.5);
+  const summaryTextColor = lighten(accentColor, 0.82);
+  const summarySecondaryFontSize = Math.max(10.5, summaryFontSize - 1);
+  const summarySecondaryTextColor = lighten(accentColor, 0.68);
+
   // Customize → Summary format: "Bullets" skips the narrative prose
   // entirely and shows the takeaway list on its own. Split the SAME
   // full-length narrative (capped by summaryLength, same as paragraph mode)
@@ -1557,7 +1566,7 @@ function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoin
         {lines.map((line, i) => (
           <View key={i} style={styles.bulletRow}>
             <View style={[styles.bulletDot, { backgroundColor: accentColor }]} />
-            <Text style={[styles.bulletText, { fontSize, lineHeight: fontSize * lineHeightMultiplier, fontFamily }]}>{line}</Text>
+            <RichParagraph text={line} fontSize={summaryFontSize} accentColor={accentColor} showEntityHighlights={showEntityHighlights} showQuoteHighlights={showQuoteHighlights} fontFamily={fontFamily} lineHeightMultiplier={lineHeightMultiplier} textColor={summaryTextColor} baseStyle={styles.bulletText} />
           </View>
         ))}
       </View>
@@ -1582,7 +1591,7 @@ function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoin
   return (
     <View>
       {paragraphs.map((p, i) => (
-        <RichParagraph key={i} text={p} fontSize={fontSize} accentColor={accentColor} showEntityHighlights={showEntityHighlights} showQuoteHighlights={showQuoteHighlights} fontFamily={fontFamily} lineHeightMultiplier={lineHeightMultiplier} />
+        <RichParagraph key={i} text={p} fontSize={summaryFontSize} accentColor={accentColor} showEntityHighlights={showEntityHighlights} showQuoteHighlights={showQuoteHighlights} fontFamily={fontFamily} lineHeightMultiplier={lineHeightMultiplier} textColor={summaryTextColor} />
       ))}
       {showKeyPoints && bullets.length > 0 && rawSummary ? (
         <View style={{ marginTop: 18, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.08)' }}>
@@ -1590,7 +1599,7 @@ function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoin
           {bullets.map((line, i) => (
             <View key={i} style={styles.bulletRow}>
               <View style={[styles.bulletDot, { backgroundColor: accentColor }]} />
-              <Text style={[styles.bulletText, { fontSize: fontSize - 1, lineHeight: (fontSize - 1) * lineHeightMultiplier, fontFamily }]}>{line}</Text>
+              <RichParagraph text={line} fontSize={summarySecondaryFontSize} accentColor={accentColor} showEntityHighlights={showEntityHighlights} showQuoteHighlights={showQuoteHighlights} fontFamily={fontFamily} lineHeightMultiplier={lineHeightMultiplier} textColor={summarySecondaryTextColor} baseStyle={styles.bulletText} />
             </View>
           ))}
         </View>
