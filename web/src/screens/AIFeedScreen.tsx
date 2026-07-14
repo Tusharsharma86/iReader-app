@@ -201,12 +201,17 @@ export function startAIFeedPreWarm(depth = 'standard') {
     }
   })();
 }
-function buildSyntheticFallback(item: { allStories: Story[]; primary?: Story }, lead: Story): DeepDiveData {
-  const summaries = item.allStories
-    .map(s => s.aiSummary || s.summary).filter(Boolean) as string[];
+function decodeEntities(s: string): string {
+  return s.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+}
+function buildSyntheticFallback(_item: { allStories: Story[]; primary?: Story }, lead: Story): DeepDiveData {
+  // LEAD story only. The cluster's other stories can be different events
+  // (theme rails like "IPO"), and stitching their summaries read as one
+  // incoherent multi-topic "story".
+  const summary = decodeEntities((lead.aiSummary || lead.summary || '').trim());
   return {
-    narrative: summaries.join('\n\n') || lead.headline,
-    tldr: summaries.slice(0, 3),
+    narrative: summary || lead.headline,
+    tldr: summary ? [summary] : [lead.headline],
     insight: lead.headline,
     keyMetrics: [], questions: [], tags: [], keyPeople: [], keyCompanies: [], topics: [],
     degraded: true,
@@ -1473,6 +1478,12 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
                   <span>THE STORY</span>
                   <div style={{ flex: 1, height: 1, background: `${VIOLET}33` }} />
                 </div>
+                {data.degraded && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(245,158,11,0.08)', borderRadius: 8, padding: '7px 10px', marginBottom: 10 }}>
+                    <span style={{ fontSize: 11 }}>⚠️</span>
+                    <span style={{ color: '#f59e0b', fontSize: 11, fontWeight: 600 }}>AI story unavailable right now — showing the source summary. Refresh to retry.</span>
+                  </div>
+                )}
                 {narrativeBody}
               </div>
             )}
