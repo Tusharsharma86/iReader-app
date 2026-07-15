@@ -146,6 +146,7 @@ export async function registerForPush(): Promise<string | null> {
 
 export async function updatePushPreferences(prefs: {
   breakingEnabled?: boolean;
+  breakingSensitivity?: string;
   aiFeedEnabled?: boolean;
   topicsEnabled?: boolean;
   topicsKeywords?: string[];

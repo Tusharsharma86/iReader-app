@@ -168,12 +168,20 @@ export default function NotificationSettingsScreen() {
                 { key: 'all' as BreakingSensitivity, label: 'All', desc: 'Every breaking story' },
                 { key: 'important' as BreakingSensitivity, label: 'Important', desc: '2+ sources confirming' },
                 { key: 'critical' as BreakingSensitivity, label: 'Critical', desc: '3+ sources confirming' },
+                { key: 'super-critical' as BreakingSensitivity, label: 'Super Critical', desc: '6+ sources within 30 min' },
               ]).map(opt => {
                 const active = breakingSensitivity === opt.key;
                 return (
                   <Pressable
                     key={opt.key}
-                    onPress={() => setBreakingSensitivity(opt.key)}
+                    onPress={() => {
+                      setBreakingSensitivity(opt.key);
+                      // Was local-only — the backend never learned which
+                      // level the user picked, so every level behaved
+                      // identically (always the server's hardcoded 3+
+                      // bar). Sync it so it actually changes what fires.
+                      updatePushPreferences({ breakingSensitivity: opt.key });
+                    }}
                     style={{
                       flex: 1, paddingVertical: 8, borderRadius: 8,
                       backgroundColor: active ? '#1C3A6A' : '#1A1A1A',

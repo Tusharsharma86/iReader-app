@@ -20,7 +20,7 @@ export type ColumnWidth = 'narrow' | 'medium' | 'wide';
 export type Eli5Tone = 'kid' | 'casual' | 'plain';
 export type DeepDiveDepth = 'quick' | 'standard' | 'deep';
 export type TimeFormat = 'relative' | 'absolute';
-export type BreakingSensitivity = 'all' | 'important' | 'critical';
+export type BreakingSensitivity = 'all' | 'important' | 'critical' | 'super-critical';
 
 interface SettingsCtx {
   fontSize: FontSize;
@@ -232,7 +232,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         if (s.fontSize) setFontSizeS(s.fontSize);
         if (typeof s.notifBreaking === 'boolean') setNotifBreakingS(s.notifBreaking);
         if (typeof s.notifAiFeed === 'boolean') setNotifAiFeedS(s.notifAiFeed);
-        if (['all','important','critical'].includes(s.breakingSensitivity)) setBreakingSensitivityS(s.breakingSensitivity);
+        if (['all','important','critical','super-critical'].includes(s.breakingSensitivity)) setBreakingSensitivityS(s.breakingSensitivity);
         if (typeof s.notifTech === 'boolean') setNotifTechS(s.notifTech);
         if (typeof s.notifDigest === 'boolean') setNotifDigestS(s.notifDigest);
         if (typeof s.notifSources === 'boolean') setNotifSourcesS(s.notifSources);

@@ -13,7 +13,7 @@ export type SummaryFormat = 'paragraph' | 'bullets';
 export type KeyPointsCount = 3 | 5 | 7;
 export type Eli5Tone = 'kid' | 'casual' | 'plain';
 export type DeepDiveDepth = 'quick' | 'standard' | 'deep';
-export type BreakingSensitivity = 'all' | 'important' | 'critical';
+export type BreakingSensitivity = 'all' | 'important' | 'critical' | 'super-critical';
 export type TimeFormat = 'relative' | 'absolute';
 export type FontFamily = 'inter' | 'serif' | 'system';
 export type LineHeightMode = 'tight' | 'normal' | 'loose';
@@ -259,7 +259,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           const saved = JSON.parse(raw);
           if (saved.fontSize) setFontSizeState(saved.fontSize);
           if (typeof saved.notifBreaking === 'boolean') setNotifBreakingState(saved.notifBreaking);
-          if (['all','important','critical'].includes(saved.breakingSensitivity)) setBreakingSensitivityState(saved.breakingSensitivity);
+          if (['all','important','critical','super-critical'].includes(saved.breakingSensitivity)) setBreakingSensitivityState(saved.breakingSensitivity);
           if (typeof saved.notifTech === 'boolean') setNotifTechState(saved.notifTech);
           if (typeof saved.notifDigest === 'boolean') setNotifDigestState(saved.notifDigest);
           if (typeof saved.notifAiFeed === 'boolean') setNotifAiFeedState(saved.notifAiFeed);
@@ -360,6 +360,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         }
         await updatePushPreferences({
           breakingEnabled: notifBreaking,
+          breakingSensitivity,
           aiFeedEnabled: notifAiFeed,
           topicsEnabled: notifTech,
           topicsKeywords: notifTech ? pairs.slice(0, 500) : [],
