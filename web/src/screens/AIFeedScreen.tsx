@@ -67,6 +67,7 @@ interface DeepDiveData {
   tldr: string[];
   tldrSections?: TldrSection[];
   quote?: { text: string; by: string } | null;
+  keyQuotes?: { text: string; by: string }[];
   narrative: string;
   storySections?: StorySection[];
   degraded?: boolean;
@@ -1065,7 +1066,13 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
       ...(data.tldrSections?.flatMap(s => s.bullets) ?? []),
       data.narrative ?? '',
     ].join(' ');
-    return extractMetrics(pool);
+    // extractMetrics's own dedup only matches an exact 40-char text prefix,
+    // so the same fact restated with different opening words (e.g. once in
+    // the TL;DR, once in the narrative — "Nvidia's valuation dropped to
+    // $4.8T..." vs "This change occurred as Nvidia's valuation dropped...")
+    // sailed through as 3 near-identical bullets. Run it through the
+    // word-overlap dedup above too, which actually catches that.
+    return deduped(extractMetrics(pool)).slice(0, 5);
   }, [data]);
   const tldrBody = useMemo(() => {
     if (!data) return null;
@@ -1441,6 +1448,40 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
                     — {data.quote.by}
                   </p>
                 )}
+              </div>
+            )}
+
+            {/* Remaining quotes beyond the one already shown as the KEY QUOTE
+                pull-quote above — avoids showing the same line twice. */}
+            {data.keyQuotes && data.keyQuotes.filter(q => q.text && q.text !== data.quote?.text).length > 0 && (
+              <div style={{
+                background: 'rgba(15,15,22,0.5)',
+                border: '1px solid rgba(255,255,255,0.06)',
+                borderRadius: 14, padding: '18px 20px',
+                backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+              }}>
+                <div style={{
+                  color: VIOLET, fontSize: 9, fontWeight: 800, letterSpacing: 1.6,
+                  marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8,
+                }}>
+                  <span>KEY QUOTATIONS</span>
+                  <div style={{ flex: 1, height: 1, background: 'rgba(185,148,255,0.2)' }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {data.keyQuotes.filter(q => q.text && q.text !== data.quote?.text).map((q, i) => (
+                    <div key={i} style={{ paddingTop: i > 0 ? 14 : 0, borderTop: i > 0 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
+                      <p style={{
+                        margin: 0, color: '#d4d4dc', fontSize: 14 * ddScale, lineHeight: 1.55,
+                        fontStyle: 'italic',
+                      }}>{'“'}{q.text}{'”'}</p>
+                      {q.by && (
+                        <p style={{ margin: '6px 0 0', color: '#777', fontSize: 11.5 * ddScale, fontWeight: 600 }}>
+                          — {q.by}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
