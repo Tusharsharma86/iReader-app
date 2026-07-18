@@ -151,12 +151,12 @@ async function fetchTopicFeed(topic: string): Promise<Story[]> {
   } catch { return []; }
 }
 
-async function aiBullets(text: string): Promise<string[]> {
+async function aiBullets(text: string, publishedAt?: string): Promise<string[]> {
   try {
     const res = await fetch(AI_SUMMARY_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paragraphs: [text.slice(0, 1500)], type: 'bullets', maxWords: 120 }),
+      body: JSON.stringify({ paragraphs: [text.slice(0, 1500)], type: 'bullets', maxWords: 120, publishedAt }),
     });
     if (!res.ok) return [];
     const data: { bullets?: string[]; summary?: string } = await res.json();
@@ -202,7 +202,7 @@ async function buildSnapshot(): Promise<Snapshot> {
   const heroStory = heroPool.slice().sort((a, b) => (b.sources?.length ?? 0) - (a.sources?.length ?? 0))[0];
   let heroBullets: string[] = [];
   if (heroStory) {
-    heroBullets = await aiBullets(`${heroStory.headline}. ${heroStory.summary ?? ''}`);
+    heroBullets = await aiBullets(`${heroStory.headline}. ${heroStory.summary ?? ''}`, heroStory.publishedAt);
     if (heroBullets.length === 0 && heroStory.summary) heroBullets = [heroStory.summary];
   }
 

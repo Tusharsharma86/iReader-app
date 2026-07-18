@@ -696,7 +696,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
       const id = story.id;
       const cacheKey = `summary_v5_${id ?? url}_summary_${maxWords}_${keyPointsCount}_${eli5Tone}`;
       if (getCached(cacheKey, TTL.AI_SUMMARY) || prewarmQueuedRef.current.has(cacheKey)) return [];
-      return [{ url, cacheKey }];
+      return [{ url, cacheKey, publishedAt: story.publishedAt }];
     });
     if (targets.length === 0) return;
     let cancelled = false;
@@ -709,7 +709,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
         while (!cancelled) {
           const idx = next++;
           if (idx >= targets.length) return;
-          const { url, cacheKey } = targets[idx];
+          const { url, cacheKey, publishedAt } = targets[idx];
           prewarmQueuedRef.current.add(cacheKey);
           try {
             const articleRes = await fetch(`${API}/article?url=${encodeURIComponent(url)}`);
@@ -720,7 +720,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
             const summaryRes = await fetch(`${API}/ai-summary`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ url, paragraphs, type: 'summary', maxWords, keyPoints: keyPointsCount, eli5Tone }),
+              body: JSON.stringify({ url, paragraphs, type: 'summary', maxWords, keyPoints: keyPointsCount, eli5Tone, publishedAt }),
             });
             if (cancelled) return;
             if (summaryRes.ok) { setCached(cacheKey, await summaryRes.json()); continue; }

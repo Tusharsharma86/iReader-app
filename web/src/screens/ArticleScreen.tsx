@@ -380,7 +380,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     setAiLoading(true); setAiError(null); setAiResult(null);
     trackAiUsage(aiType as 'summary' | 'fiveWs' | 'eli5');
     // Render free-tier cold-starts can briefly 5xx — one retry after 2s covers it.
-    const body = JSON.stringify({ url: params.url, paragraphs: paragraphs.slice(0,15), type: aiType, maxWords: maxWordsForType, keyPoints: keyPointsCount, eli5Tone });
+    const body = JSON.stringify({ url: params.url, paragraphs: paragraphs.slice(0,15), type: aiType, maxWords: maxWordsForType, keyPoints: keyPointsCount, eli5Tone, publishedAt: params.publishedAt });
     const doFetch = () => fetch(`${API}/ai-summary`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
     (async () => {
       let r = await doFetch();

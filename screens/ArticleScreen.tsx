@@ -784,6 +784,7 @@ export default function ArticleScreen() {
         maxWords: maxWordsForType,
         keyPoints: keyPointsCount,
         eli5Tone,
+        publishedAt: params.publishedAt,
       });
       const doFetch = (): Promise<Response> => fetch(`${API}/ai-summary`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body,

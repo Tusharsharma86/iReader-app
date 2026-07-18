@@ -226,7 +226,7 @@ async function fetchTopicFeed(topic: string): Promise<Story[]> {
   } catch { return []; }
 }
 
-async function aiBullets(text: string, type: 'bullets' | 'summary' = 'bullets'): Promise<string[]> {
+async function aiBullets(text: string, type: 'bullets' | 'summary' = 'bullets', publishedAt?: string): Promise<string[]> {
   try {
     const res = await fetch(AI_SUMMARY_API, {
       method: 'POST',
@@ -235,6 +235,7 @@ async function aiBullets(text: string, type: 'bullets' | 'summary' = 'bullets'):
         paragraphs: [text.slice(0, 1500)],
         type,
         maxWords: 120,
+        publishedAt,
       }),
     });
     if (!res.ok) return [];
@@ -291,6 +292,7 @@ async function buildSnapshot(): Promise<Snapshot> {
     heroBullets = await aiBullets(
       `${heroStory.headline}. ${heroStory.summary ?? ''}`,
       'bullets',
+      heroStory.publishedAt,
     );
     if (heroBullets.length === 0 && heroStory.summary) {
       heroBullets = [heroStory.summary];
