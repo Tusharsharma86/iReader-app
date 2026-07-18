@@ -113,7 +113,7 @@ function timeAbs(iso: string): string {
   catch { return ''; }
 }
 
-function HeadlineWithEntities({ text, accentColor }: { text: string; accentColor: string }) {
+export function HeadlineWithEntities({ text, accentColor }: { text: string; accentColor: string }) {
   const words = text.split(' ');
   return (
     <Text style={styles.headline} numberOfLines={2}>

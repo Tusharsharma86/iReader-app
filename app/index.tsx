@@ -24,7 +24,7 @@ import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Story, StoryCard, BiasDot, BiasSpectrum, type BiasBreakdown } from '../components/StoryCard';
+import { Story, StoryCard, BiasDot, BiasSpectrum, HeadlineWithEntities, type BiasBreakdown } from '../components/StoryCard';
 import { FeedStackParamList } from '../types/navigation';
 import { useSource } from '../contexts/SourceContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -1561,12 +1561,16 @@ const TopicSection = React.memo(function TopicSection({
           >
             <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
               {count > 1 && (
-                <Ionicons name="time-outline" size={14} color="#5A5A5A" style={{ marginTop: 4 }} />
+                <Ionicons name="time-outline" size={16} color="#5A5A5A" style={{ marginTop: 6 }} />
               )}
-              <Text style={[styles.clusterHeadline, { flex: 1 }]} numberOfLines={2}>{headline}</Text>
+              {/* Same size + entity-highlight rules as the card title below —
+                  was a much smaller, plain-white 15.5px style of its own. */}
+              <View style={{ flex: 1 }}>
+                <HeadlineWithEntities text={headline} accentColor={catColor} />
+              </View>
               {showMetaPill && count > 1 && (
                 <View style={[styles.clusterCountPill, { marginTop: 2 }]}>
-                  <Text style={styles.clusterCountPillText}>{count}</Text>
+                  <Text style={styles.clusterCountPillText}>{count} stories</Text>
                 </View>
               )}
             </View>
@@ -1700,7 +1704,6 @@ const styles = StyleSheet.create({
   clusterCountPillText: { color: 'rgba(255,255,255,0.35)', fontSize: 11, fontWeight: '600', letterSpacing: 0.4 },
   diversityBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99, backgroundColor: 'rgba(100,180,100,0.12)', borderWidth: 1, borderColor: 'rgba(100,200,100,0.2)' },
   diversityText: { color: 'rgba(100,200,100,0.8)', fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
-  clusterHeadline: { color: '#FFFFFF', fontSize: 15.5, fontWeight: '700', lineHeight: 21, letterSpacing: -0.2 },
   clusterSummary: { color: '#666', fontSize: 13, fontWeight: '400', lineHeight: 18, marginTop: 3 },
   clusterCountBox: { alignItems: 'center', minWidth: 48 },
   clusterCountNum: { color: '#FFFFFF', fontSize: 24, fontWeight: '800', lineHeight: 28 },
