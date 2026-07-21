@@ -179,7 +179,7 @@ export function startAIFeedPreWarm(depth = 'standard') {
   };
   (async () => {
     interface ApiItem { type?: string; articles?: Story[]; [key: string]: unknown; }
-    const warmTopics: [string, number][] = [['breaking', 15], ['technology', 15]];
+    const warmTopics: [string, number][] = [['breaking', 20], ['technology', 15]];
     const allStories: { id: string; headline: string; summary?: string; sources?: { url?: string }[]; publishedAt?: string }[] = [];
     for (const [topic, count] of warmTopics) {
       try {
@@ -204,6 +204,10 @@ export function startAIFeedPreWarm(depth = 'standard') {
 }
 function decodeEntities(s: string): string {
   return s.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+}
+function truncateWords(text: string, n: number): string {
+  const words = text.trim().split(/\s+/);
+  return words.length <= n ? text.trim() : words.slice(0, n).join(' ') + '…';
 }
 function buildSyntheticFallback(_item: { allStories: Story[]; primary?: Story }, lead: Story): DeepDiveData {
   // LEAD story only. The cluster's other stories can be different events
@@ -825,13 +829,10 @@ function FullPreviewCard({ item, index, total, onOpen }: {
           // keep long content at base sizes — no overflow.
           const hLen = story.headline?.length ?? 0;
           const headlineSize = hLen <= 50 ? 30 : hLen <= 80 ? 28 : hLen <= 110 ? 27 : 26;
-          const bulletWords = (aiBullets ?? []).slice(0, 3).join(' ').split(/\s+/).filter(Boolean).length;
-          // 3 full-sentence bullets at 45+ words was still overflowing past
-          // the card/tab bar on real headlines (the 16px floor was too high
-          // for a 3-bullet card) — lower the floor and add finer-grained
-          // tiers so longer bullet sets actually shrink enough to fit.
-          const bulletSize = bulletWords <= 30 ? 17 : bulletWords <= 50 ? 16 : bulletWords <= 70 ? 15 : bulletWords <= 90 ? 14 : 13;
-          const rssSize = bulletWords <= 30 ? 16 : bulletWords <= 50 ? 15 : bulletWords <= 70 ? 14.5 : 14;
+          // Single ~20-word summary line instead of a 3-bullet list — reuses
+          // the already-fetched tldr[0] (no extra API call) rather than a
+          // fresh 20-word-targeted generation.
+          const shortSummary = aiBullets?.length ? truncateWords(aiBullets[0], 20) : '';
           return (
             <>
         <h2 style={{
@@ -840,7 +841,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
           textShadow: '0 4px 24px rgba(0,0,0,0.7)',
         }}>{story.headline}</h2>
 
-        {aiBullets?.length ? (
+        {shortSummary ? (
           <div style={{
             background: 'rgba(0,0,0,0.45)',
             borderRadius: 12,
@@ -848,15 +849,10 @@ function FullPreviewCard({ item, index, total, onOpen }: {
             border: '1px solid rgba(255,255,255,0.09)',
             display: 'flex', flexDirection: 'column', gap: 6,
           }}>
-            {aiBullets.slice(0, 3).map((bullet, bi) => (
-              <div key={bi} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                <div style={{ width: 5, height: 5, borderRadius: 2.5, marginTop: 9, background: VIOLET, flexShrink: 0 }} />
-                <p style={{
-                  margin: 0, color: '#eeeeee', fontSize: bulletSize, lineHeight: 1.5,
-                  textShadow: '0 2px 12px rgba(0,0,0,0.55)',
-                }}><FactText text={bullet.trim()} color={accent} /></p>
-              </div>
-            ))}
+            <p style={{
+              margin: 0, color: '#eeeeee', fontSize: 17, lineHeight: 1.5,
+              textShadow: '0 2px 12px rgba(0,0,0,0.55)',
+            }}><FactText text={shortSummary} color={accent} /></p>
             {quote && (
               <div style={{
                 marginTop: 4, paddingLeft: 10, borderLeft: `2px solid ${VIOLET}`,
@@ -890,15 +886,6 @@ function FullPreviewCard({ item, index, total, onOpen }: {
             </div>
           </div>
         )}
-
-        {/* RSS summary below AI box — fills dead space, publisher's own framing */}
-        {aiBullets?.length && story.summary && story.summary.toLowerCase().trim() !== story.headline.toLowerCase().trim() ? (
-          <p style={{
-            margin: 0, color: 'rgba(255,255,255,0.72)', fontSize: rssSize, lineHeight: 1.5,
-            textShadow: '0 2px 12px rgba(0,0,0,0.55)',
-            display: '-webkit-box', WebkitLineClamp: 5, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-          }}>{story.summary.replace(/<[^>]+>/g, '').trim()}</p>
-        ) : null}
             </>
           );
         })()}
