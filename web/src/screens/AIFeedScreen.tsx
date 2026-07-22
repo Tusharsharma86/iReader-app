@@ -194,12 +194,18 @@ export function startAIFeedPreWarm(depth = 'standard') {
         allStories.push(...stories);
       } catch {}
     }
-    for (const s of allStories) {
-      if (preWarmedIds.has(s.id)) continue;
-      preWarmedIds.add(s.id);
-      await warmStory(s);
-      await new Promise(res => setTimeout(res, 2200));
-    }
+    // Fire concurrently instead of one-at-a-time-with-a-2.2s-delay — that
+    // loop awaited each FULL generation (can take 20-40s on a cold story)
+    // before even starting the next one's delay, so 35 stories took minutes.
+    // The backend's deepDiveGate() already serializes actual Deep Dive
+    // generation calls at a safe pace GLOBALLY (3s/slot, shared across every
+    // concurrent caller, not per-client) — that's the real rate-limit
+    // protection, so the client doesn't need its own redundant throttle on
+    // top of it. Firing all requests at once just lets the server's queue
+    // do the pacing instead of also waiting client-side before each send.
+    const toWarm = allStories.filter(s => !preWarmedIds.has(s.id));
+    toWarm.forEach(s => preWarmedIds.add(s.id));
+    await Promise.all(toWarm.map(s => warmStory(s)));
   })();
 }
 function decodeEntities(s: string): string {
