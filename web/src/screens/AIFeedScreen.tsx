@@ -166,6 +166,12 @@ export function startAIFeedPreWarm(depth = 'standard') {
           sourceUrls: [s.sources?.[0]?.url].filter(Boolean) as string[],
           depth,
           publishedAt: s.publishedAt,
+          // Cerebras free tier is ~30 RPM SHARED across the whole backend —
+          // this flag routes bulk pre-warm through the existing 2.5s-spaced
+          // background gate instead of firing ungated, which is what was
+          // actually making things slower after making pre-warm concurrent
+          // (bursts past the RPM cap -> 429s -> fallback thrashing).
+          background: true,
         }),
       });
       if (!res.ok) return;

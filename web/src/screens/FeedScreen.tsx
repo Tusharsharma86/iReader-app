@@ -720,7 +720,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
             const summaryRes = await fetch(`${API}/ai-summary`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ url, paragraphs, type: 'summary', maxWords, keyPoints: keyPointsCount, eli5Tone, publishedAt }),
+              body: JSON.stringify({ url, paragraphs, type: 'summary', maxWords, keyPoints: keyPointsCount, eli5Tone, publishedAt, background: true }),
             });
             if (cancelled) return;
             if (summaryRes.ok) { setCached(cacheKey, await summaryRes.json()); continue; }
