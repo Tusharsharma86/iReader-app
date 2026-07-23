@@ -1567,7 +1567,14 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
                   <div style={{ flex: 1, height: 1, background: `${VIOLET}33` }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {item.allStories.slice(1, 6).map((s, i) => {
+                  {/* Filter by identity, not position — native had a bug
+                      where the primary story could end up NOT at index 0
+                      (pickPrimary reordering), leaving it inside this
+                      "related" slice as a duplicate of the open article.
+                      Web's primary is always allStories[0] today, so this
+                      is defensive, but costs nothing and prevents the same
+                      class of bug if that ever changes. */}
+                  {item.allStories.filter(s => s.id !== story.id).slice(0, 5).map((s, i) => {
                     const srcUrl = s.sources?.[0]?.url ?? null;
                     return (
                       <RelatedStoryCard

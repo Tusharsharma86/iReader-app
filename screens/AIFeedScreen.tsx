@@ -1639,7 +1639,17 @@ function dedupeMetrics(items: string[]): string[] {
                         </Text>
                         <View style={overlayStyles.labelDivider} />
                       </View>
-                      {item.allStories.slice(1, 6).map((s, i) => {
+                      {/* Was allStories.slice(1, 6) — assumed index 0 is
+                          always the primary/currently-open story, but
+                          pickPrimary() (used when this list was built) can
+                          choose an article that ISN'T at index 0. When it
+                          didn't, the open story stayed in this "related"
+                          list — tapping its own duplicate card set
+                          openedItem to the SAME id, so DeepDiveOverlay's
+                          key didn't change, it never remounted, and nothing
+                          visibly happened (read as "goes back to the main
+                          article"). Filter by identity instead of position. */}
+                      {item.allStories.filter(s => s.id !== story.id).slice(0, 5).map((s, i) => {
                         const srcUrl = s.sources?.[0]?.url ?? null;
                         return (
                           <RelatedStoryCard
