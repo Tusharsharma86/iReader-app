@@ -346,6 +346,10 @@ export default function AIFeedScreen() {
         sourceUrls: [s.sources?.[0]?.url].filter(Boolean) as string[],
         depth: prewarmDepth,
         publishedAt: s.publishedAt,
+        // Cerebras free tier is ~30 RPM SHARED server-wide — this routes
+        // bulk pre-warm through the backend's existing 2.5s-spaced gate
+        // instead of firing ungated (see web's identical fix).
+        background: true,
       });
       try {
         const r = await fetch(DEEPDIVE_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
@@ -358,34 +362,48 @@ export default function AIFeedScreen() {
         }
       } catch { /* best-effort warm */ }
     };
-    const timer = setTimeout(async () => {
-      const perTopic: Story[][] = [];
-      for (const topic of TOPIC_QUEUE) {
-        if (cancelled) return;
-        // This fetch decides WHAT gets pre-warmed — unlike the deepdive calls
-        // below (best-effort, fine to drop), a cold-start 502/503 here used
-        // to silently empty out the whole topic for the rest of the session
-        // (this loop only ever runs once, on mount, with no retry at all).
-        // One retry after a short wait covers a typical cold start.
-        let r: Response | null = null;
-        try {
+    const fetchTopicStories = async (topic: string, count: number): Promise<Story[]> => {
+      // This fetch decides WHAT gets pre-warmed — unlike the deepdive calls
+      // (best-effort, fine to drop), a cold-start 502/503 here used to
+      // silently empty out the whole topic for the rest of the session.
+      // One retry after a short wait covers a typical cold start.
+      let r: Response | null = null;
+      try {
+        r = await fetch(`${FEED_API_BASE}?topic=${topic}`);
+        if (!r.ok && (r.status === 502 || r.status === 503)) {
+          await new Promise(res => setTimeout(res, 8000));
+          if (cancelled) return [];
           r = await fetch(`${FEED_API_BASE}?topic=${topic}`);
-          if (!r.ok && (r.status === 502 || r.status === 503)) {
-            await new Promise(res => setTimeout(res, 8000));
-            if (cancelled) return;
-            r = await fetch(`${FEED_API_BASE}?topic=${topic}`);
-          }
-        } catch { /* r stays null, handled below */ }
-        if (!r || !r.ok) { perTopic.push([]); continue; }
-        try {
-          const raw = await r.json();
-          const rawItems: ApiItem[] = (Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [])
-            .filter((ri: ApiItem) => !ri.collection);
-          perTopic.push(parseServerFeed(rawItems)
-            .filter(it => it.primary.sources?.[0]?.url)
-            .slice(0, 10)
-            .map(it => it.primary));
-        } catch { perTopic.push([]); }
+        }
+      } catch { /* r stays null, handled below */ }
+      if (!r || !r.ok) return [];
+      try {
+        const raw = await r.json();
+        const rawItems: ApiItem[] = (Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [])
+          .filter((ri: ApiItem) => !ri.collection);
+        return parseServerFeed(rawItems)
+          .filter(it => it.primary.sources?.[0]?.url)
+          .slice(0, count)
+          .map(it => it.primary);
+      } catch { return []; }
+    };
+    const timer = setTimeout(async () => {
+      // Breaking gets a dedicated, fast, CONCURRENT warm of its own top 30
+      // (that's the topic shown the instant AI Feed opens) — the old
+      // round-robin-10-per-topic buried breaking's later cards behind 5
+      // other topics each round, sequentially with a 4s delay between every
+      // single one, so even breaking's own top 10 took minutes to finish.
+      const breakingStories = (await fetchTopicStories('breaking', 30))
+        .filter(s => !ddPrewarmedRef.current.has(s.id));
+      breakingStories.forEach(s => ddPrewarmedRef.current.add(s.id));
+      await Promise.all(breakingStories.map(s => warmStory(s)));
+      if (cancelled) return;
+
+      // Remaining topics: round-robin top 10 each, as before.
+      const perTopic: Story[][] = [];
+      for (const topic of TOPIC_QUEUE.slice(1)) {
+        if (cancelled) return;
+        perTopic.push(await fetchTopicStories(topic, 10));
       }
       for (let rank = 0; rank < 10; rank++) {
         for (const list of perTopic) {
