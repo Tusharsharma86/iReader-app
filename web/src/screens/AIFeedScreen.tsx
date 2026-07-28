@@ -83,6 +83,53 @@ interface DeepDiveData {
   confidence?: number;
 }
 
+// Opt-in streaming attempt for an on-demand Deep Dive open — turns the
+// ~10-30s generation wait into visible progress instead of a static
+// spinner. NEVER throws: on any failure (network error, non-ok status,
+// the browser lacking response.body streaming support, a malformed
+// chunk) it resolves null, and the caller falls through to the existing,
+// proven non-streaming /deepdive flow with its full retry/cold-start
+// handling — this can only ever make things feel faster, never worse.
+async function tryStreamDeepDive(
+  body: { url: string; headline: string; paragraphs: string[]; sourceUrls: string[]; depth: string; publishedAt?: string; systemPrompt?: string },
+  onProgress: (pct: number) => void,
+  signal?: AbortSignal,
+): Promise<DeepDiveData | null> {
+  try {
+    const res = await fetch(DEEPDIVE_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body, stream: true }),
+      signal,
+    });
+    if (!res.ok || !res.body) return null;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() ?? '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data:')) continue;
+        const payload = trimmed.slice(5).trim();
+        if (!payload) continue;
+        let evt: { progress?: number; error?: string; done?: boolean } & Partial<DeepDiveData>;
+        try { evt = JSON.parse(payload); } catch { continue; }
+        if (evt.error) return null;
+        if (evt.done) return evt as DeepDiveData;
+        if (typeof evt.progress === 'number') onProgress(evt.progress);
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 const METRIC_RE = /(?:\$[\d,.]+[BMKTbmkt]?\b|\d[\d,.]*\s*(?:billion|million|trillion|percent|%|bps|basis points)\b|\d{1,2}(?:\/\d{1,2})?(?:\/\d{2,4})|\b(?:Q[1-4]|FY)\s*\d{2,4})/gi;
 function extractMetrics(text: string): string[] {
   const sentences = text.split(/(?<=[.!?])\s+/);
@@ -1026,6 +1073,7 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
   const [showColdHint, setShowColdHint] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [following, setFollowing] = useState(() => isFollowing(story.id));
+  const [progress, setProgress] = useState<number | null>(null);
 
   // Re-trigger the Deep Dive fetch (after a failure). data is still null on
   // error, so bumping reloadKey re-runs the load effect.
@@ -1131,6 +1179,41 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
         // articles into one narrative. Only event clusters (multiple outlets on
         // the SAME story) feed all sources to the synthesis.
         const paragraphs = [story.headline + '. ' + (story.summary ?? story.headline)];
+
+        // Try streaming first — live progress instead of a static spinner.
+        // Own shorter budget (60s) since any hiccup just falls through to
+        // the existing, retry-hardened flow below rather than compounding
+        // wait time on top of it.
+        setProgress(0);
+        const streamCtrl = new AbortController();
+        const streamTimer = setTimeout(() => streamCtrl.abort(), 60000);
+        let streamed: DeepDiveData | null = null;
+        try {
+          streamed = await tryStreamDeepDive(
+            {
+              url: story.sources?.[0]?.url ?? '',
+              headline: story.headline,
+              paragraphs,
+              sourceUrls: [story.sources?.[0]?.url].filter(Boolean) as string[],
+              depth: deepDiveDepth,
+              publishedAt: story.publishedAt,
+              systemPrompt: DEEPDIVE_SYSTEM_PROMPT,
+            },
+            (pct) => { if (!cancelled) setProgress(pct); },
+            streamCtrl.signal,
+          );
+        } finally { clearTimeout(streamTimer); }
+        if (cancelled) return;
+        if (streamed) {
+          // eslint-disable-next-line no-console
+          console.log('[AIFeed] deepdive (streamed)', `${Date.now() - startedAt}ms`);
+          setData(streamed);
+          if (!streamed.degraded) writeCache(story.id, streamed, deepDiveDepth);
+          setStage('done');
+          return;
+        }
+        setProgress(null);
+
         const ctrl = new AbortController();
         // Budget covers up to 2 cold-start retries (15s + 30s wait) plus real
         // generation time on each attempt — a flat 95s ceiling could fire
@@ -1379,7 +1462,7 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
         </div>
 
         {stage === 'generating' ? (
-          <InlineLoader accent={accent} showColdHint={showColdHint} />
+          <InlineLoader accent={accent} showColdHint={showColdHint} progress={progress} />
         ) : stage === 'error' ? (
           <InlineError text={error || 'Failed'} onRetry={reload} accent={accent} />
         ) : data ? (
@@ -1988,7 +2071,7 @@ function TickNumber({ to, dur = 600 }: { to: number; dur?: number }) {
   return <span style={{ fontVariantNumeric: 'tabular-nums' }}>{v}</span>;
 }
 
-function InlineLoader({ accent, showColdHint }: { accent: string; showColdHint: boolean }) {
+function InlineLoader({ accent, showColdHint, progress }: { accent: string; showColdHint: boolean; progress?: number | null }) {
   return (
     <div style={{
       padding: 18, borderRadius: 14, position: 'relative', overflow: 'hidden',
@@ -2006,7 +2089,9 @@ function InlineLoader({ accent, showColdHint }: { accent: string; showColdHint: 
       }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <span className="typing-dots" style={{ transform: 'scale(1.2)' }}><span style={{ background: accent }} /><span style={{ background: accent }} /><span style={{ background: accent }} /></span>
-        <div style={{ color: '#ccc', fontSize: 12, fontWeight: 500 }}>Distilling story…</div>
+        <div style={{ color: '#ccc', fontSize: 12, fontWeight: 500 }}>
+          Distilling story{typeof progress === 'number' ? `… ${progress}%` : '…'}
+        </div>
       </div>
       <style>{`@keyframes progSweep { 0% { background-position: -100% 0; } 100% { background-position: 200% 0; } }`}</style>
       {showColdHint && (

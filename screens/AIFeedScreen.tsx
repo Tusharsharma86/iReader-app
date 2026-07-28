@@ -111,6 +111,57 @@ interface DeepDiveData {
   confidence?: number;
 }
 
+// Opt-in streaming attempt for an on-demand Deep Dive open — turns the
+// ~10-30s generation wait into visible progress instead of a static
+// spinner. NEVER throws: on any failure (network error, non-ok status,
+// this RN version/engine lacking response.body streaming or TextDecoder
+// support, a malformed chunk) it resolves null, and the caller falls
+// through to the existing, proven non-streaming /deepdive flow with its
+// full retry/cold-start handling — this can only ever make things feel
+// faster, never worse. (React Native's fetch streaming support has
+// historically varied by version/engine — this hasn't been verified on
+// a real device from this environment, hence the defensive fallback on
+// every possible failure mode rather than assuming it works.)
+async function tryStreamDeepDive(
+  body: { url: string; headline: string; paragraphs: string[]; sourceUrls: string[]; depth: string; publishedAt?: string; systemPrompt?: string },
+  onProgress: (pct: number) => void,
+  signal?: AbortSignal,
+): Promise<DeepDiveData | null> {
+  try {
+    const res = await fetch(DEEPDIVE_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body, stream: true }),
+      signal,
+    });
+    if (!res.ok || !res.body) return null;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() ?? '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data:')) continue;
+        const payload = trimmed.slice(5).trim();
+        if (!payload) continue;
+        let evt: { progress?: number; error?: string; done?: boolean } & Partial<DeepDiveData>;
+        try { evt = JSON.parse(payload); } catch { continue; }
+        if (evt.error) return null;
+        if (evt.done) return evt as DeepDiveData;
+        if (typeof evt.progress === 'number') onProgress(evt.progress);
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 const METRIC_RE = /(?:\$[\d,.]+[BMKTbmkt]?\b|\d[\d,.]*\s*(?:billion|million|trillion|percent|%|bps|basis points)\b|\d{1,2}(?:\/\d{1,2})?(?:\/\d{2,4})|\b(?:Q[1-4]|FY)\s*\d{2,4})/gi;
 function extractMetrics(text: string): string[] {
   const sentences = text.split(/(?<=[.!?])\s+/);
@@ -399,22 +450,19 @@ export default function AIFeedScreen() {
       await Promise.all(breakingStories.map(s => warmStory(s)));
       if (cancelled) return;
 
-      // Remaining topics: round-robin top 10 each, as before.
-      const perTopic: Story[][] = [];
-      for (const topic of TOPIC_QUEUE.slice(1)) {
-        if (cancelled) return;
-        perTopic.push(await fetchTopicStories(topic, 10));
-      }
-      for (let rank = 0; rank < 10; rank++) {
-        for (const list of perTopic) {
-          if (cancelled) return;
-          const s = list[rank];
-          if (!s || ddPrewarmedRef.current.has(s.id)) continue;
-          ddPrewarmedRef.current.add(s.id);
-          await warmStory(s);
-          if (!cancelled) await new Promise(res => setTimeout(res, 4000));
-        }
-      }
+      // Remaining topics: top 10 each. Was sequential-with-4s-sleep per
+      // story (up to ~50 stories × 4s+generation-time = minutes of pure
+      // waiting) — same anti-pattern already fixed for breaking above and
+      // on web. Fetch topic lists concurrently, then warm every remaining
+      // story concurrently too; the backend's own gates (deepDiveGate /
+      // cerebrasBgGate via background:true) are what actually pace the
+      // real generation calls safely, same as breaking's batch.
+      if (cancelled) return;
+      const perTopic = await Promise.all(TOPIC_QUEUE.slice(1).map(topic => fetchTopicStories(topic, 10)));
+      if (cancelled) return;
+      const remainingStories = perTopic.flat().filter(s => !ddPrewarmedRef.current.has(s.id));
+      remainingStories.forEach(s => ddPrewarmedRef.current.add(s.id));
+      await Promise.all(remainingStories.map(s => warmStory(s)));
     }, 3000);
     return () => { cancelled = true; clearTimeout(timer); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1286,6 +1334,7 @@ function DeepDiveOverlay({ item, restored, onClose, onOpenRelated }: { item: Fee
   const [following, setFollowing] = useState(() => isFollowing(story.id));
   const [reloadKey, setReloadKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
 
 const SOURCE_COVERAGE_RE = /no other sources? (were|was) provided|only one (source|article)|no sources? (were|was) provided|single (source|article)|The article from \S+ highlights/i;
 function isSourcePara(p: string): boolean { return SOURCE_COVERAGE_RE.test(p); }
@@ -1371,6 +1420,41 @@ function dedupeMetrics(items: string[]): string[] {
         const paragraphs = [
           story.headline + '. ' + (story.summary ?? story.headline),
         ];
+
+        // Try streaming first — live progress instead of a static spinner.
+        // Own shorter budget (60s) since any hiccup just falls through to
+        // the existing, retry-hardened flow below rather than compounding
+        // wait time on top of it. Defensive by design (see
+        // tryStreamDeepDive) — untested on-device, but can only no-op if
+        // this RN version/engine doesn't support streaming fetch.
+        setProgress(0);
+        const streamCtrl = new AbortController();
+        const streamTimer = setTimeout(() => streamCtrl.abort(), 60000);
+        let streamed: DeepDiveData | null = null;
+        try {
+          streamed = await tryStreamDeepDive(
+            {
+              url: story.sources?.[0]?.url ?? '',
+              headline: story.headline,
+              paragraphs,
+              sourceUrls: (item.sources ?? []).map(s => s.url).filter(Boolean),
+              depth: deepDiveDepth,
+              publishedAt: story.publishedAt,
+              systemPrompt: DEEPDIVE_SYSTEM_PROMPT,
+            },
+            (pct) => { if (!cancelled) setProgress(pct); },
+            streamCtrl.signal,
+          );
+        } finally { clearTimeout(streamTimer); }
+        if (cancelled) return;
+        if (streamed) {
+          setData(streamed);
+          if (!streamed.degraded) await writeDeepDiveCache(story.id, streamed, deepDiveDepth);
+          setStage('done');
+          return;
+        }
+        setProgress(null);
+
         const ctrl = new AbortController();
         // Budget covers up to 2 cold-start retries (15s + 30s wait) plus real
         // generation time on each attempt — the old 95s ceiling could fire
@@ -1495,7 +1579,7 @@ function dedupeMetrics(items: string[]): string[] {
               </View>
 
               {stage === 'generating' ? (
-                <InlineLoader showColdHint={showColdHint} />
+                <InlineLoader showColdHint={showColdHint} progress={progress} />
               ) : stage === 'error' ? (
                 <InlineError text={error || 'Failed'} onRetry={reload} accent={accent} />
               ) : data ? (
@@ -1857,13 +1941,15 @@ function EntityBlock({ label, items, subtle }: { label: string; items: string[];
   );
 }
 
-function InlineLoader({ showColdHint }: { showColdHint: boolean }) {
+function InlineLoader({ showColdHint, progress }: { showColdHint: boolean; progress?: number | null }) {
   return (
     <View style={[overlayStyles.loaderCard, { overflow: 'hidden' }]}>
       <SweepBar />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <TypingDots color={VIOLET} />
-        <Text style={{ color: '#ccc', fontSize: 12, fontWeight: '500' }}>Distilling story…</Text>
+        <Text style={{ color: '#ccc', fontSize: 12, fontWeight: '500' }}>
+          Distilling story{typeof progress === 'number' ? `… ${progress}%` : '…'}
+        </Text>
       </View>
       {showColdHint && (
         <Text style={overlayStyles.coldHint}>
