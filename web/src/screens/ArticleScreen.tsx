@@ -277,6 +277,14 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const aiCache = useRef<Record<string, AiResult>>({});
+  const [aiRetryNonce, setAiRetryNonce] = useState(0);
+  const regenerateAiSummary = () => {
+    const lengthMap: Record<string, number> = { short: 200, medium: 350, long: 550 };
+    const maxWordsForType = activeTab === 'ELI5' ? 100 : (lengthMap[summaryLength] ?? 250);
+    const tabCacheKey = `${activeTab}|${maxWordsForType}|${keyPointsCount}|${eli5Tone}`;
+    delete aiCache.current[tabCacheKey];
+    setAiRetryNonce(n => n + 1);
+  };
 
   const allStories: Story[] = useMemo(() => { try { return JSON.parse(params.allStories) ?? []; } catch { return []; } }, [params.allStories]);
   const allSources: SourceEntry[] = useMemo(() => { try { return JSON.parse(params.sources); } catch { return [{ name: params.source, url: params.url, publishedAt: params.publishedAt }]; } }, [params.sources]);
@@ -401,7 +409,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
       .finally(() => { if (!cancelled) setAiLoading(false); });
     return () => { cancelled = true; };
   // Customize: re-fetch when length / key-points / ELI5 tone changes.
-  }, [activeTab, paragraphsLoading, hasBeenRead, summaryLength, keyPointsCount, eli5Tone]);
+  }, [activeTab, paragraphsLoading, hasBeenRead, summaryLength, keyPointsCount, eli5Tone, aiRetryNonce]);
 
   // When AI summary loads, upgrade entities with AI-extracted keyPeople/keyCompanies
   // (much higher quality than client-side regex extraction).
@@ -446,7 +454,15 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     } else if (aiLoading) {
       aiContent = <Spinner />;
     } else if (aiError) {
-      aiContent = <div style={{ color: '#666', textAlign: 'center', paddingBlock: 40 }}>{aiError}</div>;
+      aiContent = (
+        <div style={{ textAlign: 'center', paddingBlock: 40 }}>
+          <div style={{ color: '#666', marginBottom: 16 }}>{aiError}</div>
+          <button onClick={regenerateAiSummary}
+            style={{ padding: '14px 24px', borderRadius: 12, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+            ↻ Regenerate
+          </button>
+        </div>
+      );
     } else if (activeTab === 'Summary') {
       const rawSummary = (aiResult?.summary ?? '').trim();
       const bullets = aiResult?.bullets ?? [];

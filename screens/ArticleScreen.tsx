@@ -631,6 +631,11 @@ export default function ArticleScreen() {
   const [aiResult, setAiResult] = useState<AiResult | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [aiRetryNonce, setAiRetryNonce] = useState(0);
+  const regenerateAiSummary = useCallback(() => {
+    delete aiCache.current[activeTab];
+    setAiRetryNonce(n => n + 1);
+  }, [activeTab]);
 
   // Lazy AI: only generate after user has been reading for 5 seconds
   // Skip wait for sources where long form is unavailable — open straight to summary
@@ -816,7 +821,7 @@ export default function ArticleScreen() {
     };
     run();
     return () => { cancelled = true; };
-  }, [activeTab, paragraphsLoading, hasBeenRead, paragraphs]);
+  }, [activeTab, paragraphsLoading, hasBeenRead, paragraphs, aiRetryNonce]);
 
   // When AI summary loads, upgrade entities with AI-extracted keyPeople/keyCompanies.
   useEffect(() => {
@@ -863,13 +868,13 @@ export default function ArticleScreen() {
         case 'Summary':
           // Summary prose matches Long Form: same user font size, family and
           // line-height from Customize settings.
-          aiContent = <SummaryTab loading={aiLoading} result={aiResult} error={aiError} accentColor={dominant} fontSize={fontSizePx} showKeyPoints={showKeyPoints} showEntityHighlights={showEntityHighlights} showQuoteHighlights={showQuoteHighlights} summaryFormat={summaryFormat} fontFamily={articleFontFamily} lineHeightMultiplier={lineHeightMultiplier} />;
+          aiContent = <SummaryTab loading={aiLoading} result={aiResult} error={aiError} onRetry={regenerateAiSummary} accentColor={dominant} fontSize={fontSizePx} showKeyPoints={showKeyPoints} showEntityHighlights={showEntityHighlights} showQuoteHighlights={showQuoteHighlights} summaryFormat={summaryFormat} fontFamily={articleFontFamily} lineHeightMultiplier={lineHeightMultiplier} />;
           break;
         case '5 Ws':
-          aiContent = <FiveWsTab loading={aiLoading} result={aiResult} error={aiError} accentColor={accent} />;
+          aiContent = <FiveWsTab loading={aiLoading} result={aiResult} error={aiError} onRetry={regenerateAiSummary} accentColor={accent} />;
           break;
         case 'ELI5':
-          aiContent = <ELI5Tab loading={aiLoading} result={aiResult} error={aiError} />;
+          aiContent = <ELI5Tab loading={aiLoading} result={aiResult} error={aiError} onRetry={regenerateAiSummary} />;
           break;
       }
     }
@@ -1537,9 +1542,9 @@ function LongFormTab({ loading, paragraphs, error, summary, fontSize, url, accen
   );
 }
 
-function SummaryTab({ loading, result, error, accentColor, fontSize, showKeyPoints = true, showEntityHighlights = true, showQuoteHighlights = true, summaryFormat = 'paragraph', fontFamily, lineHeightMultiplier = 1.65 }: { loading: boolean; result: AiResult | null; error: string | null; accentColor: string; fontSize: number; showKeyPoints?: boolean; showEntityHighlights?: boolean; showQuoteHighlights?: boolean; summaryFormat?: SummaryFormat; fontFamily?: string; lineHeightMultiplier?: number }) {
+function SummaryTab({ loading, result, error, onRetry, accentColor, fontSize, showKeyPoints = true, showEntityHighlights = true, showQuoteHighlights = true, summaryFormat = 'paragraph', fontFamily, lineHeightMultiplier = 1.65 }: { loading: boolean; result: AiResult | null; error: string | null; onRetry?: () => void; accentColor: string; fontSize: number; showKeyPoints?: boolean; showEntityHighlights?: boolean; showQuoteHighlights?: boolean; summaryFormat?: SummaryFormat; fontFamily?: string; lineHeightMultiplier?: number }) {
   if (loading) return <Spinner />;
-  if (error) return <ErrorMsg msg={error} />;
+  if (error) return <ErrorMsg msg={error} onRetry={onRetry} />;
   if (!result) return <ErrorMsg msg="No summary available." />;
 
   const rawSummary = (result.summary ?? '').trim();
@@ -1644,9 +1649,9 @@ function sentenceParagraphs(text: string, sentencesPer: number): string[] {
   return out;
 }
 
-function FiveWsTab({ loading, result, error, accentColor }: { loading: boolean; result: AiResult | null; error: string | null; accentColor: string }) {
+function FiveWsTab({ loading, result, error, onRetry, accentColor }: { loading: boolean; result: AiResult | null; error: string | null; onRetry?: () => void; accentColor: string }) {
   if (loading) return <Spinner />;
-  if (error) return <ErrorMsg msg={error} />;
+  if (error) return <ErrorMsg msg={error} onRetry={onRetry} />;
   const lines = result?.fiveWs ?? [];
   if (!lines.length) return <ErrorMsg msg="Not available for this article." />;
   return (
@@ -1666,9 +1671,9 @@ function FiveWsTab({ loading, result, error, accentColor }: { loading: boolean; 
   );
 }
 
-function ELI5Tab({ loading, result, error }: { loading: boolean; result: AiResult | null; error: string | null }) {
+function ELI5Tab({ loading, result, error, onRetry }: { loading: boolean; result: AiResult | null; error: string | null; onRetry?: () => void }) {
   if (loading) return <Spinner />;
-  if (error) return <ErrorMsg msg={error} />;
+  if (error) return <ErrorMsg msg={error} onRetry={onRetry} />;
   if (!result?.eli5) return <ErrorMsg msg="Not available for this article." />;
   return <Text style={styles.eli5Text}>{result.eli5}</Text>;
 }
@@ -1681,8 +1686,18 @@ function Spinner() {
   );
 }
 
-function ErrorMsg({ msg }: { msg: string }) {
-  return <Text style={styles.emptyText}>{msg}</Text>;
+function ErrorMsg({ msg, onRetry }: { msg: string; onRetry?: () => void }) {
+  return (
+    <View style={styles.center}>
+      <Text style={styles.emptyText}>{msg}</Text>
+      {onRetry ? (
+        <TouchableOpacity style={[styles.readFullBtn, { flexDirection: 'row', justifyContent: 'center' }]} onPress={onRetry}>
+          <Ionicons name="refresh-outline" size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
+          <Text style={styles.readFullText}>Regenerate</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
