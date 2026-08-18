@@ -311,7 +311,18 @@ function buildSyntheticFallbackRN(_stories: Story[], lead: Story): DeepDiveData 
 
 // ── Main Screen ─────────────────────────────────────────────────────────────
 export default function AIFeedScreen() {
-  const { width: screenW, height: screenH } = useWindowDimensions();
+  const { width: hookScreenW, height: hookScreenH } = useWindowDimensions();
+  // onLayout is the only reliable resize signal on Samsung foldables — the
+  // useWindowDimensions hook can miss or lag the fold/unfold transition (same
+  // finding behind the main feed's onLayout-based useLayout()). Falls back to
+  // the hook's value until the root container's first real layout pass.
+  const [measuredSize, setMeasuredSize] = useState<{ width: number; height: number } | null>(null);
+  const onRootLayout = useCallback((e: { nativeEvent: { layout: { width: number; height: number } } }) => {
+    const { width, height } = e.nativeEvent.layout;
+    if (width > 0 && height > 0) setMeasuredSize({ width, height });
+  }, []);
+  const screenW = measuredSize?.width ?? hookScreenW;
+  const screenH = measuredSize?.height ?? hookScreenH;
   // Header is position:'absolute' so the FlatList fills full screenH.
   // CARD_H < screenH by PEEK so the next card's top PEEK px are visible.
   const PEEK = 72;
@@ -767,7 +778,7 @@ export default function AIFeedScreen() {
 
   if (loading && items.length === 0) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={[styles.container, { paddingTop: insets.top }]} onLayout={onRootLayout}>
         <Header topInset={insets.top} />
         <AIFeedSkeleton />
       </View>
@@ -775,7 +786,7 @@ export default function AIFeedScreen() {
   }
   if (error && items.length === 0) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={[styles.container, { paddingTop: insets.top }]} onLayout={onRootLayout}>
         <Header topInset={insets.top} />
         <View style={styles.centered}>
           <Ionicons name="cloud-offline-outline" size={28} color="#444" />
@@ -789,7 +800,7 @@ export default function AIFeedScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onLayout={onRootLayout}>
       <Header
         topInset={insets.top}
         counter={items.length > 0 ? `${activeIdx + 1} / ${items.length}` : undefined}
@@ -948,12 +959,14 @@ function Header({ topInset, counter, currentTopic, onPickTopic }: {
 }
 
 // ── Full-bleed card ─────────────────────────────────────────────────────────
-function FullPreviewCard({ item, index: _i, total: _t, width: _w, height: cardH, topInset, isActive, onOpen }: {
+function FullPreviewCard({ item, index: _i, total: _t, width, height: cardH, topInset, isActive, onOpen }: {
   item: FeedItem; index: number; total: number; width: number; height: number; topInset: number; isActive: boolean; onOpen: () => void;
 }) {
-  // Use live width for foldable resize; height comes from prop so it matches
-  // the FlatList layout (getItemLayout) and prevents drift on scroll.
-  const { width } = useWindowDimensions();
+  // Width and height both come from the parent's onLayout-measured screen
+  // size (see AIFeedScreen's onRootLayout) rather than useWindowDimensions
+  // here, which used to miss/lag the fold/unfold transition on Samsung
+  // foldables. Height staying prop-driven also still matches the FlatList
+  // layout (getItemLayout) and prevents drift on scroll.
   const story = item.primary;
   const dominant = useMemo(() => getArticleColor(story.id || story.headline), [story.id, story.headline]);
   const accent = useMemo(() => lighten(dominant, 0.55), [dominant]);
