@@ -327,7 +327,14 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
   useEffect(() => {
     if (!params.url) { setParagraphs(params.summary ? [params.summary] : []); setParagraphsLoading(false); return; }
     fetch(`${API}/article?url=${encodeURIComponent(params.url)}`)
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then(async r => {
+        if (!r.ok) {
+          let reason = `HTTP ${r.status}`;
+          try { const body = await r.json(); if (body?.error) reason = body.error; } catch {}
+          throw new Error(reason);
+        }
+        return r.json();
+      })
       .then(data => {
         const paras: string[] = data.paragraphs ?? data.originalParagraphs ?? (data.text ? data.text.split('\n\n').filter(Boolean) : null) ?? (params.summary ? [params.summary] : []);
         const filtered = paras.filter(Boolean);
@@ -401,7 +408,11 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
         if (cancelled) throw new Error('cancelled');
         r = await doFetch();
       }
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      if (!r.ok) {
+        let reason = `HTTP ${r.status}`;
+        try { const body = await r.json(); if (body?.error) reason = body.error; } catch {}
+        throw new Error(reason);
+      }
       return r.json() as Promise<AiResult>;
     })()
       .then(data => { aiCache.current[tabCacheKey] = data; setCached(cacheKey, data); if (!cancelled) setAiResult(data); })

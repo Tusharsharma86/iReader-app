@@ -701,7 +701,14 @@ export default function ArticleScreen() {
       return;
     }
     fetch(`${API}/article?url=${encodeURIComponent(params.url)}`)
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then(async r => {
+        if (!r.ok) {
+          let reason = `HTTP ${r.status}`;
+          try { const body = await r.json(); if (body?.error) reason = body.error; } catch {}
+          throw new Error(reason);
+        }
+        return r.json();
+      })
       .then(data => {
         const paras: string[] =
           data.paragraphs ?? data.originalParagraphs ??
@@ -803,7 +810,15 @@ export default function ArticleScreen() {
           await new Promise(res => setTimeout(res, waitMs));
           r = await doFetch();
         }
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        if (!r.ok) {
+          // Surface the server's actual reason (e.g. "AI summary unavailable",
+          // "AI not configured") instead of a bare status code — makes it
+          // possible to tell rate-limit exhaustion apart from misconfig from
+          // the UI alone, without needing server log access.
+          let reason = `HTTP ${r.status}`;
+          try { const body = await r.json(); if (body?.error) reason = body.error; } catch {}
+          throw new Error(reason);
+        }
         return r.json();
       };
       try {
