@@ -37,6 +37,7 @@ import { darken, lighten, getArticleColor } from '../utils/colors';
 import { isBlockedHeadline } from '../utils/contentFilters';
 
 const FEED_API_BASE = 'https://ireader.onrender.com/api/news/feed';
+const DD_PREWARM_ENABLED: boolean = false;
 const DEEPDIVE_API = 'https://ireader.onrender.com/api/news/deepdive';
 const ASK_API = 'https://ireader.onrender.com/api/news/ask';
 const CACHE_PREFIX = '@deepdive_v8_'; // v8 — cache cleared
@@ -348,6 +349,11 @@ export default function AIFeedScreen() {
   // coalesces concurrent generations, so this is shared across users/sessions.
   const ddPrewarmedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
+    void ddPrewarmedRef;
+    // DISABLED: prewarming up to 60 deep dives per session burned the free-tier
+    // AI quota (Gemini 1500/day) and starved live taps into 502s. On-demand +
+    // 7-day server cache is fast enough.
+    if (!DD_PREWARM_ENABLED) return;
     let cancelled = false;
     const warmStory = async (s: Story) => {
       const body = JSON.stringify({

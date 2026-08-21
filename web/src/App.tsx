@@ -5,7 +5,10 @@ import { SourceProvider } from './contexts/SourceContext';
 import { SavedProvider } from './contexts/SavedContext';
 import { TabBarProvider } from './contexts/TabBarContext';
 import { TabBar } from './components/TabBar';
-import('./screens/AIFeedScreen').then(m => m.startAIFeedPreWarm());
+// AI Feed prewarm DISABLED — free-tier AI quotas (Gemini 1500/day, 10/min)
+// can't fund speculative deep dives; on-demand generation + 7-day server
+// cache keeps opens fast enough.
+// import('./screens/AIFeedScreen').then(m => m.startAIFeedPreWarm());
 
 const FeedScreen       = lazy(() => import('./screens/FeedScreen'));
 const ExploreScreen    = lazy(() => import('./screens/ExploreScreen'));

@@ -140,6 +140,8 @@ function notifyPreWarm() { preWarmListeners.forEach(fn => fn()); }
 const preWarmStarted = { current: false };
 const preWarmedIds = new Set<string>();
 export function startAIFeedPreWarm(depth = 'standard') {
+  // DISABLED: prewarm burns free-tier AI quota needed for live taps.
+  if (depth) return;
   if (preWarmStarted.current) return;
   preWarmStarted.current = true;
   const warmStory = async (s: { id: string; headline: string; summary?: string; sources?: { url?: string }[]; publishedAt?: string }) => {
