@@ -679,8 +679,10 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
     containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   }, [pendingFeed, activeTopic]);
 
-  // Pre-warm AI summaries for top 10 articles (Gemini free tier: 10 req/min —
-  // bigger prewarms starve live taps and trip provider breakers)
+  // Pre-warm AI summaries for the top 30 ranked articles so ArticleScreen
+  // opens instantly. Safe again now that the server runs a PRIORITY gate:
+  // live taps always jump ahead of pre-warm, and pre-warm is dropped rather
+  // than queued when the reader-facing provider is busy.
   const prewarmQueuedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (allFeed.length === 0) return;
@@ -689,7 +691,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
     const lengthMap: Record<string, number> = { short: 200, medium: 350, long: 550 };
     const maxWords = lengthMap[summaryLength] ?? 250;
     const API = 'https://ireader.onrender.com/api/news';
-    const targets = rankedClusters.slice(0, 10).flatMap(c => {
+    const targets = rankedClusters.slice(0, 30).flatMap(c => {
       const story = c.stories[0];
       if (!story) return [];
       const url = story.sources?.[0]?.url ?? '';
@@ -732,7 +734,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
           if (!cancelled) await new Promise(r => setTimeout(r, 1500));
         }
       };
-      for (let w = 0; w < 1; w++) void worker();
+      for (let w = 0; w < 2; w++) void worker();
     }, 2000);
     return () => { cancelled = true; clearTimeout(timer); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
