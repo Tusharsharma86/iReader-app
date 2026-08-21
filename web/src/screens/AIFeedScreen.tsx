@@ -185,7 +185,7 @@ export function startAIFeedPreWarm(depth = 'standard') {
   };
   (async () => {
     interface ApiItem { type?: string; articles?: Story[]; [key: string]: unknown; }
-    const warmTopics: [string, number][] = [['breaking', 20], ['technology', 15]];
+    const warmTopics: [string, number][] = [['breaking', 5], ['technology', 5]]; // Gemini 10 RPM: keep prewarm tiny
     const allStories: { id: string; headline: string; summary?: string; sources?: { url?: string }[]; publishedAt?: string }[] = [];
     for (const [topic, count] of warmTopics) {
       try {
