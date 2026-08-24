@@ -793,15 +793,18 @@ export default function FeedScreen() {
     listRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, [pendingFeed]);
 
-  // Pre-warm AI summaries for top 40 articles — stored in AsyncStorage so they
-  // survive app restarts. ArticleScreen checks AsyncStorage on cache miss.
+  // Pre-warm AI summaries for the top 50 ranked articles — stored in
+  // AsyncStorage so they survive app restarts. ArticleScreen checks
+  // AsyncStorage on cache miss.
   const prewarmQueuedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (allFeed.length === 0) return;
-    const lengthMap: Record<string, number> = { short: 150, medium: 250, long: 400 };
+    // MUST match ArticleScreen's map exactly — a different maxWords lands in a
+    // different cache key, so every pre-warm would be wasted work.
+    const lengthMap: Record<string, number> = { short: 200, medium: 350, long: 550 };
     const maxWords = lengthMap[summaryLength] ?? 250;
     const API = 'https://ireader.onrender.com/api/news';
-    const targets = rankedClusterGroups.slice(0, 40).flatMap(c => {
+    const targets = rankedClusterGroups.slice(0, 50).flatMap(c => {
       const story = c.stories[0];
       if (!story) return [];
       const url = story.sources?.[0]?.url ?? '';
@@ -813,9 +816,9 @@ export default function FeedScreen() {
     });
     if (targets.length === 0) return;
     let cancelled = false;
-    // 3 parallel workers (server caps at 4 concurrent generations — leave one
-    // slot for a user's live tap). Ranked order, so the articles most likely
-    // to be opened warm first. ~40 articles in ~30-45s vs 2+ min serial.
+    // 2 workers, ranked order, so the articles most likely to be opened warm
+    // first. The server runs a reader-priority gate and drops pre-warm rather
+    // than queueing it, so this can never delay a live tap.
     const timer = setTimeout(() => {
       let next = 0;
       const worker = async () => {
@@ -836,7 +839,7 @@ export default function FeedScreen() {
             const summaryRes = await fetch(`${API}/ai-summary`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ url, paragraphs, type: 'summary', maxWords, keyPoints: keyPointsCount, eli5Tone }),
+              body: JSON.stringify({ url, paragraphs, type: 'summary', maxWords, keyPoints: keyPointsCount, eli5Tone, background: true }),
             });
             if (cancelled) return;
             if (summaryRes.ok) { setCached(cacheKey, await summaryRes.json()); continue; }
@@ -847,7 +850,7 @@ export default function FeedScreen() {
           if (!cancelled) await new Promise(r => setTimeout(r, 1500));
         }
       };
-      for (let w = 0; w < 3; w++) void worker();
+      for (let w = 0; w < 2; w++) void worker();
     }, 2000);
     return () => { cancelled = true; clearTimeout(timer); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
