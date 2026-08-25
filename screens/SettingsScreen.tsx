@@ -18,6 +18,8 @@ import {
   TouchableOpacity,
   UIManager,
   View,
+  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSettings, FontSize } from '../contexts/SettingsContext';
@@ -308,6 +310,18 @@ function InlineSources() {
 // ── Main Screen ────────────────────────────────────────────────────────────
 export default function SettingsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<SettingsStackParamList>>();
+  // Layout diagnostics (foldables): track every width source and refresh on
+  // Dimensions change so the values update live across a fold/unfold.
+  const { width: winW } = useWindowDimensions();
+  const [dimW, setDimW] = useState(() => Dimensions.get('window').width);
+  const [scrW, setScrW] = useState(() => Dimensions.get('screen').width);
+  useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window, screen }) => {
+      setDimW(window.width);
+      setScrW(screen.width);
+    });
+    return () => sub.remove();
+  }, []);
   const {
     fontSize, setFontSize,
     notifBreaking, setNotifBreaking,
@@ -578,6 +592,22 @@ export default function SettingsScreen() {
           <View style={[styles.row, styles.rowBorder]}>
             <Text style={styles.rowLabel}>Build</Text>
             <Text style={styles.rowValue}>Expo SDK 54</Text>
+          </View>
+          {/* Live layout readout. Foldables report width through several APIs
+              that can disagree (or lag) across a fold, so show all of them:
+              if these do not change when the device is unfolded, the app is
+              not being told about the new window size at all. */}
+          <View style={[styles.row, styles.rowBorder]}>
+            <Text style={styles.rowLabel}>Screen width</Text>
+            <Text style={styles.rowValue}>{`${Math.round(winW)}dp`}</Text>
+          </View>
+          <View style={[styles.row, styles.rowBorder]}>
+            <Text style={styles.rowLabel}>Dimensions API</Text>
+            <Text style={styles.rowValue}>{`${Math.round(dimW)}dp · scr ${Math.round(scrW)}dp`}</Text>
+          </View>
+          <View style={[styles.row, styles.rowBorder]}>
+            <Text style={styles.rowLabel}>Card layout</Text>
+            <Text style={styles.rowValue}>{winW >= 768 ? `tablet · ${Math.round(winW * 0.46)}dp` : `phone · ${Math.round(winW - 28)}dp`}</Text>
           </View>
           <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => {
             Alert.alert('Reset?', 'This clears all settings + source preferences.', [
