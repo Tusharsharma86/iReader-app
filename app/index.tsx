@@ -5,6 +5,7 @@ import {
   AppState,
   AppStateStatus,
   Dimensions,
+  useWindowDimensions,
   FlatList,
   Modal,
   NativeScrollEvent,
@@ -48,9 +49,26 @@ const CARD_GAP = 12;
 function useLayout() {
   const [width, setWidth] = useState(() => Dimensions.get('window').width);
 
-  // onLayout is the only reliable signal on Samsung foldables — Android
-  // re-lays out the entire tree on fold/unfold, firing onLayout synchronously
-  // with the new dimensions regardless of background/foreground timing.
+  // Foldables deliver resize through three different channels, and no single
+  // one is reliable across devices: with android:configChanges absorbing the
+  // fold (see plugins/withFoldableConfigChanges.js) the Activity is never
+  // recreated, so on some Samsung models onLayout does not fire and only the
+  // Dimensions event reports the new window — while on others the reverse is
+  // true. Listening to ALL of them and letting the newest value win means the
+  // cards resize as long as any one channel works.
+  const { width: hookWidth } = useWindowDimensions();
+
+  useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window }) => {
+      if (window.width > 0) setWidth(window.width);
+    });
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
+    if (hookWidth > 0) setWidth(hookWidth);
+  }, [hookWidth]);
+
   const onLayout = useCallback((e: { nativeEvent: { layout: { width: number } } }) => {
     const w = e.nativeEvent.layout.width;
     if (w > 0) setWidth(w);
