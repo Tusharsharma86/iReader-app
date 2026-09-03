@@ -1119,8 +1119,16 @@ function FullPreviewCard({ item, index: _i, total: _t, width, height: cardH, top
           const isAndroid = Platform.OS === 'android';
           const hLen = story.headline?.length ?? 0;
           const headlineSize = !isAndroid ? 24 : hLen <= 50 ? 29 : hLen <= 80 ? 27 : hLen <= 110 ? 25.5 : 24;
-          const bulletWords = (bullets ?? []).slice(0, 2).join(' ').split(/\s+/).filter(Boolean).length;
-          const bulletSize = !isAndroid ? 16 : bulletWords <= 45 ? 18 : bulletWords <= 75 ? 17 : 16;
+          // 3 bullets of 35-50 words each is a wide range (105-150 words), so
+          // step the type down as density rises rather than clamping lines —
+          // clamping used to cut bullets mid-sentence.
+          const bulletWords = (bullets ?? []).slice(0, 3).join(' ').split(/\s+/).filter(Boolean).length;
+          const bulletSize = !isAndroid
+            ? 16
+            : bulletWords <= 70 ? 17.5
+            : bulletWords <= 105 ? 16.5
+            : bulletWords <= 135 ? 15.5
+            : 14.5;
           const rssSize = !isAndroid ? 15.5 : bulletWords <= 45 ? 16.5 : 16;
           return (
             <>
@@ -1132,16 +1140,13 @@ function FullPreviewCard({ item, index: _i, total: _t, width, height: cardH, top
             backgroundColor: 'rgba(0,0,0,0.38)',
             borderRadius: 12, padding: 12,
             borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.10)',
-            gap: 7,
+            gap: 6,
           }}>
-            {/* 2 bullets shown full-length (no numberOfLines clamp) instead of
-                3 clamped to 3 lines each — AI bullets run 40-45 words, way
-                past 3 lines at this font size, so the old clamp cut every
-                bullet off mid-sentence. Quote restored below (was dropped
-                briefly while fixing the clamp bug) — also uncapped now.
-                Container below keeps overflow:'hidden' as the real safety
-                net if content genuinely doesn't fit. */}
-            {bullets.slice(0, 2).map((bullet, bi) => (
+            {/* 3 bullets, full-length (never line-clamped — clamping cut them
+                mid-sentence). Density is handled by stepping bulletSize down
+                above instead, and the container keeps overflow:'hidden' as
+                the final safety net. */}
+            {bullets.slice(0, 3).map((bullet, bi) => (
               <View key={bi} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 9 }}>
                 <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 8, backgroundColor: aiBullets ? accent : `${accent}66`, flexShrink: 0 }} />
                 <FactText text={bullet.trim()} color={accent} style={{ color: 'rgba(255,255,255,0.92)', fontSize: bulletSize, lineHeight: bulletSize * 1.47, flex: 1, letterSpacing: 0.1 }} />

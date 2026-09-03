@@ -18,6 +18,7 @@ import {
   Text,
   View,
   ViewToken,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -1512,11 +1513,26 @@ const TopicSection = React.memo(function TopicSection({
   const navigation = useNavigation<NativeStackNavigationProp<FeedStackParamList>>();
   const { showMetaPill, showClusterSummary, cardDensity } = useSettings();
 
+  // Self-measure. The global width from useLayout depends on the window
+  // reporting a resize, which some Samsung foldables never do while
+  // configChanges absorbs the fold. Measuring this section's own container
+  // resizes cards off the real layout pass instead, so it works even when
+  // every window-level signal stays silent. Falls back to the prop until the
+  // first layout.
+  const [sectionW, setSectionW] = useState<number | null>(null);
+  const onSectionLayout = useCallback((e: LayoutChangeEvent) => {
+    const w = e.nativeEvent.layout.width;
+    if (w > 0) setSectionW(w);
+  }, []);
+  const effectiveWidth = sectionW != null && sectionW > 0
+    ? (sectionW >= 768 ? Math.round(sectionW * 0.46) : sectionW - 28)
+    : cardWidth;
+
   // Cluster cards stay 82% width to hint there's more to swipe, but use the
   // FULL-WIDTH image height so they feel as tall as individual cards.
-  const clusterCardWidth = count > 1 ? Math.round(cardWidth * 0.82) : cardWidth;
+  const clusterCardWidth = count > 1 ? Math.round(effectiveWidth * 0.82) : effectiveWidth;
   const densityScale = cardDensity === 'compact' ? 0.55 : cardDensity === 'spacious' ? 0.85 : 0.72;
-  const clusterImageHeight = Math.round(cardWidth * densityScale);
+  const clusterImageHeight = Math.round(effectiveWidth * densityScale);
   const snapInterval = clusterCardWidth + CARD_GAP;
 
   const onScrollSettle = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -1527,7 +1543,7 @@ const TopicSection = React.memo(function TopicSection({
   if (count === 1) {
     const tier1 = breakingTier(cluster.publishedAt, isBreaking);
     return (
-      <View style={styles.section}>
+      <View style={styles.section} onLayout={onSectionLayout}>
         {showMetaPill && tier1 && (
           <View style={{ paddingHorizontal: 16, marginBottom: 6 }}>
             <View style={{
@@ -1545,7 +1561,7 @@ const TopicSection = React.memo(function TopicSection({
         <View style={{ alignItems: 'center' }}>
           {/* suppressBreaking: singleton cards already show the tier pill above — showing
               it again inline in the card's meta row would duplicate it. */}
-          <StoryCard story={cluster.stories[0]} cardWidth={cardWidth} allStories={allStories} suppressBreaking />
+          <StoryCard story={cluster.stories[0]} cardWidth={effectiveWidth} allStories={allStories} suppressBreaking />
         </View>
       </View>
     );
@@ -1557,7 +1573,7 @@ const TopicSection = React.memo(function TopicSection({
   const headline = cluster.topicLabel;
   const summary = cluster.summary;
   return (
-    <View style={styles.section}>
+    <View style={styles.section} onLayout={onSectionLayout}>
       <View style={styles.sectionHeader}>
         <View style={{ flex: 1 }}>
           {/* Meta row — TREND/BREAKING pills only */}
