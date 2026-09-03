@@ -540,45 +540,16 @@ export default function SettingsScreen() {
         {/* AI ENGINE */}
         <Text style={styles.sectionHeader}>AI ENGINE</Text>
         <View style={styles.card}>
-          {[
-            {
-              icon: '✦',
-              label: 'Deep Dive',
-              model: 'GPT-OSS 120B',
-              why: 'Cerebras (~3000 tok/s) — falls back to Llama 4 Scout on Groq',
-              warn: false,
-            },
-            {
-              icon: '⚡',
-              label: 'Summaries & Q&A',
-              model: 'GPT-OSS 120B',
-              why: 'Article summaries on Cerebras; Q&A on Groq GPT-OSS 20B',
-              warn: false,
-            },
-            {
-              icon: '⟲',
-              label: 'Feed processing',
-              model: 'GPT-OSS 20B',
-              why: 'Background bulk: clustering, cluster headlines, themes (Groq); card summaries on Cerebras',
-              warn: false,
-            },
-          ].map((item, i) => (
-            <View key={i} style={[{ paddingHorizontal: 16, paddingVertical: 14 }, i > 0 && styles.rowBorder]}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={{ color: '#b994ff', fontSize: 14 }}>{item.icon}</Text>
-                  <Text style={{ color: '#DDD', fontSize: 14, fontWeight: '600' }}>{item.label}</Text>
-                </View>
-                <View style={{ backgroundColor: item.warn ? 'rgba(245,158,11,0.1)' : 'rgba(185,148,255,0.1)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 }}>
-                  <Text style={{ color: item.warn ? '#F59E0B' : '#b994ff', fontSize: 11, fontWeight: '700' }}>{item.model}{item.warn ? ' ⚠' : ''}</Text>
-                </View>
-              </View>
-              <Text style={{ color: '#555', fontSize: 12, lineHeight: 18 }}>{item.why}</Text>
+          <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('AIUsage')}>
+            <View style={styles.rowTextCol}>
+              <Text style={styles.rowLabel}>AI Usage Dashboard</Text>
+              <Text style={styles.rowSub}>Models, requests, latency, token budgets & spend</Text>
             </View>
-          ))}
+            <Ionicons name="chevron-forward" size={18} color="#444" />
+          </TouchableOpacity>
           <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12 }, styles.rowBorder]}>
             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#34D399' }} />
-            <Text style={{ color: '#555', fontSize: 12 }}>Providers: Cerebras + Groq · free tier · resets daily (UTC)</Text>
+            <Text style={{ color: '#555', fontSize: 12 }}>Gemini primary · Groq fallback · free tier</Text>
           </View>
         </View>
 

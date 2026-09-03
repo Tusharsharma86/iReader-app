@@ -324,44 +324,17 @@ export default function SettingsScreen() {
 
       {/* AI ENGINE */}
       <div style={{ ...sectionHeader, marginTop: 14 }}>AI ENGINE</div>
-      <div style={{ margin: '0 16px 18px', background: '#0E0E0E', borderRadius: 14, border: '1px solid #1A1A1A', overflow: 'hidden' }}>
-        {[
-          {
-            icon: '✦',
-            label: 'Deep Dive',
-            model: 'GPT-OSS 120B',
-            why: 'Cerebras (~3000 tok/s) — falls back to Llama 4 Scout on Groq',
-            warn: false,
-          },
-          {
-            icon: '⚡',
-            label: 'Summaries & Q&A',
-            model: 'GPT-OSS 120B',
-            why: 'Article summaries on Cerebras; Q&A on Groq GPT-OSS 20B',
-            warn: false,
-          },
-          {
-            icon: '⟲',
-            label: 'Feed processing',
-            model: 'GPT-OSS 20B',
-            why: 'Background bulk: clustering, cluster headlines, themes (Groq); card summaries on Cerebras',
-            warn: false,
-          },
-        ].map((item, i) => (
-          <div key={i} style={{ padding: '14px 16px', borderTop: i > 0 ? '1px solid #1A1A1A' : 'none' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ color: '#b994ff', fontSize: 14 }}>{item.icon}</span>
-                <span style={{ color: '#DDD', fontSize: 14, fontWeight: 600 }}>{item.label}</span>
-              </div>
-              <span style={{ color: (item as any).warn ? '#F59E0B' : '#b994ff', fontSize: 11, fontWeight: 700, background: (item as any).warn ? 'rgba(245,158,11,0.1)' : 'rgba(185,148,255,0.1)', borderRadius: 6, padding: '2px 8px' }}>{item.model}{(item as any).warn ? ' ⚠' : ''}</span>
-            </div>
-            <div style={{ color: '#555', fontSize: 12, lineHeight: 1.5 }}>{item.why}</div>
+      <div style={card}>
+        <div style={{ ...row, cursor: 'pointer' }} onClick={() => navigate({ name: 'AIUsage' })}>
+          <div style={{ flex: 1, marginRight: 12 }}>
+            <div style={{ color: '#DDD', fontSize: 15, fontWeight: 500 }}>AI Usage Dashboard</div>
+            <div style={{ color: '#555', fontSize: 12, marginTop: 2 }}>Models, requests, latency, token budgets & spend</div>
           </div>
-        ))}
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
         <div style={{ padding: '12px 16px', borderTop: '1px solid #1A1A1A', display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{ width: 8, height: 8, borderRadius: 4, background: '#34D399', flexShrink: 0 }} />
-          <span style={{ color: '#555', fontSize: 12 }}>Providers: Cerebras + Groq · free tier · resets daily (UTC)</span>
+          <span style={{ color: '#555', fontSize: 12 }}>Gemini primary · Groq fallback · free tier</span>
         </div>
       </div>
 

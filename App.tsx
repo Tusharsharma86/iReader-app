@@ -25,6 +25,7 @@ import { SavedProvider } from './contexts/SavedContext';
 import { FeedStackParamList, RootTabParamList, SettingsStackParamList, ExploreStackParamList } from './types/navigation';
 import FavSourcesScreen from './screens/FavSourcesScreen';
 import UsageScreen from './screens/UsageScreen';
+import AIUsageScreen from './screens/AIUsageScreen';
 import CostDashboardScreen from './screens/CostDashboardScreen';
 import TopicInterestsScreen from './screens/TopicInterestsScreen';
 import BreakingThemesScreen from './screens/BreakingThemesScreen';
@@ -328,6 +329,7 @@ function SettingsNavigator() {
       <SettingsStack.Screen name="Sources" component={SourcesScreen} />
       <SettingsStack.Screen name="FavSources" component={FavSourcesScreen} />
       <SettingsStack.Screen name="Usage" component={UsageScreen} />
+      <SettingsStack.Screen name="AIUsage" component={AIUsageScreen} />
       <SettingsStack.Screen name="CostDashboard" component={CostDashboardScreen} />
       <SettingsStack.Screen name="TopicInterests" component={TopicInterestsScreen} />
       <SettingsStack.Screen name="BreakingThemes" component={BreakingThemesScreen} />

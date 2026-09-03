@@ -50,6 +50,7 @@ export type SettingsStackParamList = {
   Sources: undefined;
   FavSources: undefined;
   Usage: undefined;
+  AIUsage: undefined;
   CostDashboard: undefined;
   TopicInterests: undefined;
   BreakingThemes: undefined;

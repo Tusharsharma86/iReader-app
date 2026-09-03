@@ -79,6 +79,7 @@ export type NavScreen =
   | { name: 'FavSources' }
   | { name: 'TopicInterests' }
   | { name: 'Usage' }
+  | { name: 'AIUsage' }
   | { name: 'NotificationSettings' }
   | { name: 'BreakingThemes' }
   | { name: 'NotifHistory' }
