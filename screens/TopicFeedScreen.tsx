@@ -9,6 +9,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { MAX_CARD_WIDTH } from '../utils/layout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Story, StoryCard } from '../components/StoryCard';
@@ -25,7 +26,8 @@ export default function TopicFeedScreen() {
   const keyword = tag.replace(/^#/, '').toLowerCase();
 
   const { width } = useWindowDimensions();
-  const cardWidth = Math.round(width * (width >= 768 ? 0.46 : 0.88));
+  // Keeps its 88% peek of the next card; no tablet shrink (see utils/layout).
+  const cardWidth = Math.round(Math.min(width * 0.88, MAX_CARD_WIDTH));
 
   const [stories, setStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);

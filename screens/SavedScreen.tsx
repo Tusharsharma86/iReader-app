@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback } from 'react';
 import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { feedCardWidth } from '../utils/layout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StoryCard } from '../components/StoryCard';
 import { useSaved } from '../contexts/SavedContext';
@@ -9,7 +10,7 @@ import { useTabBarAutoHide } from '../utils/tabBarAnim';
 
 export default function SavedScreen() {
   const { width } = useWindowDimensions();
-  const cardWidth = width >= 768 ? Math.round(width * 0.46) : width - 28;
+  const cardWidth = feedCardWidth(width);
   const { savedStories } = useSaved();
   const { onScroll, restore } = useTabBarAutoHide();
   useFocusEffect(useCallback(() => () => restore(), [restore]));

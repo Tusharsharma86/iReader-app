@@ -44,6 +44,7 @@ import { pushNotifHistory } from '../utils/notifHistory';
 import { getArticleColor } from '../utils/colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getCached, setCached, hydrateCached, sweepExpiredCache, TTL } from '../utils/cache';
+import { feedCardWidth } from '../utils/layout';
 
 const CARD_GAP = 12;
 // Anchor config for maintainVisibleContentPosition — module-level so the prop
@@ -79,7 +80,7 @@ function useLayout() {
   }, []);
 
   const isTablet = width >= 768;
-  const cardWidth = isTablet ? Math.round(width * 0.46) : width - 28;
+  const cardWidth = feedCardWidth(width);
   return {
     screenWidth: width,
     cardWidth,
@@ -1576,7 +1577,7 @@ const TopicSection = React.memo(function TopicSection({
     if (w > 0) setSectionW(w);
   }, []);
   const effectiveWidth = sectionW != null && sectionW > 0
-    ? (sectionW >= 768 ? Math.round(sectionW * 0.46) : sectionW - 28)
+    ? feedCardWidth(sectionW)
     : cardWidth;
 
   // Cluster cards stay 82% width to hint there's more to swipe, but use the

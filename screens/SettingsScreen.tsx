@@ -30,6 +30,7 @@ import { useTabBarAutoHide } from '../utils/tabBarAnim';
 import { INTEREST_CATEGORIES, INTEREST_TOPICS, type InterestTopic } from '../utils/interestTopics';
 import { TOPIC_SUBTOPICS } from '../utils/topics';
 import { getFollowedEntities, toggleFollowEntity, clearFollowedEntities } from '../utils/entityFollowStore';
+import { feedCardWidth } from '../utils/layout';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -578,7 +579,7 @@ export default function SettingsScreen() {
           </View>
           <View style={[styles.row, styles.rowBorder]}>
             <Text style={styles.rowLabel}>Card layout</Text>
-            <Text style={styles.rowValue}>{winW >= 768 ? `tablet · ${Math.round(winW * 0.46)}dp` : `phone · ${Math.round(winW - 28)}dp`}</Text>
+            <Text style={styles.rowValue}>{`${feedCardWidth(winW)}dp wide`}</Text>
           </View>
           <TouchableOpacity style={[styles.row, styles.rowBorder]} onPress={() => {
             Alert.alert('Reset?', 'This clears all settings + source preferences.', [

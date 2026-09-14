@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Dimensions, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { feedCardWidth } from '../utils/layout';
 import { darken, lighten, getArticleColor } from '../utils/colors';
 import { FeedStackParamList } from '../types/navigation';
 import { useSettings } from '../contexts/SettingsContext';
@@ -175,7 +176,7 @@ function StoryCardInner({ story, compact, cardWidth: cardWidthProp, imageHeight:
     return () => sub.remove();
   }, []);
   const width = Math.abs(hookWidth - dimWidth) < 1 ? hookWidth : dimWidth;
-  const cardWidth = cardWidthProp ?? (width >= 768 ? Math.round(width * 0.46) : width - 28);
+  const cardWidth = cardWidthProp ?? feedCardWidth(width);
   // Image takes ~72% of card width in height — unless a caller overrides it
   // (e.g. cluster carousel passes full-card height while keeping width narrow).
   // Customize → cardDensity scales image height. Compact crops the image,
