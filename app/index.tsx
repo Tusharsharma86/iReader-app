@@ -46,6 +46,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getCached, setCached, hydrateCached, sweepExpiredCache, TTL } from '../utils/cache';
 
 const CARD_GAP = 12;
+// Anchor config for maintainVisibleContentPosition — module-level so the prop
+// keeps a stable identity across renders.
+const MVCP_CONFIG = { minIndexForVisible: 1 } as const;
 
 function useLayout() {
   const [width, setWidth] = useState(() => Dimensions.get('window').width);
@@ -543,6 +546,42 @@ export default function FeedScreen() {
   const feedOpacity = useRef(new Animated.Value(1)).current;
   useEffect(() => { activeTopicRef.current = activeTopic; }, [activeTopic]);
 
+  // ── Refresh always lands at the top ─────────────────────────────────────
+  // maintainVisibleContentPosition pins the first visible row whenever the
+  // data changes. That is what holds a row steady through fold/unfold and
+  // late-arriving summary heights — but on a refresh it is exactly wrong:
+  // new stories arrive above the pinned row, and the list is dragged DOWN to
+  // keep that row in view. Calling scrollToOffset(0) alongside the data
+  // update can't win either, because it runs before the new data commits
+  // and the anchor re-applies afterwards.
+  //
+  // So every refresh path switches the anchor off in the SAME render that
+  // commits the new data (React batches the state updates), scrolls to 0
+  // once that render has landed, then switches the anchor back on.
+  const [mvcpEnabled, setMvcpEnabled] = useState(true);
+  const [scrollTopToken, setScrollTopToken] = useState(0);
+  const skipRestoreRef = useRef<Record<string, boolean>>({});
+  const requestScrollTopAfterUpdate = useCallback(() => {
+    setMvcpEnabled(false);
+    setScrollTopToken(t => t + 1);
+    visibleIndexRef.current = 0;
+    // Drop the saved position too, so the restore effect can't pull the
+    // list back down to where the reader was before the refresh.
+    AsyncStorage.removeItem(`@ireader_scroll_${activeTopicRef.current}`).catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (scrollTopToken === 0) return;
+    let reEnable: ReturnType<typeof setTimeout> | undefined;
+    const frame = requestAnimationFrame(() => {
+      listRef.current?.scrollToOffset({ offset: 0, animated: false });
+      reEnable = setTimeout(() => setMvcpEnabled(true), 400);
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      if (reEnable) clearTimeout(reEnable);
+    };
+  }, [scrollTopToken]);
+
   // Fold/unfold: maintainVisibleContentPosition on the FlatList (set below)
   // automatically pins the visible row through dimension changes. The old
   // manual scrollToOffset(index * 436) used a hardcoded item-height estimate
@@ -792,12 +831,15 @@ export default function FeedScreen() {
     setNewCount(0);
     try {
       const fresh = await fetchFeed(activeTopic, true);
+      requestScrollTopAfterUpdate();
       setAllFeed(fresh);
       lastFetchRef.current = Date.now();
       saveFeedCache(activeTopic, fresh).catch(() => {});
       prewarmOtherTopics(activeTopic);
     } catch {
-      // keep existing
+      // Keep the existing stories, but still honour the gesture: the reader
+      // asked for the top of the feed.
+      requestScrollTopAfterUpdate();
     } finally {
       setRefreshing(false);
     }
@@ -806,11 +848,11 @@ export default function FeedScreen() {
 
   const applyPending = useCallback(() => {
     if (!pendingFeed) return;
+    requestScrollTopAfterUpdate();
     setAllFeed(pendingFeed);
     setPendingFeed(null);
     setNewCount(0);
-    listRef.current?.scrollToOffset({ offset: 0, animated: true });
-  }, [pendingFeed]);
+  }, [pendingFeed, requestScrollTopAfterUpdate]);
 
   // Pre-warm AI summaries for the top 50 ranked articles — stored in
   // AsyncStorage so they survive app restarts. ArticleScreen checks
@@ -1023,6 +1065,11 @@ export default function FeedScreen() {
     // Only restore when data goes from 0 → N (fresh load), not on subsequent renders
     if ((lastRestoredLengthRef.current[activeTopic] ?? 0) > 0) return;
     lastRestoredLengthRef.current[activeTopic] = rankedClusterGroups.length;
+    if (skipRestoreRef.current[activeTopic]) {
+      skipRestoreRef.current[activeTopic] = false;
+      requestScrollTopAfterUpdate();
+      return;
+    }
     AsyncStorage.getItem(`@ireader_scroll_${activeTopic}`).then(saved => {
       if (!saved) return;
       // Only restore scroll position if it's recent (<30 min). Beyond that, news
@@ -1067,6 +1114,10 @@ export default function FeedScreen() {
     if (topic === activeTopic) {
       onRefresh();
     } else {
+      // A deliberate tab switch always opens that tab at the top. The saved-
+      // position restore is for returning after the Activity is recreated,
+      // not for a reader tapping a category.
+      skipRestoreRef.current[topic] = true;
       listRef.current?.scrollToOffset({ offset: 0, animated: false });
       setActiveTopic(topic);
     }
@@ -1312,7 +1363,7 @@ export default function FeedScreen() {
         showsVerticalScrollIndicator={false}
         // Anchors visible row so async AI-summary height changes above don't
         // push it (root cause of fold-open bounce-loop on long feeds).
-        maintainVisibleContentPosition={{ minIndexForVisible: 1 }}
+        maintainVisibleContentPosition={mvcpEnabled ? MVCP_CONFIG : undefined}
         // STATIC props — must NOT depend on cardWidth. Earlier they flipped
         // at the 480 fold threshold, forcing FlatList to re-virtualize mid-
         // fold and jump the visible row. removeClippedSubviews=false also
