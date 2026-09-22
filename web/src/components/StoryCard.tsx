@@ -17,6 +17,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { trackArticleOpen } from '../utils/personalization';
 import { FALLBACK_IMG } from '../utils/fallback';
 import { isRead, markRead, subscribeRead } from '../utils/readStore';
+import { sampleImageColor, cachedImageColor } from '../utils/imageColor';
 
 const CARD_HEIGHT_BASE = 420;
 const DENSITY_HEIGHT: Record<string, number> = { compact: 320, comfortable: 420, spacious: 500 };
@@ -98,7 +99,18 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
   const saved = isSaved(story.id);
 
   const cardWidth = cwProp ?? Math.min(window.innerWidth - 28, 452);
-  const dominant = story.dominantColor || getArticleColor(story.id || story.headline);
+  // Colour precedence: server-provided → sampled from the photo → hashed
+  // palette. The hash is deterministic but unrelated to the story, so it is
+  // the last resort rather than the default.
+  const [sampled, setSampled] = useState<string | null>(() => cachedImageColor(story.imageUrl));
+  React.useEffect(() => {
+    if (!showCardImages || !story.imageUrl || story.dominantColor || sampled) return;
+    let alive = true;
+    sampleImageColor(story.imageUrl).then(c => { if (alive && c) setSampled(c); });
+    return () => { alive = false; };
+  }, [story.imageUrl, story.dominantColor, showCardImages, sampled]);
+
+  const dominant = story.dominantColor || sampled || getArticleColor(story.id || story.headline);
   const accent = lighten(dominant, 0.55);
 
   const source = story.sources?.[0]?.name ?? 'Unknown';
