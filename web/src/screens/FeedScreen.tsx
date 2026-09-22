@@ -134,7 +134,7 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
   cluster: StoryCluster; soloCardWidth: number; allStories: Story[];
 }) {
   const { navigate } = useRouter();
-  const { showMetaPill, showClusterSummary, cardDensity: density } = useSettings();
+  const { showMetaPill, showClusterSummary, cardDensity: density, feedLayout } = useSettings();
   const clusterGap = density === 'compact' ? 14 : density === 'spacious' ? 44 : 28;
   const isBreaking = cluster.isBreaking;
   const canTimeline = cluster.stories.length >= 3;
@@ -281,22 +281,36 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
         })()}
       </div>
 
-      {/* Horizontal carousel — narrower cards, next card peeks */}
-      <div ref={scrollRef} onScroll={handleScroll}
-        style={{ display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', paddingLeft: sideMargin, paddingRight: sideMargin, gap: CARD_GAP, scrollbarWidth: 'none' }}>
-        {cluster.stories.map((story, idx) => (
-          <div key={story.id} style={{ scrollSnapAlign: 'start', flexShrink: 0 }}>
-            <StoryCard story={story} cardWidth={clusterCardWidth} allStories={allStories} clusterCard={idx === 0} />
+      {/* List layout stacks the cluster vertically — a horizontal carousel of
+          text rows reads as a bug, and the peek/dots affordances are pointless
+          when every row is already visible. */}
+      {feedLayout === 'list' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', padding: '0 16px' }}>
+          {cluster.stories.map((story, idx) => (
+            <StoryCard key={story.id} story={story} cardWidth={soloCardWidth}
+              allStories={allStories} clusterCard={idx === 0} />
+          ))}
+        </div>
+      ) : (
+        <>
+          {/* Horizontal carousel — narrower cards, next card peeks */}
+          <div ref={scrollRef} onScroll={handleScroll}
+            style={{ display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', paddingLeft: sideMargin, paddingRight: sideMargin, gap: CARD_GAP, scrollbarWidth: 'none' }}>
+            {cluster.stories.map((story, idx) => (
+              <div key={story.id} style={{ scrollSnapAlign: 'start', flexShrink: 0 }}>
+                <StoryCard story={story} cardWidth={clusterCardWidth} allStories={allStories} clusterCard={idx === 0} />
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      {/* Dot indicators */}
-      <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 12 }}>
-        {cluster.stories.map((_, i) => (
-          <div key={i} style={{ height: 6, borderRadius: 3, background: i === activeIdx ? 'var(--text)' : 'var(--muted-5)', width: i === activeIdx ? 18 : 6, transition: 'all 0.2s' }} />
-        ))}
-      </div>
+          {/* Dot indicators */}
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 12 }}>
+            {cluster.stories.map((_, i) => (
+              <div key={i} style={{ height: 6, borderRadius: 3, background: i === activeIdx ? 'var(--text)' : 'var(--muted-5)', width: i === activeIdx ? 18 : 6, transition: 'all 0.2s' }} />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
