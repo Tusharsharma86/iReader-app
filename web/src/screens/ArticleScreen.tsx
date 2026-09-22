@@ -209,6 +209,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     showEntityHighlights, showQuoteHighlights, showReadingDifficulty,
     fontFamily, lineHeightMode, columnWidth,
     eli5Tone,
+    accentPreset,
   } = useSettings();
 
   // Customize: font / line-height / column width. Inter + Merriweather are
@@ -235,6 +236,19 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
   const fontSizePx = FONT_SIZE_MAP[fontSizeName] ?? 17;
 
   const dominant = params.dominantColor;
+
+  // Accent → "Story": the chrome borrows this article's own colour while it
+  // is open, then hands the previous accent back on unmount.
+  React.useEffect(() => {
+    if (accentPreset !== 'dynamic' || !dominant) return;
+    const root = document.documentElement;
+    const prev = root.style.getPropertyValue('--accent');
+    root.style.setProperty('--accent', lighten(dominant, 0.5));
+    return () => {
+      if (prev) root.style.setProperty('--accent', prev);
+      else root.style.removeProperty('--accent');
+    };
+  }, [accentPreset, dominant]);
   const accent = lighten(dominant, 0.45);
   // AI Summary tab: follow the same font-size customization as Long Form
   // (was hardcoded 15/13.5px, ignoring the user's Customize setting), but

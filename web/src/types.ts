@@ -18,6 +18,8 @@ export interface BiasBreakdown {
 }
 
 export interface Story {
+  /** Dominant colour sampled from the story image, server-side. */
+  dominantColor?: string;
   id: string;
   headline: string;
   summary: string;

@@ -10,6 +10,7 @@
 // match current behavior — existing users see no change until they toggle.
 import React, { useCallback } from 'react';
 import { useRouter } from '../contexts/RouterContext';
+import { ACCENTS, type ThemeSkin, type AccentPreset, type MotionLevel, type FeedLayout } from '../theme/theme';
 import {
   useSettings,
   type CardDensity, type ArticleTab, type SummaryLength, type SummaryFormat,
@@ -42,6 +43,66 @@ const THEME_OPTIONS: { label: string; value: ThemeMode }[] = [
   { label: 'Auto',  value: 'auto' },
   { label: 'Light', value: 'light' },
 ];
+
+const SKIN_OPTIONS: { label: string; value: ThemeSkin }[] = [
+  { label: 'Midnight', value: 'midnight' },
+  { label: 'OLED',     value: 'oled' },
+  { label: 'Auto',     value: 'auto' },
+  { label: 'Paper',    value: 'paper' },
+];
+
+const MOTION_OPTIONS: { label: string; value: MotionLevel }[] = [
+  { label: 'Full',   value: 'full' },
+  { label: 'Subtle', value: 'subtle' },
+  { label: 'Off',    value: 'off' },
+];
+
+const LAYOUT_OPTIONS: { label: string; value: FeedLayout }[] = [
+  { label: 'Magazine', value: 'magazine' },
+  { label: 'Standard', value: 'standard' },
+  { label: 'List',     value: 'list' },
+];
+
+const ACCENT_SWATCHES: { value: AccentPreset; label: string; swatch: string }[] = [
+  { value: 'violet', label: 'Violet', swatch: ACCENTS.violet.accent },
+  { value: 'cyan',   label: 'Cyan',   swatch: ACCENTS.cyan.accent },
+  { value: 'amber',  label: 'Amber',  swatch: ACCENTS.amber.accent },
+  { value: 'rose',   label: 'Rose',   swatch: ACCENTS.rose.accent },
+  { value: 'mono',   label: 'Mono',   swatch: ACCENTS.mono.accent },
+  // Follows the open story's own colour instead of a fixed hue.
+  { value: 'dynamic', label: 'Story', swatch: 'linear-gradient(135deg,#FB7185,#B994FF,#22D3EE)' },
+];
+
+function AccentRow({ value, onChange, border }: {
+  value: AccentPreset; onChange: (v: AccentPreset) => void; border?: boolean;
+}) {
+  return (
+    <div style={{ ...(border ? rowBorder : {}), padding: '14px 16px' }}>
+      <div style={rowLabel}>Accent</div>
+      <div style={rowSub}>Tints pills, links and highlights. &ldquo;Story&rdquo; follows each article&apos;s own colour.</div>
+      <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
+        {ACCENT_SWATCHES.map(a => {
+          const active = a.value === value;
+          return (
+            <button key={a.value} onClick={() => onChange(a.value)}
+              aria-label={a.label} aria-pressed={active}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+              }}>
+              <span style={{
+                width: 30, height: 30, borderRadius: '50%', background: a.swatch,
+                boxShadow: active ? '0 0 0 2px var(--bg), 0 0 0 4px var(--accent)' : 'none',
+                transition: 'box-shadow var(--dur-fast) ease',
+              }} />
+              <span style={{ fontSize: 10, color: active ? 'var(--text-3)' : 'var(--muted-3)', fontWeight: 600 }}>{a.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 const FONT_OPTIONS: { label: string; value: FontFamily }[] = [
   { label: 'Inter',  value: 'inter' },
@@ -361,9 +422,21 @@ export default function CustomizeScreen() {
       <div style={sectionHeader}>APPEARANCE</div>
       <div style={card}>
         <RowSegmented label="Theme"
-          sub="Dark (default), Auto (follows system), Light."
-          options={THEME_OPTIONS}
-          value={s.themeMode} onChange={s.setThemeMode} />
+          sub="Midnight, OLED (true black), Auto (follows system) or Paper."
+          options={SKIN_OPTIONS}
+          value={s.themeSkin} onChange={s.setThemeSkin} />
+        <AccentRow border value={s.accentPreset} onChange={s.setAccentPreset} />
+        <RowSegmented border label="Feed layout"
+          sub="Magazine leads with a large card, List is text-only rows."
+          options={LAYOUT_OPTIONS}
+          value={s.feedLayout} onChange={s.setFeedLayout} />
+        <RowSegmented border label="Motion"
+          sub="Card entrances, parallax and transitions."
+          options={MOTION_OPTIONS}
+          value={s.motionLevel} onChange={s.setMotionLevel} />
+        <RowToggle border label="Time-of-day ambience"
+          sub="A subtle warm/cool wash that drifts with the clock."
+          value={s.ambience} onChange={s.setAmbience} />
         <RowToggle border label="Entity highlights"
           sub="Highlight people / companies in article body."
           value={s.showEntityHighlights} onChange={s.setShowEntityHighlights} />

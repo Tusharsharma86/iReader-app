@@ -93,12 +93,12 @@ interface Props {
 export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppressBreaking, clusterCard }: Props) {
   const { navigate } = useRouter();
   const { toggleSave, isSaved } = useSaved();
-  const { showClusterSummary, showBiasDots, showCardImages, cardDensity, timeFormat, autoMarkRead } = useSettings();
+  const { showClusterSummary, showBiasDots, showCardImages, cardDensity, timeFormat, autoMarkRead, feedLayout, motionLevel } = useSettings();
   const [imgError, setImgError] = useState(false);
   const saved = isSaved(story.id);
 
   const cardWidth = cwProp ?? Math.min(window.innerWidth - 28, 452);
-  const dominant = getArticleColor(story.id || story.headline);
+  const dominant = story.dominantColor || getArticleColor(story.id || story.headline);
   const accent = lighten(dominant, 0.55);
 
   const source = story.sources?.[0]?.name ?? 'Unknown';
@@ -156,6 +156,76 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
     return () => { if (t != null) clearTimeout(t); obs.disconnect(); };
   }, [autoMarkRead, readState, story.id]);
 
+  const baseHeight = DENSITY_HEIGHT[cardDensity] ?? CARD_HEIGHT_BASE;
+  const cardHeight = feedLayout === 'magazine' ? Math.round(baseHeight * 1.18) : baseHeight;
+
+  // Parallax: drift the photo against the card as it crosses the viewport.
+  // Scroll events don't bubble, so listen on window in the capture phase to
+  // catch the feed container's own scrolling.
+  const imgRef = React.useRef<HTMLImageElement | null>(null);
+  React.useEffect(() => {
+    const img = imgRef.current;
+    if (motionLevel !== 'full' || !img) return;
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      const host = cardRef.current;
+      if (!host) return;
+      const r = host.getBoundingClientRect();
+      const vh = window.innerHeight || 1;
+      if (r.bottom < -120 || r.top > vh + 120) return;
+      const progress = (r.top + r.height / 2 - vh / 2) / vh;   // -0.5 … 0.5
+      img.style.transform = `scale(1.14) translateY(${(-progress * 18).toFixed(2)}px)`;
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(update); };
+    update();
+    window.addEventListener('scroll', onScroll, { passive: true, capture: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll, true);
+      if (raf) cancelAnimationFrame(raf);
+      img.style.transform = '';
+    };
+  }, [motionLevel, showCardImages, story.imageUrl]);
+
+  // Text-only rows — a different shape, not a squashed card.
+  if (feedLayout === 'list') {
+    return (
+      <div
+        ref={cardRef}
+        onClick={handleClick}
+        style={{
+          display: 'flex', gap: 12, alignItems: 'center', width: cardWidth,
+          padding: '12px 4px', borderBottom: '1px solid var(--line)',
+          cursor: 'pointer', opacity: readState ? 0.55 : 1,
+          animation: 'cardIn var(--dur-base) ease both',
+          WebkitTapHighlightColor: 'transparent',
+        }}
+      >
+        {showCardImages && story.imageUrl && !imgError ? (
+          <img src={story.imageUrl} alt="" onError={() => setImgError(true)}
+            style={{ width: 74, height: 74, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
+        ) : (
+          <div style={{ width: 74, height: 74, borderRadius: 10, flexShrink: 0, background: dominant }} />
+        )}
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 4 }}>
+            <span style={{ width: 6, height: 6, borderRadius: 3, background: dominant, flexShrink: 0 }} />
+            <span style={{ color: 'var(--muted-2)', fontSize: 10, fontWeight: 700, letterSpacing: 0.6 }}>
+              {source.toUpperCase()}
+            </span>
+            <span style={{ color: 'var(--muted-4)', fontSize: 10 }}>
+              {timeFormat === 'absolute' ? timeAbs(story.publishedAt) : timeAgo(story.publishedAt)}
+            </span>
+          </div>
+          <div style={{
+            color: 'var(--text)', fontSize: 15, fontWeight: 600, lineHeight: 1.3,
+            display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          }}>{story.headline}</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       ref={cardRef}
@@ -165,7 +235,8 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
       onPointerLeave={() => setPressed(false)}
       onPointerCancel={() => setPressed(false)}
       style={{
-        width: cardWidth, height: DENSITY_HEIGHT[cardDensity] ?? CARD_HEIGHT_BASE, borderRadius: 20, overflow: 'hidden',
+        width: cardWidth, height: cardHeight, borderRadius: 20, overflow: 'hidden',
+        animation: 'cardIn var(--dur-base) cubic-bezier(.2,.7,.3,1) both',
         opacity: readState ? 0.55 : 1,
         position: 'relative', flexShrink: 0, cursor: 'pointer',
         // Particle-style colour bleed: bright accent halo + layered dominant
@@ -185,8 +256,11 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
       {/* Background image or typographic fallback. Hidden when Customize →
           showCardImages is off (text-only feed mode). */}
       {showCardImages && !imgError && story.imageUrl ? (
-        <img src={story.imageUrl} alt="" onError={() => setImgError(true)}
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+        <img ref={imgRef} src={story.imageUrl} alt="" onError={() => setImgError(true)}
+          style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
+            willChange: motionLevel === 'full' ? 'transform' : undefined,
+          }} />
       ) : (
         <div style={{
           position: 'absolute', inset: 0, background: '#05060c',
