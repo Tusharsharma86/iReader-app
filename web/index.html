@@ -22,10 +22,29 @@
          already used 100dvh correctly; html/body now match so the very
          first paint is correct without needing a later resize to fix it. */
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      /* Default (midnight) token values so the very first paint is correct
+         before React mounts and ThemeApplier writes the active skin. */
+      :root {
+        --bg:#080808; --surface:#0E0E0E; --surface-2:#111111; --surface-3:#141414;
+        --line:#1A1A1A; --line-2:#222222; --line-3:#2A2A2A;
+        --text:#FFFFFF; --text-2:#EEEEEE; --text-3:#DDDDDD; --text-4:#CCCCCC;
+        --muted:#999999; --muted-2:#888888; --muted-3:#666666; --muted-4:#555555; --muted-5:#444444;
+        --pill:#FFFFFF; --pill-text:#000000;
+        --fg-rgb:255,255,255; --shadow-rgb:0,0,0; --scrim:rgba(0,0,0,0.6);
+        --accent:#B994FF; --accent-2:#4A90D9;
+        --danger:#FF3B30; --success:#34C759; --warn:#FF9500;
+        --star:#FFC542; --info:#4ECDC4; --topic:#A29BFE;
+        --ambience:transparent; --motion:1; --dur-fast:140ms; --dur-base:240ms;
+        color-scheme: dark;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        :root { --motion:0; --dur-fast:0ms; --dur-base:0ms; }
+      }
       html {
         height: 100%;
         height: 100dvh;
-        background: #000;
+        background: var(--bg);
         overscroll-behavior: none;
       }
       body {

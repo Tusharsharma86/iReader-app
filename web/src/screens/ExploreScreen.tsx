@@ -315,8 +315,8 @@ function TopicIcon({ icon, color, size = 18 }: { icon: string; color: string; si
 function SectionLabel({ text }: { text: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-      <span style={{ color: '#4A90D9', fontSize: 11, fontWeight: 700 }}>●</span>
-      <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', color: '#555', textTransform: 'uppercase' }}>{text}</span>
+      <span style={{ color: 'var(--accent-2)', fontSize: 11, fontWeight: 700 }}>●</span>
+      <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', color: 'var(--muted-4)', textTransform: 'uppercase' }}>{text}</span>
     </div>
   );
 }
@@ -334,7 +334,7 @@ function HScroll({ children }: { children: React.ReactNode }) {
   );
 }
 
-function IconSearch({ size = 16, color = '#444' }: { size?: number; color?: string }) {
+function IconSearch({ size = 16, color = 'var(--muted-5)' }: { size?: number; color?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
       <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -359,11 +359,11 @@ function EntityTile({ entity, accent, bgColor, onTap }: { entity: EntityCard; ac
       {entity.imageUrl && (
         <img src={entity.imageUrl} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
       )}
-      <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${bgColor}CC 0%, rgba(0,0,0,0.7) 100%)` }} />
+      <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${bgColor}CC 0%, rgba(var(--shadow-rgb),0.7) 100%)` }} />
       {/* Name leads (bigger, bold) with the story count underneath it — was
           reversed (tiny count above a small name), per request. */}
       <div style={{ position: 'absolute', inset: 0, padding: '10px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-        <div style={{ fontSize: 19, fontWeight: 800, color: '#fff', lineHeight: 1.15, letterSpacing: -0.3, textAlign: 'left', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{entity.name}</div>
+        <div style={{ fontSize: 19, fontWeight: 800, color: 'var(--text)', lineHeight: 1.15, letterSpacing: -0.3, textAlign: 'left', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{entity.name}</div>
         <div style={{ fontSize: 11, fontWeight: 700, color: accent, marginTop: 4, letterSpacing: 0.3 }}>{entity.count} {entity.count === 1 ? 'story' : 'stories'}</div>
       </div>
     </button>
@@ -379,7 +379,7 @@ function SourceChip({ src, onTap }: { src: SourceCard; onTap: (name: string) => 
       onClick={() => onTap(src.name)}
       style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-        background: '#0E0E0E', border: '1px solid #1A1A1A',
+        background: 'var(--surface)', border: '1px solid var(--line)',
         borderRadius: 12, padding: '12px 8px 10px', width: '100%',
         cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
       }}
@@ -387,17 +387,17 @@ function SourceChip({ src, onTap }: { src: SourceCard; onTap: (name: string) => 
       {faviconUrl ? (
         <img src={faviconUrl} alt="" width={24} height={24} style={{ borderRadius: 6 }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
       ) : (
-        <div style={{ width: 24, height: 24, borderRadius: 6, background: '#222' }} />
+        <div style={{ width: 24, height: 24, borderRadius: 6, background: 'var(--line-2)' }} />
       )}
-      <span style={{ fontSize: 9.5, fontWeight: 700, color: '#999', textAlign: 'center', lineHeight: 1.2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{src.name}</span>
-      <span style={{ fontSize: 8.5, color: '#444', fontWeight: 600 }}>{src.count}</span>
+      <span style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--muted)', textAlign: 'center', lineHeight: 1.2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{src.name}</span>
+      <span style={{ fontSize: 8.5, color: 'var(--muted-5)', fontWeight: 600 }}>{src.count}</span>
     </button>
   );
 }
 
 // ── Skeleton placeholders ─────────────────────────────────────────────────────
 
-const SHIMMER = 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 50%, transparent 100%)';
+const SHIMMER = 'linear-gradient(90deg, transparent 0%, rgba(var(--fg-rgb),0.04) 50%, transparent 100%)';
 const SHIMMER_CSS = `@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`;
 
 // Matches StoryCard's own DENSITY_HEIGHT map so the skeleton doesn't jump in
@@ -409,7 +409,7 @@ function VerticalCardSkeleton({ cardDensity }: { cardDensity: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
       {[0,1,2].map(i => (
-        <div key={i} style={{ width: '100%', maxWidth: 452, height, borderRadius: 20, background: '#141414', overflow: 'hidden', position: 'relative' }}>
+        <div key={i} style={{ width: '100%', maxWidth: 452, height, borderRadius: 20, background: 'var(--surface-3)', overflow: 'hidden', position: 'relative' }}>
           <div style={{ position: 'absolute', inset: 0, background: SHIMMER, animation: 'shimmer 1.4s infinite' }} />
         </div>
       ))}
@@ -421,7 +421,7 @@ function TileSkeleton() {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
       {[0,1,2,3,4,5].map(i => (
-        <div key={i} style={{ height: 108, borderRadius: 14, background: '#141414', overflow: 'hidden', position: 'relative' }}>
+        <div key={i} style={{ height: 108, borderRadius: 14, background: 'var(--surface-3)', overflow: 'hidden', position: 'relative' }}>
           <div style={{ position: 'absolute', inset: 0, background: SHIMMER, animation: 'shimmer 1.4s infinite' }} />
         </div>
       ))}
@@ -433,7 +433,7 @@ function SourceGridSkeleton() {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
       {[0,1,2,3,4,5].map(i => (
-        <div key={i} style={{ height: 88, borderRadius: 12, background: '#141414', overflow: 'hidden', position: 'relative' }}>
+        <div key={i} style={{ height: 88, borderRadius: 12, background: 'var(--surface-3)', overflow: 'hidden', position: 'relative' }}>
           <div style={{ position: 'absolute', inset: 0, background: SHIMMER, animation: 'shimmer 1.4s infinite' }} />
         </div>
       ))}
@@ -451,13 +451,13 @@ function SearchStoryCard({ item, onOpen }: { item: FeedItem; onOpen: (item: Feed
   const accent = getArticleColor(label);
 
   return (
-    <div onClick={() => onOpen(item)} style={{ display: 'flex', gap: 10, alignItems: 'center', background: '#0E0E0E', border: '1px solid #1A1A1A', borderRadius: 12, padding: '10px 12px', cursor: 'pointer', marginBottom: 8, WebkitTapHighlightColor: 'transparent' }}>
+    <div onClick={() => onOpen(item)} style={{ display: 'flex', gap: 10, alignItems: 'center', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 12px', cursor: 'pointer', marginBottom: 8, WebkitTapHighlightColor: 'transparent' }}>
       <div style={{ flexShrink: 0, width: 56, height: 56, borderRadius: 8, overflow: 'hidden', background: accent }}>
         {imgUrl && <img src={imgUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 9.5, color: '#555', fontWeight: 600, marginBottom: 3 }}>{srcName}{srcCount > 1 ? ` · ${srcCount} sources` : ''}</div>
-        <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: '#eee', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{label}</p>
+        <div style={{ fontSize: 9.5, color: 'var(--muted-4)', fontWeight: 600, marginBottom: 3 }}>{srcName}{srcCount > 1 ? ` · ${srcCount} sources` : ''}</div>
+        <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: 'var(--text-2)', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{label}</p>
       </div>
     </div>
   );
@@ -782,7 +782,7 @@ export default function ExploreScreen() {
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
-      style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', background: '#080808', WebkitOverflowScrolling: 'touch' }}
+      style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', background: 'var(--bg)', WebkitOverflowScrolling: 'touch' }}
     >
       <style>{SHIMMER_CSS}</style>
       {(refreshing || pullProgress > 0.1) && (
@@ -793,8 +793,8 @@ export default function ExploreScreen() {
         }}>
           <div style={{
             width: 16, height: 16, borderRadius: '50%',
-            border: '2px solid rgba(255,255,255,0.08)',
-            borderTop: `2px solid ${pullProgress >= 1 && !refreshing ? '#fff' : 'rgba(255,255,255,0.45)'}`,
+            border: '2px solid rgba(var(--fg-rgb),0.08)',
+            borderTop: `2px solid ${pullProgress >= 1 && !refreshing ? 'var(--text)' : 'rgba(var(--fg-rgb),0.45)'}`,
             animation: refreshing ? 'spin 0.7s linear infinite' : 'none',
             transform: refreshing ? undefined : `rotate(${pullProgress * 360}deg)`,
           }} />
@@ -809,9 +809,9 @@ export default function ExploreScreen() {
 
         {/* Header + Search */}
         <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)', paddingBottom: 16 }}>
-          <h1 style={{ margin: '0 0 14px', fontSize: 28, fontWeight: 800, color: '#fff', letterSpacing: -0.5 }}>Explore</h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#111', border: '1px solid #1E1E1E', borderRadius: 12, padding: '10px 14px' }}>
-            <IconSearch size={15} color="#444" />
+          <h1 style={{ margin: '0 0 14px', fontSize: 28, fontWeight: 800, color: 'var(--text)', letterSpacing: -0.5 }}>Explore</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface-2)', border: '1px solid #1E1E1E', borderRadius: 12, padding: '10px 14px' }}>
+            <IconSearch size={15} color="var(--muted-5)" />
             <input
               type="search"
               placeholder="Search stories, companies, people…"
@@ -819,11 +819,11 @@ export default function ExploreScreen() {
               onChange={e => setSearchText(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const q = searchText.trim(); if (q) doSearch(q); else { setSearchQuery(''); setSearchResults({ stories: [], companies: [], people: [], places: [] }); } } }}
               autoCorrect="off" autoCapitalize="none" spellCheck={false} autoComplete="off"
-              style={{ flex: 1, background: 'none', border: 'none', outline: 'none', fontSize: 16, color: '#ccc', caretColor: '#4A90D9' }}
+              style={{ flex: 1, background: 'none', border: 'none', outline: 'none', fontSize: 16, color: 'var(--text-4)', caretColor: 'var(--accent-2)' }}
             />
             {searchText.length > 0 && (
               <button type="button" onClick={() => { setSearchText(''); setSearchQuery(''); setSearchResults({ stories: [], companies: [], people: [], places: [] }); }}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#555', fontSize: 18, lineHeight: 1, WebkitTapHighlightColor: 'transparent' }}>×</button>
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-4)', fontSize: 18, lineHeight: 1, WebkitTapHighlightColor: 'transparent' }}>×</button>
             )}
           </div>
         </div>
@@ -832,9 +832,9 @@ export default function ExploreScreen() {
         {searchQuery !== '' && (
           <div style={{ marginBottom: 32 }}>
             {searchLoading ? (
-              <div style={{ color: '#444', fontSize: 13, textAlign: 'center', padding: '32px 0' }}>Searching…</div>
+              <div style={{ color: 'var(--muted-5)', fontSize: 13, textAlign: 'center', padding: '32px 0' }}>Searching…</div>
             ) : !hasSearchResults ? (
-              <p style={{ color: '#444', fontSize: 13, textAlign: 'center', padding: '32px 0' }}>No results for "{searchQuery}"</p>
+              <p style={{ color: 'var(--muted-5)', fontSize: 13, textAlign: 'center', padding: '32px 0' }}>No results for "{searchQuery}"</p>
             ) : (
               <>
                 {searchResults.stories.length > 0 && (
@@ -849,8 +849,8 @@ export default function ExploreScreen() {
                     <HScroll>
                       {searchResults.companies.map((c, i) => (
                         <button key={i} onClick={() => triggerSearch(c.name)}
-                          style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, background: '#111', border: '1px solid #1E1E1E', borderRadius: 10, padding: '8px 12px', cursor: 'pointer', WebkitTapHighlightColor: 'transparent', scrollSnapAlign: 'start' }}>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: '#ddd', whiteSpace: 'nowrap' }}>{c.name}</span>
+                          style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, background: 'var(--surface-2)', border: '1px solid #1E1E1E', borderRadius: 10, padding: '8px 12px', cursor: 'pointer', WebkitTapHighlightColor: 'transparent', scrollSnapAlign: 'start' }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{c.name}</span>
                           <span style={{ fontSize: 9, fontWeight: 700, color: '#0A84FF', background: '#0A84FF18', borderRadius: 4, padding: '2px 5px' }}>{c.count}</span>
                         </button>
                       ))}
@@ -863,8 +863,8 @@ export default function ExploreScreen() {
                     <HScroll>
                       {searchResults.people.map((p, i) => (
                         <button key={i} onClick={() => triggerSearch(p.name)}
-                          style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, background: '#111', border: '1px solid #1E1E1E', borderRadius: 10, padding: '8px 12px', cursor: 'pointer', WebkitTapHighlightColor: 'transparent', scrollSnapAlign: 'start' }}>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: '#ddd', whiteSpace: 'nowrap' }}>{p.name}</span>
+                          style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, background: 'var(--surface-2)', border: '1px solid #1E1E1E', borderRadius: 10, padding: '8px 12px', cursor: 'pointer', WebkitTapHighlightColor: 'transparent', scrollSnapAlign: 'start' }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{p.name}</span>
                           <span style={{ fontSize: 9, fontWeight: 700, color: '#FF9F0A', background: '#FF9F0A18', borderRadius: 4, padding: '2px 5px' }}>{p.count}</span>
                         </button>
                       ))}
@@ -877,8 +877,8 @@ export default function ExploreScreen() {
                     <HScroll>
                       {searchResults.places.map((p, i) => (
                         <button key={i} onClick={() => triggerSearch(p.name)}
-                          style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, background: '#111', border: '1px solid #1E1E1E', borderRadius: 10, padding: '8px 12px', cursor: 'pointer', WebkitTapHighlightColor: 'transparent', scrollSnapAlign: 'start' }}>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: '#ddd', whiteSpace: 'nowrap' }}>{p.name}</span>
+                          style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, background: 'var(--surface-2)', border: '1px solid #1E1E1E', borderRadius: 10, padding: '8px 12px', cursor: 'pointer', WebkitTapHighlightColor: 'transparent', scrollSnapAlign: 'start' }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{p.name}</span>
                           <span style={{ fontSize: 9, fontWeight: 700, color: '#30D158', background: '#30D15818', borderRadius: 4, padding: '2px 5px' }}>{p.count}</span>
                         </button>
                       ))}
@@ -991,11 +991,11 @@ export default function ExploreScreen() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 {TOPICS.map(t => (
                   <button key={t.tag} onClick={() => openTopic(t.tag)}
-                    style={{ background: '#0E0E0E', border: '1px solid #1A1A1A', borderRadius: 14, height: 64, display: 'flex', alignItems: 'center', gap: 12, padding: '0 14px', cursor: 'pointer', WebkitTapHighlightColor: 'transparent', textAlign: 'left' }}>
+                    style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, height: 64, display: 'flex', alignItems: 'center', gap: 12, padding: '0 14px', cursor: 'pointer', WebkitTapHighlightColor: 'transparent', textAlign: 'left' }}>
                     <div style={{ width: 36, height: 36, borderRadius: 10, background: t.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <TopicIcon icon={t.icon} color={t.color} size={18} />
                     </div>
-                    <span style={{ fontSize: 13.5, fontWeight: 700, color: '#eee' }}>{t.label}</span>
+                    <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-2)' }}>{t.label}</span>
                   </button>
                 ))}
               </div>

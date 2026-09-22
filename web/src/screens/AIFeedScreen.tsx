@@ -58,8 +58,8 @@ STYLE
 QUALITY CHECK
 Before returning: Is there a single dominant narrative? Have all repeated facts been removed? Are the key numbers surfaced separately? Can a reader understand the story in under one minute? Does the final paragraph leave the reader with the most important implication or likely outcome?`;
 
-const VIOLET = '#b994ff';
-const GOLD   = '#FFC542';
+const VIOLET = 'var(--accent)';
+const GOLD   = 'var(--star)';
 
 interface TldrSection { heading: string; bullets: string[]; }
 interface StorySection { heading: string; body: string; }
@@ -524,7 +524,7 @@ export default function AIFeedScreen() {
     <div style={{
       height: '100%', position: 'relative',
       background: 'radial-gradient(at 0% 0%, #1a1a2e44 0%, transparent 50%), #050507',
-      color: '#fff',
+      color: 'var(--text)',
       overflow: 'hidden',
     }}>
       {/* Header — pill is now a dropdown for topic filtering */}
@@ -560,14 +560,14 @@ export default function AIFeedScreen() {
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '8px 16px', borderRadius: 999,
             background: 'rgba(20,20,28,0.75)',
-            border: '1px solid rgba(255,255,255,0.1)',
+            border: '1px solid rgba(var(--fg-rgb),0.1)',
             backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
-            color: '#fff', fontSize: 11, fontWeight: 700, letterSpacing: 0.8,
+            color: 'var(--text)', fontSize: 11, fontWeight: 700, letterSpacing: 0.8,
             transform: `scale(${Math.min(1, pull / PULL_THRESHOLD || 1)})`,
           }}>
             <div style={{
               width: 14, height: 14, borderRadius: '50%',
-              border: '2px solid rgba(255,255,255,0.15)', borderTopColor: VIOLET,
+              border: '2px solid rgba(var(--fg-rgb),0.15)', borderTopColor: VIOLET,
               animation: refreshing ? 'aifspin 0.8s linear infinite' : 'none',
               transform: !refreshing ? `rotate(${(pull / PULL_THRESHOLD) * 360}deg)` : undefined,
               transition: refreshing ? undefined : 'transform 0.05s linear',
@@ -594,7 +594,7 @@ export default function AIFeedScreen() {
             height: '100%', overflowY: 'auto',
             scrollSnapType: 'y mandatory',
             WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none',
-            background: '#080808',
+            background: 'var(--bg)',
             // Block Chrome's native pull-to-refresh from intercepting our gesture
             overscrollBehaviorY: 'contain',
             transform: `translateY(${pull}px)`,
@@ -621,10 +621,10 @@ export default function AIFeedScreen() {
             }}>
               <div style={{
                 width: 28, height: 28, borderRadius: '50%',
-                border: '3px solid rgba(255,255,255,0.08)', borderTopColor: VIOLET,
+                border: '3px solid rgba(var(--fg-rgb),0.08)', borderTopColor: VIOLET,
                 animation: 'aifspin 0.8s linear infinite',
               }} />
-              <div style={{ color: '#888', fontSize: 12, fontWeight: 600, letterSpacing: 0.4 }}>
+              <div style={{ color: 'var(--muted-2)', fontSize: 12, fontWeight: 600, letterSpacing: 0.4 }}>
                 Loading more stories…
               </div>
             </div>
@@ -638,8 +638,8 @@ export default function AIFeedScreen() {
               background: '#050507',
             }}>
               <div className="aif-celebrate" style={{ fontSize: 38 }}>🎉</div>
-              <div style={{ color: '#fff', fontSize: 15, fontWeight: 700 }}>You're all caught up</div>
-              <div style={{ color: '#666', fontSize: 12 }}>Swipe back to revisit any story.</div>
+              <div style={{ color: 'var(--text)', fontSize: 15, fontWeight: 700 }}>You're all caught up</div>
+              <div style={{ color: 'var(--muted-3)', fontSize: 12 }}>Swipe back to revisit any story.</div>
             </div>
           )}
         </div>
@@ -787,7 +787,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         {/* Top scrim for counter/badge legibility */}
         <div style={{
           position: 'absolute', top: 0, left: 0, right: 0, height: '45%',
-          background: 'linear-gradient(180deg, rgba(0,0,0,0.32) 0%, transparent 100%)',
+          background: 'linear-gradient(180deg, rgba(var(--shadow-rgb),0.32) 0%, transparent 100%)',
           pointerEvents: 'none',
         }} />
         {/* Bleed: image fades into the story's dominant colour — same vibrant
@@ -804,8 +804,8 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         position: 'absolute', top: 'max(14px, calc(env(safe-area-inset-top, 0px) + 10px))', right: 14, zIndex: 5,
         padding: '5px 10px', borderRadius: 999,
         background: 'rgba(15,15,20,0.78)',
-        border: '1px solid rgba(255,255,255,0.12)',
-        color: '#fff', fontSize: 10, fontWeight: 700, letterSpacing: 0.6,
+        border: '1px solid rgba(var(--fg-rgb),0.12)',
+        color: 'var(--text)', fontSize: 10, fontWeight: 700, letterSpacing: 0.6,
       }}>
         {index + 1} / {total}
       </div>
@@ -831,7 +831,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
         display: 'flex', flexDirection: 'column', gap: 12,
         zIndex: 2, overflow: 'hidden',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: 800, letterSpacing: 1.4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(var(--fg-rgb),0.55)', fontSize: 11, fontWeight: 800, letterSpacing: 1.4 }}>
           <span>{timeAgo(story.publishedAt)}</span>
           <span style={{ opacity: 0.5 }}>·</span>
           <span>{sourceName}</span>
@@ -850,22 +850,22 @@ function FullPreviewCard({ item, index, total, onOpen }: {
           return (
             <>
         <h2 style={{
-          margin: 0, color: '#fff', fontSize: headlineSize, fontWeight: 800,
+          margin: 0, color: 'var(--text)', fontSize: headlineSize, fontWeight: 800,
           lineHeight: 1.2, letterSpacing: -0.5,
-          textShadow: '0 4px 24px rgba(0,0,0,0.7)',
+          textShadow: '0 4px 24px rgba(var(--shadow-rgb),0.7)',
         }}>{story.headline}</h2>
 
         {shortSummary ? (
           <div style={{
-            background: 'rgba(0,0,0,0.45)',
+            background: 'rgba(var(--shadow-rgb),0.45)',
             borderRadius: 12,
             padding: '10px 12px',
-            border: '1px solid rgba(255,255,255,0.09)',
+            border: '1px solid rgba(var(--fg-rgb),0.09)',
             display: 'flex', flexDirection: 'column', gap: 6,
           }}>
             <p style={{
-              margin: 0, color: '#eeeeee', fontSize: 17, lineHeight: 1.5,
-              textShadow: '0 2px 12px rgba(0,0,0,0.55)',
+              margin: 0, color: 'var(--text-2)', fontSize: 17, lineHeight: 1.5,
+              textShadow: '0 2px 12px rgba(var(--shadow-rgb),0.55)',
             }}><FactText text={shortSummary} color={accent} /></p>
             {quote && (
               <div style={{
@@ -873,7 +873,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
               }}>
                 <p style={{
                   margin: 0, color: '#d0d0d0', fontSize: 14.5, lineHeight: 1.5,
-                  fontStyle: 'italic', textShadow: '0 2px 12px rgba(0,0,0,0.55)',
+                  fontStyle: 'italic', textShadow: '0 2px 12px rgba(var(--shadow-rgb),0.55)',
                 }}>"{quote.text}"</p>
                 <p style={{
                   margin: '2px 0 0', color: VIOLET, fontSize: 12, fontWeight: 700,
@@ -886,7 +886,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
             {story.summary && story.summary.toLowerCase().trim() !== story.headline.toLowerCase().trim() && (
               <p style={{
                 margin: 0, color: '#d0d0d0', fontSize: 14, lineHeight: 1.55,
-                textShadow: '0 2px 12px rgba(0,0,0,0.55)',
+                textShadow: '0 2px 12px rgba(var(--shadow-rgb),0.55)',
               }}>{story.summary}</p>
             )}
             <div style={{
@@ -896,7 +896,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
               border: '1px solid rgba(185,148,255,0.12)',
             }}>
               <span className="aif-pulse" style={{ color: VIOLET, fontSize: 13 }}>✦</span>
-              <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: 600 }}>Generating AI insights…</span>
+              <span style={{ color: 'rgba(var(--fg-rgb),0.45)', fontSize: 11, fontWeight: 600 }}>Generating AI insights…</span>
             </div>
           </div>
         )}
@@ -967,19 +967,19 @@ function RelatedStoryCard({ s, onPress }: { s: Story; onPress: () => void }) {
         <div style={{ width: '100%', height: 100, background: 'linear-gradient(135deg, rgba(185,148,255,0.15) 0%, #0a0a10 100%)' }} />
       )}
       <div style={{ padding: '12px 14px 14px' }}>
-        <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10, fontWeight: 800, letterSpacing: 1.2, marginBottom: 6 }}>{srcName.toUpperCase()}</div>
+        <div style={{ color: 'rgba(var(--fg-rgb),0.45)', fontSize: 10, fontWeight: 800, letterSpacing: 1.2, marginBottom: 6 }}>{srcName.toUpperCase()}</div>
         <div style={{ color: '#f0f0f0', fontSize: 15, fontWeight: 700, lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as const }}>{s.headline}</div>
         <div style={{
           background: 'rgba(15,15,22,0.6)', borderRadius: 12, padding: '10px 12px',
           marginTop: 10,
-          border: '1px solid rgba(255,255,255,0.07)',
+          border: '1px solid rgba(var(--fg-rgb),0.07)',
           borderTop: `2px solid ${VIOLET}`,
           display: 'flex', flexDirection: 'column', gap: 0,
         }}>
           {tldrSections ? (
             tldrSections.slice(0, 2).map((section, si) => (
               <div key={si} style={{ marginTop: si > 0 ? 10 : 0 }}>
-                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: 800, letterSpacing: 1.4, marginBottom: 6, textTransform: 'uppercase' as const }}>{section.heading}</div>
+                <div style={{ color: 'rgba(var(--fg-rgb),0.5)', fontSize: 9, fontWeight: 800, letterSpacing: 1.4, marginBottom: 6, textTransform: 'uppercase' as const }}>{section.heading}</div>
                 {section.bullets.slice(0, 2).map((b, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, paddingTop: 3, paddingBottom: 3 }}>
                     <div style={{ width: 5, height: 5, borderRadius: 3, marginTop: 6, background: VIOLET, flexShrink: 0 }} />
@@ -1079,8 +1079,8 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
     if (!data) return null;
     if (data.tldrSections && data.tldrSections.length > 0) {
       return data.tldrSections.map((section, si) => (
-        <div key={si} style={{ marginTop: si > 0 ? 20 : 0, paddingTop: si > 0 ? 16 : 0, borderTop: si > 0 ? '1px solid rgba(255,255,255,0.08)' : 'none' }}>
-          <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 10, fontWeight: 800, letterSpacing: 1.4, marginBottom: 8, textTransform: 'uppercase' }}>{section.heading}</div>
+        <div key={si} style={{ marginTop: si > 0 ? 20 : 0, paddingTop: si > 0 ? 16 : 0, borderTop: si > 0 ? '1px solid rgba(var(--fg-rgb),0.08)' : 'none' }}>
+          <div style={{ color: 'rgba(var(--fg-rgb),0.55)', fontSize: 10, fontWeight: 800, letterSpacing: 1.4, marginBottom: 8, textTransform: 'uppercase' }}>{section.heading}</div>
           {section.bullets.map((b, i) => (
             <div key={i} style={{ display: 'flex', gap: 12, padding: '7px 0', alignItems: 'flex-start' }}>
               <div style={{ width: 6, height: 6, borderRadius: 4, marginTop: 9, background: VIOLET, flexShrink: 0 }} />
@@ -1289,18 +1289,18 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
         position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: 'calc(env(safe-area-inset-top, 0px) + 10px) 16px 14px',
-        background: 'linear-gradient(180deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 60%, transparent 100%)',
+        background: 'linear-gradient(180deg, rgba(var(--shadow-rgb),0.7) 0%, rgba(var(--shadow-rgb),0.3) 60%, transparent 100%)',
         pointerEvents: 'none',
       }}>
         <button onClick={onClose} style={{
           pointerEvents: 'auto',
           width: 38, height: 38, borderRadius: 19,
           background: 'rgba(20,20,28,0.7)',
-          border: '1px solid rgba(255,255,255,0.1)',
+          border: '1px solid rgba(var(--fg-rgb),0.1)',
           backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
           cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2.5">
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
@@ -1310,13 +1310,13 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
               width: 40, height: 40, borderRadius: 20, cursor: 'pointer', flexShrink: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               background: active ? `${accent}26` : 'rgba(20,20,28,0.7)',
-              border: `1px solid ${active ? accent : 'rgba(255,255,255,0.1)'}`,
+              border: `1px solid ${active ? accent : 'rgba(var(--fg-rgb),0.1)'}`,
               backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
             });
             return (<>
               <button onClick={() => setFollowing(toggleFollow({ id: story.id, headline: story.headline, imageUrl: story.imageUrl }))}
                 title={following ? 'Following' : 'Follow this story'} style={circle(following)}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill={following ? accent : 'none'} stroke={following ? accent : '#fff'} strokeWidth="2"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4-6.3-4.6L5.7 21 8 14 2 9.4h7.6z"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill={following ? accent : 'none'} stroke={following ? accent : 'var(--pill)'} strokeWidth="2"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4-6.3-4.6L5.7 21 8 14 2 9.4h7.6z"/></svg>
               </button>
             </>);
           })()}
@@ -1346,7 +1346,7 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
         )}
         <div style={{
           position: 'absolute', inset: 0,
-          background: 'linear-gradient(180deg, rgba(0,0,0,0.35) 0%, transparent 25%, transparent 55%, rgba(5,5,7,0.6) 88%, #050507 100%)',
+          background: 'linear-gradient(180deg, rgba(var(--shadow-rgb),0.35) 0%, transparent 25%, transparent 55%, rgba(5,5,7,0.6) 88%, #050507 100%)',
         }} />
         {/* Tags overlay */}
         {data && data.tags.length > 0 && (
@@ -1358,9 +1358,9 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
               <span key={t} style={{
                 padding: '5px 11px', borderRadius: 999,
                 background: 'rgba(20,20,28,0.75)',
-                border: '1px solid rgba(255,255,255,0.18)',
+                border: '1px solid rgba(var(--fg-rgb),0.18)',
                 backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
-                color: '#eee', fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+                color: 'var(--text-2)', fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
               }}>{t}</span>
             ))}
           </div>
@@ -1370,13 +1370,13 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
       {/* Content */}
       <div style={{ padding: '4px 20px 80px', display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 720, margin: '0 auto' }}>
         <h1 style={{
-          margin: 0, color: '#fff', fontSize: 24, fontWeight: 800,
+          margin: 0, color: 'var(--text)', fontSize: 24, fontWeight: 800,
           lineHeight: 1.22, letterSpacing: -0.4,
         }}>{story.headline}</h1>
 
         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, color: accent, fontSize: 10, fontWeight: 800, letterSpacing: 1.4 }}>
           <span>{sourceName.toUpperCase()}</span>
-          <span style={{ color: 'rgba(255,255,255,0.3)' }}>·</span>
+          <span style={{ color: 'rgba(var(--fg-rgb),0.3)' }}>·</span>
           <span>{timeAgo(story.publishedAt)}</span>
         </div>
 
@@ -1389,7 +1389,7 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
             {(data.tldrSections && data.tldrSections.length > 0) || data.tldr.length > 0 ? (
               <div style={{
                 background: 'rgba(15,15,22,0.5)',
-                border: '1px solid rgba(255,255,255,0.06)',
+                border: '1px solid rgba(var(--fg-rgb),0.06)',
                 borderRadius: 16, padding: '20px 22px',
                 backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
                 boxShadow: `0 6px 24px ${dominant}22`,
@@ -1411,14 +1411,14 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
               }}>
                 <div style={{
                   position: 'absolute', left: 0, top: 14, bottom: 14, width: 3,
-                  background: 'linear-gradient(180deg, #FFC542, #FF9A00)',
+                  background: 'linear-gradient(180deg, var(--star), #FF9A00)',
                   borderRadius: 999,
                 }} />
-                <div style={{ color: '#FFC542', fontSize: 9, fontWeight: 800, letterSpacing: 1.6, marginBottom: 8 }}>
+                <div style={{ color: 'var(--star)', fontSize: 9, fontWeight: 800, letterSpacing: 1.6, marginBottom: 8 }}>
                   KEY INSIGHT
                 </div>
                 <p style={{
-                  margin: 0, color: '#fff', fontSize: 15.5 * ddScale, lineHeight: 1.55,
+                  margin: 0, color: 'var(--text)', fontSize: 15.5 * ddScale, lineHeight: 1.55,
                   fontWeight: 500, fontStyle: 'italic',
                 }}>{data.insight}</p>
               </div>
@@ -1445,7 +1445,7 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
                   fontWeight: 500, fontStyle: 'italic',
                 }}>{'“'}{data.quote.text}{'”'}</p>
                 {data.quote.by && (
-                  <p style={{ margin: '10px 0 0', color: '#888', fontSize: 12 * ddScale, fontWeight: 600 }}>
+                  <p style={{ margin: '10px 0 0', color: 'var(--muted-2)', fontSize: 12 * ddScale, fontWeight: 600 }}>
                     — {data.quote.by}
                   </p>
                 )}
@@ -1457,7 +1457,7 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
             {data.keyQuotes && data.keyQuotes.filter(q => q.text && q.text !== data.quote?.text).length > 0 && (
               <div style={{
                 background: 'rgba(15,15,22,0.5)',
-                border: '1px solid rgba(255,255,255,0.06)',
+                border: '1px solid rgba(var(--fg-rgb),0.06)',
                 borderRadius: 14, padding: '18px 20px',
                 backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
               }}>
@@ -1470,7 +1470,7 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   {data.keyQuotes.filter(q => q.text && q.text !== data.quote?.text).map((q, i) => (
-                    <div key={i} style={{ paddingTop: i > 0 ? 14 : 0, borderTop: i > 0 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
+                    <div key={i} style={{ paddingTop: i > 0 ? 14 : 0, borderTop: i > 0 ? '1px solid rgba(var(--fg-rgb),0.05)' : 'none' }}>
                       <p style={{
                         margin: 0, color: '#d4d4dc', fontSize: 14 * ddScale, lineHeight: 1.55,
                         fontStyle: 'italic',
@@ -1489,12 +1489,12 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
             {metrics.length > 0 && (
               <div style={{
                 background: 'rgba(15,15,22,0.5)',
-                border: '1px solid rgba(255,255,255,0.06)',
+                border: '1px solid rgba(var(--fg-rgb),0.06)',
                 borderRadius: 14, padding: '18px 20px',
                 backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
               }}>
                 <div style={{
-                  color: '#4A90D9', fontSize: 9, fontWeight: 800, letterSpacing: 1.6,
+                  color: 'var(--accent-2)', fontSize: 9, fontWeight: 800, letterSpacing: 1.6,
                   marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8,
                 }}>
                   <span>KEY METRICS</span>
@@ -1502,8 +1502,8 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                   {metrics.map((m, i) => (
-                    <div key={i} style={{ display: 'flex', gap: 10, padding: '8px 0', alignItems: 'flex-start', borderTop: i > 0 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
-                      <div style={{ width: 5, height: 5, borderRadius: 3, marginTop: 8, background: '#4A90D9', flexShrink: 0 }} />
+                    <div key={i} style={{ display: 'flex', gap: 10, padding: '8px 0', alignItems: 'flex-start', borderTop: i > 0 ? '1px solid rgba(var(--fg-rgb),0.05)' : 'none' }}>
+                      <div style={{ width: 5, height: 5, borderRadius: 3, marginTop: 8, background: 'var(--accent-2)', flexShrink: 0 }} />
                       <div style={{ flex: 1, color: '#d4d4dc', fontSize: 14 * ddScale, lineHeight: 1.55 }}>{highlightEntities(m, tagList, accent)}</div>
                     </div>
                   ))}
@@ -1523,7 +1523,7 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
                 {data.degraded && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(245,158,11,0.08)', borderRadius: 8, padding: '7px 10px', marginBottom: 10 }}>
                     <span style={{ fontSize: 11 }}>⚠️</span>
-                    <span style={{ color: '#f59e0b', fontSize: 11, fontWeight: 600 }}>AI story unavailable right now — showing the source summary. Refresh to retry.</span>
+                    <span style={{ color: 'var(--warn)', fontSize: 11, fontWeight: 600 }}>AI story unavailable right now — showing the source summary. Refresh to retry.</span>
                   </div>
                 )}
                 {narrativeBody}
@@ -1605,7 +1605,7 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
         .dd-hero-in { animation: ddHeroIn 0.55s cubic-bezier(0.22, 1, 0.36, 1); transform-origin: center 40%; }
         @keyframes typingDot { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-5px); opacity: 1; } }
         .typing-dots { display: inline-flex; gap: 4px; align-items: center; }
-        .typing-dots span { width: 6px; height: 6px; border-radius: 50%; background: #b994ff; animation: typingDot 1.1s ease-in-out infinite; }
+        .typing-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: typingDot 1.1s ease-in-out infinite; }
         .typing-dots span:nth-child(2) { animation-delay: 0.18s; }
         .typing-dots span:nth-child(3) { animation-delay: 0.36s; }
         @keyframes ddEntityPulse {
@@ -1725,8 +1725,8 @@ function QuestionItem({ question, story, narrative, accent, scale = 1 }: {
   return (
     <div style={{
       borderRadius: 12, overflow: 'hidden',
-      background: 'rgba(255,255,255,0.04)',
-      border: '1px solid rgba(255,255,255,0.08)',
+      background: 'rgba(var(--fg-rgb),0.04)',
+      border: '1px solid rgba(var(--fg-rgb),0.08)',
     }}>
       <button
         onClick={toggle}
@@ -1750,7 +1750,7 @@ function QuestionItem({ question, story, narrative, accent, scale = 1 }: {
       {open && (
         <div style={{
           padding: '0 14px 14px',
-          borderTop: '1px solid rgba(255,255,255,0.05)',
+          borderTop: '1px solid rgba(var(--fg-rgb),0.05)',
           paddingTop: 12,
         }}>
           {loading ? (
@@ -1760,16 +1760,16 @@ function QuestionItem({ question, story, narrative, accent, scale = 1 }: {
               <button onClick={cancelAnswer} style={{
                 marginLeft: 4, padding: '2px 8px', borderRadius: 999,
                 background: 'transparent', border: '1px solid rgba(255,136,136,0.4)',
-                color: '#ff8888', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                color: 'var(--danger)', fontSize: 10, fontWeight: 700, cursor: 'pointer',
               }}>CANCEL</button>
             </div>
           ) : error ? (
-            <div style={{ color: '#ff8888', fontSize: 12 }}>
+            <div style={{ color: 'var(--danger)', fontSize: 12 }}>
               {error}
               <button onClick={() => { setError(null); fetchAnswer(); }} style={{
                 marginLeft: 8, padding: '2px 8px', borderRadius: 999,
                 background: 'transparent', border: '1px solid rgba(255,136,136,0.4)',
-                color: '#ff8888', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                color: 'var(--danger)', fontSize: 10, fontWeight: 700, cursor: 'pointer',
               }}>RETRY</button>
             </div>
           ) : answer ? (
@@ -1794,10 +1794,10 @@ function EntityBlock({ label, items, accent, dominant, subtle }: {
       marginBottom: 12,
       padding: '14px 16px', borderRadius: 14,
       background: 'rgba(15,15,22,0.5)',
-      border: '1px solid rgba(255,255,255,0.06)',
+      border: '1px solid rgba(var(--fg-rgb),0.06)',
       backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
     }}>
-      <div style={{ color: '#666', fontSize: 9, fontWeight: 800, letterSpacing: 1.4, marginBottom: 10 }}>
+      <div style={{ color: 'var(--muted-3)', fontSize: 9, fontWeight: 800, letterSpacing: 1.4, marginBottom: 10 }}>
         {label}
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -1810,9 +1810,9 @@ function EntityBlock({ label, items, accent, dominant, subtle }: {
             }} style={{
               padding: '5px 11px', borderRadius: 999, cursor: 'pointer',
               display: 'inline-flex', alignItems: 'center', gap: 4,
-              background: isOn ? 'rgba(52,199,89,0.18)' : subtle ? `${accent}1a` : 'rgba(255,255,255,0.05)',
-              border: isOn ? '1px solid #34C759' : subtle ? `1px solid ${accent}33` : '1px solid rgba(255,255,255,0.1)',
-              color: isOn ? '#34C759' : subtle ? accent : '#e8e8e8',
+              background: isOn ? 'rgba(52,199,89,0.18)' : subtle ? `${accent}1a` : 'rgba(var(--fg-rgb),0.05)',
+              border: isOn ? '1px solid var(--success)' : subtle ? `1px solid ${accent}33` : '1px solid rgba(var(--fg-rgb),0.1)',
+              color: isOn ? 'var(--success)' : subtle ? accent : '#e8e8e8',
               fontSize: 11.5, fontWeight: isOn || subtle ? 700 : 500,
               letterSpacing: subtle ? 0.3 : 0,
               transition: 'background 0.18s, border-color 0.18s, color 0.18s',
@@ -1831,7 +1831,7 @@ function Section({ label, accent, dominant, children }: { label: string; accent:
   return (
     <div style={{
       background: 'rgba(15,15,22,0.6)',
-      border: '1px solid rgba(255,255,255,0.06)',
+      border: '1px solid rgba(var(--fg-rgb),0.06)',
       borderRadius: 16, padding: '16px 18px',
       backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
       boxShadow: dominant ? `0 6px 24px ${dominant}22` : undefined,
@@ -1874,13 +1874,13 @@ function TopicPill({ current, onChange }: { current: string; onChange: (t: strin
           display: 'inline-flex', alignItems: 'center', gap: 6,
           padding: '6px 12px', borderRadius: 999,
           background: 'rgba(20,20,28,0.65)',
-          border: '1px solid rgba(255,255,255,0.1)',
+          border: '1px solid rgba(var(--fg-rgb),0.1)',
           backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
-          color: '#fff', fontSize: 11, fontWeight: 800, letterSpacing: 1.4,
+          color: 'var(--text)', fontSize: 11, fontWeight: 800, letterSpacing: 1.4,
           cursor: 'pointer',
         }}
       >
-        <SparkleIcon color="#b994ff" size={12} />
+        <SparkleIcon color="var(--accent)" size={12} />
         AI FEED · {TOPIC_LABELS[current] ?? current.toUpperCase()}
         <span style={{ fontSize: 9, marginLeft: 2, opacity: 0.7, transform: open ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }}>▼</span>
       </button>
@@ -1891,9 +1891,9 @@ function TopicPill({ current, onChange }: { current: string; onChange: (t: strin
             position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 20,
             minWidth: 180, padding: 4, borderRadius: 12,
             background: 'rgba(15,15,20,0.95)',
-            border: '1px solid rgba(255,255,255,0.1)',
+            border: '1px solid rgba(var(--fg-rgb),0.1)',
             backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+            boxShadow: '0 8px 24px rgba(var(--shadow-rgb),0.5)',
           }}>
             {Object.entries(TOPIC_LABELS).map(([key, label]) => {
               const active = key === current;
@@ -1905,7 +1905,7 @@ function TopicPill({ current, onChange }: { current: string; onChange: (t: strin
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     width: '100%', padding: '10px 14px', borderRadius: 8, border: 'none',
                     background: active ? 'rgba(185,148,255,0.15)' : 'transparent',
-                    color: active ? '#b994ff' : '#fff',
+                    color: active ? 'var(--accent)' : 'var(--text)',
                     fontSize: 12, fontWeight: 700, letterSpacing: 1, textAlign: 'left',
                     cursor: 'pointer',
                   }}
@@ -1937,10 +1937,10 @@ function CenteredLoading({ text }: { text: string }) {
         }} />
         {/* fake content blocks */}
         <div style={{ position: 'absolute', left: 22, right: 22, bottom: 110, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ height: 14, width: '40%', borderRadius: 4, background: 'rgba(255,255,255,0.06)' }} />
-          <div style={{ height: 28, width: '90%', borderRadius: 6, background: 'rgba(255,255,255,0.08)' }} />
-          <div style={{ height: 28, width: '70%', borderRadius: 6, background: 'rgba(255,255,255,0.08)' }} />
-          <div style={{ height: 12, width: '55%', borderRadius: 4, background: 'rgba(255,255,255,0.05)', marginTop: 6 }} />
+          <div style={{ height: 14, width: '40%', borderRadius: 4, background: 'rgba(var(--fg-rgb),0.06)' }} />
+          <div style={{ height: 28, width: '90%', borderRadius: 6, background: 'rgba(var(--fg-rgb),0.08)' }} />
+          <div style={{ height: 28, width: '70%', borderRadius: 6, background: 'rgba(var(--fg-rgb),0.08)' }} />
+          <div style={{ height: 12, width: '55%', borderRadius: 4, background: 'rgba(var(--fg-rgb),0.05)', marginTop: 6 }} />
         </div>
       </div>
       <div style={{
@@ -1964,10 +1964,10 @@ function CenteredError({ text }: { text: string }) {
     <div style={{
       position: 'absolute', inset: 0,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      gap: 8, color: '#ff8888', padding: 32, textAlign: 'center',
+      gap: 8, color: 'var(--danger)', padding: 32, textAlign: 'center',
     }}>
       <div style={{ fontSize: 14, fontWeight: 600 }}>Couldn't load</div>
-      <div style={{ color: '#666', fontSize: 12 }}>{text}</div>
+      <div style={{ color: 'var(--muted-3)', fontSize: 12 }}>{text}</div>
     </div>
   );
 }
@@ -1995,7 +1995,7 @@ function InlineLoader({ accent, showColdHint }: { accent: string; showColdHint: 
     <div style={{
       padding: 18, borderRadius: 14, position: 'relative', overflow: 'hidden',
       background: 'rgba(15,15,22,0.7)',
-      border: '1px solid rgba(255,255,255,0.06)',
+      border: '1px solid rgba(var(--fg-rgb),0.06)',
       backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
       display: 'flex', flexDirection: 'column', gap: 10,
     }}>
@@ -2008,13 +2008,13 @@ function InlineLoader({ accent, showColdHint }: { accent: string; showColdHint: 
       }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <span className="typing-dots" style={{ transform: 'scale(1.2)' }}><span style={{ background: accent }} /><span style={{ background: accent }} /><span style={{ background: accent }} /></span>
-        <div style={{ color: '#ccc', fontSize: 12, fontWeight: 500 }}>Distilling story…</div>
+        <div style={{ color: 'var(--text-4)', fontSize: 12, fontWeight: 500 }}>Distilling story…</div>
       </div>
       <style>{`@keyframes progSweep { 0% { background-position: -100% 0; } 100% { background-position: 200% 0; } }`}</style>
       {showColdHint && (
         <div style={{
-          color: '#888', fontSize: 11, lineHeight: 1.5,
-          paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.05)',
+          color: 'var(--muted-2)', fontSize: 11, lineHeight: 1.5,
+          paddingTop: 6, borderTop: '1px solid rgba(var(--fg-rgb),0.05)',
         }}>
           Backend warming up (Render free tier). First request after idle takes ~20s.
         </div>
@@ -2024,12 +2024,12 @@ function InlineLoader({ accent, showColdHint }: { accent: string; showColdHint: 
 }
 
 function InlineError({ text, onRetry, accent }: { text: string; onRetry?: () => void; accent?: string }) {
-  const c = accent || '#b994ff';
+  const c = accent || 'var(--accent)';
   return (
     <div style={{
       padding: 18, borderRadius: 14,
       background: 'rgba(40,20,20,0.4)', border: '1px solid rgba(255,80,80,0.15)',
-      color: '#ff8888', fontSize: 12,
+      color: 'var(--danger)', fontSize: 12,
     }}>
       <div style={{ fontWeight: 700, marginBottom: 4 }}>Couldn't generate</div>
       <div style={{ color: '#aaa', fontSize: 11, marginBottom: onRetry ? 16 : 0 }}>{text}</div>
@@ -2046,7 +2046,7 @@ function InlineError({ text, onRetry, accent }: { text: string; onRetry?: () => 
             </svg>
             RETRY
           </button>
-          <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.35)', fontSize: 10, marginTop: 10, letterSpacing: 0.3 }}>
+          <div style={{ textAlign: 'center', color: 'rgba(var(--fg-rgb),0.35)', fontSize: 10, marginTop: 10, letterSpacing: 0.3 }}>
             or pull down to refresh
           </div>
         </>
@@ -2079,12 +2079,12 @@ function highlightEntities(text: string, tags: string[], _color: string): React.
 
   return segments.map((seg, si) => {
     if (seg.bold) {
-      return <strong key={`b${si}`} className="dd-entity-pulse" style={{ color: '#fff', fontWeight: 700 }}>{seg.text}</strong>;
+      return <strong key={`b${si}`} className="dd-entity-pulse" style={{ color: 'var(--text)', fontWeight: 700 }}>{seg.text}</strong>;
     }
     if (!re) return <React.Fragment key={`t${si}`}>{seg.text}</React.Fragment>;
     const parts = seg.text.split(re);
     return parts.map((p, i) => i % 2 === 1
-      ? <strong key={`t${si}-${i}`} className="dd-entity-pulse" style={{ color: '#fff', fontWeight: 700 }}>{p}</strong>
+      ? <strong key={`t${si}-${i}`} className="dd-entity-pulse" style={{ color: 'var(--text)', fontWeight: 700 }}>{p}</strong>
       : <React.Fragment key={`t${si}-${i}`}>{p}</React.Fragment>);
   });
 }

@@ -1,14 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useRouter } from '../contexts/RouterContext';
 
-const VIOLET = '#b994ff';
+const VIOLET = 'var(--accent)';
 const GREEN = '#34D399';
-const AMBER = '#F59E0B';
-const RED = '#EF4444';
-const BLUE = '#4A90D9';
-const CARD = '#0E0E0E';
-const BORDER = '#1A1A1A';
-const MUTED = '#666';
+const AMBER = 'var(--warn)';
+const RED = 'var(--danger)';
+const BLUE = 'var(--accent-2)';
+const CARD = 'var(--surface)';
+const BORDER = 'var(--line)';
+const MUTED = 'var(--muted-3)';
 
 interface AiTask { task: string; label: string; tokens: number; calls: number; errors: number; avgMs?: number | null; }
 interface AiModel {
@@ -67,7 +67,7 @@ export default function AIUsageScreen() {
   const peakMax = Math.max(1, ...peakHour);
 
   return (
-    <div style={{ minHeight: '100vh', background: '#080808', paddingBottom: 100 }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 100 }}>
       {/* Header */}
       <div style={{
         position: 'sticky', top: 0, zIndex: 10, background: 'rgba(8,8,8,0.94)',
@@ -75,11 +75,11 @@ export default function AIUsageScreen() {
         padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12,
       }}>
         <button onClick={goBack} aria-label="Back" style={{
-          background: 'none', border: 'none', color: '#DDD', cursor: 'pointer',
+          background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer',
           fontSize: 22, lineHeight: 1, padding: 0,
         }}>‹</button>
         <div style={{ flex: 1 }}>
-          <div style={{ color: '#fff', fontSize: 17, fontWeight: 700 }}>AI Engine</div>
+          <div style={{ color: 'var(--text)', fontSize: 17, fontWeight: 700 }}>AI Engine</div>
           <div style={{ color: MUTED, fontSize: 11 }}>{ai?.day ?? '—'} · resets daily (UTC)</div>
         </div>
         <button onClick={load} disabled={loading} style={{
@@ -149,7 +149,7 @@ export default function AIUsageScreen() {
                 {idle.map(m => (
                   <div key={m.model} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0' }}>
                     <span style={{ color: '#777', fontSize: 12 }}>{m.model}</span>
-                    <span style={{ color: '#444', fontSize: 11 }}>{m.tier ? TIER_LABEL[m.tier] ?? m.tier : 'idle'}</span>
+                    <span style={{ color: 'var(--muted-5)', fontSize: 11 }}>{m.tier ? TIER_LABEL[m.tier] ?? m.tier : 'idle'}</span>
                   </div>
                 ))}
               </div>
@@ -164,12 +164,12 @@ export default function AIUsageScreen() {
                 return ai.tasks!.map(t => (
                   <div key={t.task} style={{ marginBottom: 12 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                      <span style={{ color: '#DDD', fontSize: 13 }}>{t.label}</span>
+                      <span style={{ color: 'var(--text-3)', fontSize: 13 }}>{t.label}</span>
                       <span style={{ color: MUTED, fontSize: 12 }}>
                         {t.calls} · {fmt(t.tokens)} tok{t.errors > 0 ? ` · ${t.errors} err` : ''}
                       </span>
                     </div>
-                    <div style={{ height: 5, background: '#161616', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ height: 5, background: 'var(--line)', borderRadius: 3, overflow: 'hidden' }}>
                       <div style={{
                         width: `${(t.calls / max) * 100}%`, height: '100%',
                         background: t.errors > 0 ? AMBER : VIOLET, borderRadius: 3,
@@ -181,7 +181,7 @@ export default function AIUsageScreen() {
             </Section>
           )}
 
-          <div style={{ color: '#444', fontSize: 11, lineHeight: 1.6, padding: '0 4px' }}>
+          <div style={{ color: 'var(--muted-5)', fontSize: 11, lineHeight: 1.6, padding: '0 4px' }}>
             {ai.note ?? ''} Counters live in server memory and reset when the backend restarts,
             so treat these as a running snapshot rather than an audited total.
           </div>
@@ -196,7 +196,7 @@ function Kpi({ label, value, sub, accent }: { label: string; value: string; sub?
     <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: '13px 14px' }}>
       <div style={{ color: MUTED, fontSize: 10, fontWeight: 700, letterSpacing: 1, marginBottom: 6 }}>{label.toUpperCase()}</div>
       <div style={{ color: accent, fontSize: 24, fontWeight: 800, lineHeight: 1.1 }}>{value}</div>
-      {sub && <div style={{ color: '#555', fontSize: 11, marginTop: 4 }}>{sub}</div>}
+      {sub && <div style={{ color: 'var(--muted-4)', fontSize: 11, marginTop: 4 }}>{sub}</div>}
     </div>
   );
 }
@@ -214,10 +214,10 @@ function Bar({ pct, color, label, right }: { pct: number; color: string; label: 
   return (
     <div style={{ marginTop: 10 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-        <span style={{ color: '#888', fontSize: 11 }}>{label}</span>
-        <span style={{ color: '#888', fontSize: 11 }}>{right}</span>
+        <span style={{ color: 'var(--muted-2)', fontSize: 11 }}>{label}</span>
+        <span style={{ color: 'var(--muted-2)', fontSize: 11 }}>{right}</span>
       </div>
-      <div style={{ height: 5, background: '#161616', borderRadius: 3, overflow: 'hidden' }}>
+      <div style={{ height: 5, background: 'var(--line)', borderRadius: 3, overflow: 'hidden' }}>
         <div style={{ width: `${Math.min(100, pct)}%`, height: '100%', background: color, borderRadius: 3 }} />
       </div>
     </div>
@@ -228,7 +228,7 @@ function ModelCard({ m, open, onToggle }: { m: AiModel; open: boolean; onToggle:
   const pc = PROVIDER_COLOR[m.provider ?? ''] ?? VIOLET;
   const health = healthColor(m.successPct);
   return (
-    <div style={{ background: '#111', border: `1px solid ${BORDER}`, borderRadius: 12, overflow: 'hidden' }}>
+    <div style={{ background: 'var(--surface-2)', border: `1px solid ${BORDER}`, borderRadius: 12, overflow: 'hidden' }}>
       <div onClick={onToggle} style={{ padding: 14, cursor: 'pointer' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
           {m.provider && (
@@ -237,16 +237,16 @@ function ModelCard({ m, open, onToggle }: { m: AiModel; open: boolean; onToggle:
             </span>
           )}
           {m.tier && m.tier !== '—' && (
-            <span style={{ color: '#777', fontSize: 9, fontWeight: 700, letterSpacing: 0.8, border: `1px solid #2A2A2A`, padding: '2px 6px', borderRadius: 5 }}>
+            <span style={{ color: '#777', fontSize: 9, fontWeight: 700, letterSpacing: 0.8, border: `1px solid var(--line-3)`, padding: '2px 6px', borderRadius: 5 }}>
               {TIER_LABEL[m.tier] ?? m.tier}
             </span>
           )}
           <span style={{ marginLeft: 'auto', color: health, fontSize: 11, fontWeight: 700 }}>
             {m.successPct != null ? `${m.successPct}% ok` : '—'}
           </span>
-          <span style={{ color: '#555', fontSize: 13 }}>{open ? '▾' : '▸'}</span>
+          <span style={{ color: 'var(--muted-4)', fontSize: 13 }}>{open ? '▾' : '▸'}</span>
         </div>
-        <div style={{ color: '#EEE', fontSize: 14, fontWeight: 600, wordBreak: 'break-all' }}>{m.model}</div>
+        <div style={{ color: 'var(--text-2)', fontSize: 14, fontWeight: 600, wordBreak: 'break-all' }}>{m.model}</div>
         <div style={{ color: MUTED, fontSize: 11, marginTop: 2 }}>{m.role}</div>
 
         <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap' }}>
@@ -289,8 +289,8 @@ function ModelCard({ m, open, onToggle }: { m: AiModel; open: boolean; onToggle:
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div style={{ color: '#EEE', fontSize: 15, fontWeight: 700 }}>{value}</div>
-      <div style={{ color: '#555', fontSize: 10, letterSpacing: 0.4 }}>{label}</div>
+      <div style={{ color: 'var(--text-2)', fontSize: 15, fontWeight: 700 }}>{value}</div>
+      <div style={{ color: 'var(--muted-4)', fontSize: 10, letterSpacing: 0.4 }}>{label}</div>
     </div>
   );
 }

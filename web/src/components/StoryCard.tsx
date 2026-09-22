@@ -42,7 +42,7 @@ function clientDifficulty(text: string): 'Easy' | 'Medium' | 'Hard' {
   return score >= 70 ? 'Easy' : score >= 50 ? 'Medium' : 'Hard';
 }
 
-const DIFFICULTY_COLORS: Record<string, string> = { Easy: '#34C759', Medium: '#FF9500', Hard: '#FF3B30' };
+const DIFFICULTY_COLORS: Record<string, string> = { Easy: 'var(--success)', Medium: 'var(--warn)', Hard: 'var(--danger)' };
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -172,7 +172,7 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
         // glow. Numbers tuned to push the colour ~80-100 px past the card
         // edge so adjacent cards/background pick up the tint.
         boxShadow: `
-          0 8px 22px rgba(0,0,0,0.55),
+          0 8px 22px rgba(var(--shadow-rgb),0.55),
           0 0 ${pressed ? 110 : 90}px ${accent}${pressed ? 'aa' : '88'},
           0 0 ${pressed ? 70 : 56}px ${dominant}${pressed ? 'cc' : 'aa'},
           0 22px 70px ${dominant}99
@@ -207,7 +207,7 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
       {/* Source circles top-right */}
       <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex' }}>
         {story.sources.slice(0, 3).map((src, i) => (
-          <div key={i} style={{ width: 28, height: 28, borderRadius: 14, border: '2px solid #000', overflow: 'hidden', background: dominant, marginLeft: i > 0 ? -8 : 0 }}>
+          <div key={i} style={{ width: 28, height: 28, borderRadius: 14, border: '2px solid var(--bg)', overflow: 'hidden', background: dominant, marginLeft: i > 0 ? -8 : 0 }}>
             <img src={faviconUrl(src.name)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
         ))}
@@ -217,28 +217,28 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
       <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 14, paddingLeft: clusterCard ? 20 : 14 }}>
         {/* Meta row */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-          <div style={{ width: 18, height: 18, borderRadius: 9, background: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+          <div style={{ width: 18, height: 18, borderRadius: 9, background: 'rgba(var(--fg-rgb),0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: 'var(--text)', flexShrink: 0 }}>
             {source.charAt(0).toUpperCase()}
           </div>
-          <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 9.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{source.toUpperCase()}</span>
+          <span style={{ color: 'rgba(var(--fg-rgb),0.75)', fontSize: 9.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{source.toUpperCase()}</span>
           {showBiasDots && story.sourceBias && story.sourceBias !== 'unknown' && (
             <div style={{ width: 6, height: 6, borderRadius: 3, background: BIAS_CONFIG[story.sourceBias as BiasRating]?.color, flexShrink: 0 }} />
           )}
-          <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9.5, flexShrink: 0 }}>·</span>
-          <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 9.5, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>{timeFormat === 'absolute' ? timeAbs(story.publishedAt) : timeAgo(story.publishedAt)}</span>
+          <span style={{ color: 'rgba(var(--fg-rgb),0.4)', fontSize: 9.5, flexShrink: 0 }}>·</span>
+          <span style={{ color: 'rgba(var(--fg-rgb),0.75)', fontSize: 9.5, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>{timeFormat === 'absolute' ? timeAbs(story.publishedAt) : timeAgo(story.publishedAt)}</span>
           {isBreakingBadge && !suppressBreaking && (() => {
             const tier = breakingTier(story.publishedAt, true);
-            const dot = <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>·</span>;
-            if (tier === 'live') return <><span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>·</span><span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#FF3B30', display: 'inline-block' }} /><span style={{ color: '#FF3B30', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>LIVE</span></span></>;
-            if (tier === 'developing') return <>{dot}<span style={{ color: '#FF9500', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>DEVELOPING</span></>;
-            return <>{dot}<span style={{ color: '#FF3B30', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>BREAKING</span></>;
+            const dot = <span style={{ color: 'rgba(var(--fg-rgb),0.4)', fontSize: 11 }}>·</span>;
+            if (tier === 'live') return <><span style={{ color: 'rgba(var(--fg-rgb),0.4)', fontSize: 11 }}>·</span><span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--danger)', display: 'inline-block' }} /><span style={{ color: 'var(--danger)', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>LIVE</span></span></>;
+            if (tier === 'developing') return <>{dot}<span style={{ color: 'var(--warn)', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>DEVELOPING</span></>;
+            return <>{dot}<span style={{ color: 'var(--danger)', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>BREAKING</span></>;
           })()}
           {isTrending && !isBreakingBadge && <span style={{ fontSize: 12 }}>🔥</span>}
           {isOngoing && <span style={{ fontSize: 12 }}>📍</span>}
           <div style={{ flex: 1 }} />
           <button onClick={e => { e.stopPropagation(); try { navigator.vibrate?.(10); } catch {} toggleSave(story); }}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: saved ? '#4A90D9' : 'rgba(255,255,255,0.7)', fontSize: 18, lineHeight: 1, WebkitTapHighlightColor: 'transparent' }}>
-            <svg key={saved ? 'on' : 'off'} width="19" height="19" viewBox="0 0 24 24" fill={saved ? '#4A90D9' : 'none'} stroke={saved ? '#4A90D9' : 'rgba(255,255,255,0.7)'} strokeWidth="2"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: saved ? 'var(--accent-2)' : 'rgba(var(--fg-rgb),0.7)', fontSize: 18, lineHeight: 1, WebkitTapHighlightColor: 'transparent' }}>
+            <svg key={saved ? 'on' : 'off'} width="19" height="19" viewBox="0 0 24 24" fill={saved ? 'var(--accent-2)' : 'none'} stroke={saved ? 'var(--accent-2)' : 'rgba(var(--fg-rgb),0.7)'} strokeWidth="2"
               style={{ display: 'block', animation: saved ? 'bookPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none' }}>
               <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" />
             </svg>
@@ -247,7 +247,7 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
         </div>
 
         {/* Headline */}
-        <div style={{ color: '#fff', fontSize: 17, fontWeight: 800, lineHeight: 1.3, letterSpacing: -0.2, marginBottom: compact ? 0 : 5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+        <div style={{ color: 'var(--text)', fontSize: 17, fontWeight: 800, lineHeight: 1.3, letterSpacing: -0.2, marginBottom: compact ? 0 : 5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
           {story.headline}
         </div>
 
@@ -262,7 +262,7 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
           if (!raw) return null;
           const words = raw.split(/\s+/);
           const text = words.length > 25 ? words.slice(0, 25).join(' ') + '…' : raw;
-          return <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: 10.5, lineHeight: 1.5 }}>{text}</div>;
+          return <div style={{ color: 'rgba(var(--fg-rgb),0.65)', fontSize: 10.5, lineHeight: 1.5 }}>{text}</div>;
         })()}
       </div>
     </div>

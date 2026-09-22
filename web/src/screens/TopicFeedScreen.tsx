@@ -47,27 +47,27 @@ export default function TopicFeedScreen({ tag }: { tag: string }) {
   }, [keyword]);
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', background: '#000', WebkitOverflowScrolling: 'touch' }}>
+    <div style={{ height: '100%', overflowY: 'auto', background: 'var(--bg)', WebkitOverflowScrolling: 'touch' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', position: 'sticky', top: 0, background: '#000', zIndex: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', position: 'sticky', top: 0, background: 'var(--bg)', zIndex: 10 }}>
         <button
           onClick={goBack}
-          style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 20, padding: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          style={{ background: 'rgba(var(--fg-rgb),0.1)', border: 'none', borderRadius: 20, padding: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        <span style={{ color: '#FFF', fontSize: 22, fontWeight: 800, flex: 1 }}>{tag}</span>
-        {!loading && <span style={{ color: '#555', fontSize: 13, fontWeight: 500 }}>{stories.length} stories</span>}
+        <span style={{ color: 'var(--text)', fontSize: 22, fontWeight: 800, flex: 1 }}>{tag}</span>
+        {!loading && <span style={{ color: 'var(--muted-4)', fontSize: 13, fontWeight: 500 }}>{stories.length} stories</span>}
       </div>
 
       {loading ? (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
-          <div style={{ width: 36, height: 36, border: '3px solid #1A1A1A', borderTop: '3px solid #4A90D9', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          <div style={{ width: 36, height: 36, border: '3px solid var(--line)', borderTop: '3px solid var(--accent-2)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       ) : stories.length === 0 ? (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
-          <span style={{ color: '#555', fontSize: 15 }}>No stories found for {tag}</span>
+          <span style={{ color: 'var(--muted-4)', fontSize: 15 }}>No stories found for {tag}</span>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 0 40px' }}>

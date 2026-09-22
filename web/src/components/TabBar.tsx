@@ -16,7 +16,7 @@ const TAB_ITEMS: Array<{ tab: TabName; screen: NavScreen; icon: IconName; label:
 ];
 
 function TabIcon({ name, active }: { name: IconName; active: boolean }) {
-  const color = active ? '#fff' : 'rgba(255,255,255,0.55)';
+  const color = active ? 'var(--text)' : 'rgba(var(--fg-rgb),0.55)';
   const size = 22;
   // Ionicons-matched paths
   const common = {
@@ -112,8 +112,8 @@ export function TabBar() {
           background: 'rgba(10,10,10,0.45)',
           backdropFilter: visible ? 'blur(32px) saturate(200%)' : 'blur(0px) saturate(100%)',
           WebkitBackdropFilter: visible ? 'blur(32px) saturate(200%)' : 'blur(0px) saturate(100%)',
-          border: '1px solid rgba(255,255,255,0.06)',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
+          border: '1px solid rgba(var(--fg-rgb),0.06)',
+          boxShadow: '0 4px 16px rgba(var(--shadow-rgb),0.35)',
           transition: 'backdrop-filter 0.35s ease, -webkit-backdrop-filter 0.35s ease',
         }}
       >
@@ -147,7 +147,7 @@ export function TabBar() {
                 style={{
                   width: 30, height: 30, borderRadius: 15,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: active ? 'rgba(255,255,255,0.11)' : 'transparent',
+                  background: active ? 'rgba(var(--fg-rgb),0.11)' : 'transparent',
                   transform: active ? 'scale(1)' : 'scale(0.92)',
                   transition: 'background 0.2s, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
                   animation: active ? 'tabBounce 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none',
