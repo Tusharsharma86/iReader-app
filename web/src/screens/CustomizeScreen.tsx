@@ -10,7 +10,7 @@
 // match current behavior — existing users see no change until they toggle.
 import React, { useCallback } from 'react';
 import { useRouter } from '../contexts/RouterContext';
-import { ACCENTS, type ThemeSkin, type AccentPreset, type MotionLevel, type FeedLayout, type UiStyle } from '../theme/theme';
+import { ACCENTS, type ThemeSkin, type AccentPreset, type MotionLevel, type FeedLayout, type UiStyle, type BackgroundFx } from '../theme/theme';
 import {
   useSettings,
   type CardDensity, type ArticleTab, type SummaryLength, type SummaryFormat,
@@ -49,6 +49,13 @@ const STYLE_OPTIONS: { label: string; value: UiStyle }[] = [
   { label: 'Editorial', value: 'editorial' },
   { label: 'Brutal',    value: 'brutal' },
   { label: 'Glass',     value: 'glass' },
+];
+
+const BACKGROUND_OPTIONS: { label: string; value: BackgroundFx }[] = [
+  { label: 'None',    value: 'none' },
+  { label: 'Network', value: 'constellation' },
+  { label: 'Grid',    value: 'grid' },
+  { label: 'Aurora',  value: 'aurora' },
 ];
 
 const SKIN_OPTIONS: { label: string; value: ThemeSkin }[] = [
@@ -437,6 +444,10 @@ export default function CustomizeScreen() {
           options={SKIN_OPTIONS}
           value={s.themeSkin} onChange={s.setThemeSkin} />
         <AccentRow border value={s.accentPreset} onChange={s.setAccentPreset} />
+        <RowSegmented border label="Feed backdrop"
+          sub="Animated layer behind the cards. Network echoes the app mark; Grid is a moving tech grid; Aurora drifts soft colour."
+          options={BACKGROUND_OPTIONS}
+          value={s.backgroundFx} onChange={s.setBackgroundFx} />
         <RowSegmented border label="Feed layout"
           sub="Magazine leads with a large card, List is text-only rows."
           options={LAYOUT_OPTIONS}

@@ -446,7 +446,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
     activeTopics, activeSubTopics, showSports, showEntertainment, topicInterests,
     showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity,
     defaultTopic, pullToRefresh, hiddenTopics,
-    summaryLength, keyPointsCount, eli5Tone,
+    summaryLength, keyPointsCount, eli5Tone, backgroundFx,
   } = useSettings();
   const { navigate } = useRouter();
   const { reportScroll } = useTabBar();
@@ -856,7 +856,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   return (
     <div ref={containerRef} onScroll={handleScroll}
       onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
-      style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', background: 'var(--bg)', WebkitOverflowScrolling: 'touch' }}>
+      style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', background: backgroundFx === 'none' ? 'var(--bg)' : 'transparent', WebkitOverflowScrolling: 'touch' }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px', paddingTop: 'calc(16px + env(safe-area-inset-top, 0px))' }}>

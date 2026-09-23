@@ -42,6 +42,21 @@
         animation-duration: var(--dur-base);
       }
 
+      .aurora-blob {
+        position: absolute; border-radius: 50%; filter: blur(54px); opacity: 0.66;
+        will-change: transform;
+      }
+      .aurora-a { width: 60vw; height: 60vw; left: -15vw; top: -10vh;
+        background: var(--accent); animation: auroraA 26s ease-in-out infinite alternate; }
+      .aurora-b { width: 55vw; height: 55vw; right: -18vw; top: 22vh;
+        background: var(--accent-2); animation: auroraB 32s ease-in-out infinite alternate; }
+      .aurora-c { width: 50vw; height: 50vw; left: 10vw; bottom: -12vh;
+        background: var(--info); animation: auroraC 38s ease-in-out infinite alternate; }
+      @keyframes auroraA { to { transform: translate3d(14vw, 10vh, 0) scale(1.15); } }
+      @keyframes auroraB { to { transform: translate3d(-12vw, -8vh, 0) scale(1.1); } }
+      @keyframes auroraC { to { transform: translate3d(8vw, -12vh, 0) scale(0.92); } }
+      @media (prefers-reduced-motion: reduce) { .aurora-blob { animation: none !important; } }
+
       @keyframes cardIn {
         from { opacity: 0; transform: translateY(10px) scale(0.992); }
         to   { opacity: 1; transform: none; }

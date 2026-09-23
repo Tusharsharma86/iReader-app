@@ -6,6 +6,7 @@ import { SourceProvider } from './contexts/SourceContext';
 import { SavedProvider } from './contexts/SavedContext';
 import { TabBarProvider } from './contexts/TabBarContext';
 import { TabBar } from './components/TabBar';
+import { BackgroundFX } from './components/BackgroundFX';
 // AI Feed prewarm DISABLED — free-tier AI quotas (Gemini 1500/day, 10/min)
 // can't fund speculative deep dives; on-demand generation + 7-day server
 // cache keeps opens fast enough.
@@ -193,7 +194,12 @@ export default function App() {
                   overflow: 'hidden',
                   position: 'relative',
                 }}>
-                  <ScreenRenderer />
+                  {/* Behind everything; the feed is transparent so it shows
+                      through, other screens keep their own surface. */}
+                  <BackgroundFX />
+                  <div style={{ position: 'relative', zIndex: 1, height: '100%' }}>
+                    <ScreenRenderer />
+                  </div>
                   <TabBar /> 
                 </div>
               </ThemeApplier>

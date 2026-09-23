@@ -15,6 +15,7 @@ export type FeedLayout = 'magazine' | 'standard' | 'list';
 // Skins/accents alone leave the app feeling identical, because shape and
 // typography carry most of a product's visual identity.
 export type UiStyle = 'signal' | 'editorial' | 'brutal' | 'glass';
+export type BackgroundFx = 'none' | 'constellation' | 'grid' | 'aurora';
 
 export interface StyleTokens {
   radius: string;        // card corner

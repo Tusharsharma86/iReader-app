@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import type { ThemeSkin, AccentPreset, MotionLevel, FeedLayout, UiStyle } from '../theme/theme';
+import type { ThemeSkin, AccentPreset, MotionLevel, FeedLayout, UiStyle, BackgroundFx } from '../theme/theme';
 import type { FontSize, TopicKey, CategoryTopic } from '../types';
 
 const ALL_TOPICS: TopicKey[] = ['breaking','technology','india-politics','geopolitics','markets','business'];
@@ -78,6 +78,7 @@ interface SettingsCtx {
   motionLevel: MotionLevel; setMotionLevel: (v: MotionLevel) => void;
   feedLayout: FeedLayout; setFeedLayout: (v: FeedLayout) => void;
   uiStyle: UiStyle; setUiStyle: (v: UiStyle) => void;
+  backgroundFx: BackgroundFx; setBackgroundFx: (v: BackgroundFx) => void;
   showEntityHighlights: boolean; setShowEntityHighlights: (v: boolean) => void;
   showQuoteHighlights: boolean; setShowQuoteHighlights: (v: boolean) => void;
   showReadingDifficulty: boolean; setShowReadingDifficulty: (v: boolean) => void;
@@ -142,6 +143,7 @@ const DEFAULTS = {
   motionLevel: 'full' as MotionLevel,
   feedLayout: 'standard' as FeedLayout,
   uiStyle: 'signal' as UiStyle,
+  backgroundFx: 'constellation' as BackgroundFx,
   showEntityHighlights: true,
   showQuoteHighlights: true,
   showReadingDifficulty: true,
@@ -174,7 +176,7 @@ const SettingsContext = createContext<SettingsCtx>({
   setSummaryLength: noop, setSummaryFormat: noop, setKeyPointsCount: noop, setShowKeyPoints: noop,
   setDefaultTopic: noop, setLinkOpen: noop, setPullToRefresh: noop,
   // Wave 2 noops
-  setUiStyle: noop,
+  setUiStyle: noop, setBackgroundFx: noop,
   setThemeSkin: noop, setAccentPreset: noop, setAmbience: noop, setMotionLevel: noop, setFeedLayout: noop,
   setThemeMode: noop, setShowEntityHighlights: noop, setShowQuoteHighlights: noop, setShowReadingDifficulty: noop, setTimeFormat: noop,
   setFontFamily: noop, setLineHeightMode: noop, setColumnWidth: noop,
@@ -227,6 +229,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [motionLevel, setMotionLevel] = useState<MotionLevel>(DEFAULTS.motionLevel);
   const [feedLayout, setFeedLayout] = useState<FeedLayout>(DEFAULTS.feedLayout);
   const [uiStyle, setUiStyle] = useState<UiStyle>(DEFAULTS.uiStyle);
+  const [backgroundFx, setBackgroundFx] = useState<BackgroundFx>(DEFAULTS.backgroundFx);
   const [showEntityHighlights, setShowEntityHighlights] = useState(DEFAULTS.showEntityHighlights);
   const [showQuoteHighlights, setShowQuoteHighlights] = useState(DEFAULTS.showQuoteHighlights);
   const [showReadingDifficulty, setShowReadingDifficulty] = useState(DEFAULTS.showReadingDifficulty);
@@ -295,6 +298,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         if (['full','subtle','off'].includes(s.motionLevel)) setMotionLevel(s.motionLevel);
         if (['magazine','standard','list'].includes(s.feedLayout)) setFeedLayout(s.feedLayout);
         if (['signal','editorial','brutal','glass'].includes(s.uiStyle)) setUiStyle(s.uiStyle);
+        if (['none','constellation','grid','aurora'].includes(s.backgroundFx)) setBackgroundFx(s.backgroundFx);
         if (typeof s.showEntityHighlights === 'boolean') setShowEntityHighlights(s.showEntityHighlights);
         if (typeof s.showQuoteHighlights === 'boolean') setShowQuoteHighlights(s.showQuoteHighlights);
         if (typeof s.showReadingDifficulty === 'boolean') setShowReadingDifficulty(s.showReadingDifficulty);
@@ -328,14 +332,14 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         summaryLength, summaryFormat, keyPointsCount, showKeyPoints,
         defaultTopic, linkOpen, pullToRefresh,
         // Wave 2
-        themeMode, themeSkin, accentPreset, ambience, motionLevel, feedLayout, uiStyle,
+        themeMode, themeSkin, accentPreset, ambience, motionLevel, feedLayout, uiStyle, backgroundFx,
         showEntityHighlights, showQuoteHighlights, showReadingDifficulty, timeFormat,
         fontFamily, lineHeightMode, columnWidth,
         eli5Tone, deepDiveDepth, showDeepDiveQA, showDeepDiveEntities, showDeepDiveCurious,
         hiddenTabs, hiddenTopics, autoMarkRead, keyboardShortcuts,
       }));
     } catch {}
-  }, [loaded, fontSize, notifBreaking, notifAiFeed, breakingSensitivity, notifTech, notifDigest, notifSources, showSports, showEntertainment, activeTopics, activeSubTopics, favSources, favTopics, topicInterests, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showArticleRssSummary, showVerifyDedup, showReferencedSources, summaryLength, summaryFormat, keyPointsCount, showKeyPoints, defaultTopic, linkOpen, pullToRefresh, themeMode, showEntityHighlights, showQuoteHighlights, showReadingDifficulty, timeFormat, fontFamily, lineHeightMode, columnWidth, eli5Tone, deepDiveDepth, showDeepDiveQA, showDeepDiveEntities, showDeepDiveCurious, hiddenTabs, hiddenTopics, autoMarkRead, keyboardShortcuts, themeSkin, accentPreset, ambience, motionLevel, feedLayout, uiStyle]);
+  }, [loaded, fontSize, notifBreaking, notifAiFeed, breakingSensitivity, notifTech, notifDigest, notifSources, showSports, showEntertainment, activeTopics, activeSubTopics, favSources, favTopics, topicInterests, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showArticleRssSummary, showVerifyDedup, showReferencedSources, summaryLength, summaryFormat, keyPointsCount, showKeyPoints, defaultTopic, linkOpen, pullToRefresh, themeMode, showEntityHighlights, showQuoteHighlights, showReadingDifficulty, timeFormat, fontFamily, lineHeightMode, columnWidth, eli5Tone, deepDiveDepth, showDeepDiveQA, showDeepDiveEntities, showDeepDiveCurious, hiddenTabs, hiddenTopics, autoMarkRead, keyboardShortcuts, themeSkin, accentPreset, ambience, motionLevel, feedLayout, uiStyle, backgroundFx]);
 
   const setFontSize = useCallback((fs: FontSize) => setFontSizeS(fs), []);
   const setNotifBreaking = useCallback((v: boolean) => setNotifBreakingS(v), []);
@@ -437,6 +441,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     motionLevel, setMotionLevel,
     feedLayout, setFeedLayout,
     uiStyle, setUiStyle,
+    backgroundFx, setBackgroundFx,
     showEntityHighlights, setShowEntityHighlights,
     showQuoteHighlights, setShowQuoteHighlights,
     showReadingDifficulty, setShowReadingDifficulty,
@@ -454,7 +459,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     autoMarkRead, setAutoMarkRead,
     keyboardShortcuts, setKeyboardShortcuts,
     resetCustomize,
-  }), [fontSize, notifBreaking, notifAiFeed, breakingSensitivity, notifTech, notifDigest, notifSources, showSports, showEntertainment, favSources, favTopics, activeTopics, activeSubTopics, topicInterests, setFontSize, setNotifBreaking, setNotifAiFeed, setBreakingSensitivity, setNotifTech, setNotifDigest, setNotifSources, setShowSports, setShowEntertainment, toggleFavSource, toggleFavTopic, toggleTopic, toggleSubTopic, setTopicInterest, resetSettings, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showArticleRssSummary, showVerifyDedup, showReferencedSources, summaryLength, summaryFormat, keyPointsCount, showKeyPoints, defaultTopic, linkOpen, pullToRefresh, themeMode, showEntityHighlights, showQuoteHighlights, showReadingDifficulty, timeFormat, fontFamily, lineHeightMode, columnWidth, eli5Tone, deepDiveDepth, showDeepDiveQA, showDeepDiveEntities, showDeepDiveCurious, hiddenTabs, hiddenTopics, autoMarkRead, keyboardShortcuts, toggleHiddenTab, toggleHiddenTopic, resetCustomize, themeSkin, accentPreset, ambience, motionLevel, feedLayout, uiStyle]);
+  }), [fontSize, notifBreaking, notifAiFeed, breakingSensitivity, notifTech, notifDigest, notifSources, showSports, showEntertainment, favSources, favTopics, activeTopics, activeSubTopics, topicInterests, setFontSize, setNotifBreaking, setNotifAiFeed, setBreakingSensitivity, setNotifTech, setNotifDigest, setNotifSources, setShowSports, setShowEntertainment, toggleFavSource, toggleFavTopic, toggleTopic, toggleSubTopic, setTopicInterest, resetSettings, showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity, defaultArticleTab, showStatsCard, showArticleRssSummary, showVerifyDedup, showReferencedSources, summaryLength, summaryFormat, keyPointsCount, showKeyPoints, defaultTopic, linkOpen, pullToRefresh, themeMode, showEntityHighlights, showQuoteHighlights, showReadingDifficulty, timeFormat, fontFamily, lineHeightMode, columnWidth, eli5Tone, deepDiveDepth, showDeepDiveQA, showDeepDiveEntities, showDeepDiveCurious, hiddenTabs, hiddenTopics, autoMarkRead, keyboardShortcuts, toggleHiddenTab, toggleHiddenTopic, resetCustomize, themeSkin, accentPreset, ambience, motionLevel, feedLayout, uiStyle, backgroundFx]);
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }
