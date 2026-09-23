@@ -11,6 +11,60 @@ export type AccentPreset = 'violet' | 'cyan' | 'amber' | 'rose' | 'mono' | 'dyna
 export type MotionLevel = 'full' | 'subtle' | 'off';
 export type FeedLayout = 'magazine' | 'standard' | 'list';
 
+// UI style changes FORM, not colour: card silhouette, composition and type.
+// Skins/accents alone leave the app feeling identical, because shape and
+// typography carry most of a product's visual identity.
+export type UiStyle = 'signal' | 'editorial' | 'brutal' | 'glass';
+
+export interface StyleTokens {
+  radius: string;        // card corner
+  radiusSm: string;      // pills, chips, thumbs
+  fontHead: string;      // headline stack
+  headSize: string;      // headline size on a feed card
+  headWeight: string;
+  headTracking: string;
+  headTransform: string;
+  metaSize: string;
+  metaTracking: string;
+  metaWeight: string;
+  borderWidth: string;
+}
+
+export const STYLES: Record<UiStyle, StyleTokens> = {
+  // Today's look: glossy, photo-forward, tight sans.
+  signal: {
+    radius: '20px', radiusSm: '10px',
+    fontHead: "'Inter', system-ui, sans-serif",
+    headSize: '17px', headWeight: '800', headTracking: '-0.2px', headTransform: 'none',
+    metaSize: '9.5px', metaTracking: '0.2px', metaWeight: '600',
+    borderWidth: '0px',
+  },
+  // Newspaper: serif headlines, square-ish corners, no glow, calm.
+  editorial: {
+    radius: '4px', radiusSm: '2px',
+    fontHead: "'Merriweather', Georgia, 'Times New Roman', serif",
+    headSize: '20px', headWeight: '700', headTracking: '-0.1px', headTransform: 'none',
+    metaSize: '10px', metaTracking: '1.4px', metaWeight: '700',
+    borderWidth: '1px',
+  },
+  // Poster: hard edges, heavy caps, offset shadow instead of a halo.
+  brutal: {
+    radius: '0px', radiusSm: '0px',
+    fontHead: "'Inter', system-ui, sans-serif",
+    headSize: '19px', headWeight: '900', headTracking: '-0.6px', headTransform: 'uppercase',
+    metaSize: '10px', metaTracking: '1.6px', metaWeight: '800',
+    borderWidth: '2px',
+  },
+  // Frosted: soft translucency, wide corners, lighter type.
+  glass: {
+    radius: '26px', radiusSm: '14px',
+    fontHead: "'Inter', system-ui, sans-serif",
+    headSize: '18px', headWeight: '600', headTracking: '-0.1px', headTransform: 'none',
+    metaSize: '10px', metaTracking: '0.6px', metaWeight: '500',
+    borderWidth: '1px',
+  },
+};
+
 export interface TokenSet {
   bg: string; surface: string; surface2: string; surface3: string;
   line: string; line2: string; line3: string;
@@ -97,6 +151,7 @@ export const MOTION_SCALE: Record<MotionLevel, number> = { full: 1, subtle: 0.5,
 
 export interface ApplyThemeArgs {
   skin: Exclude<ThemeSkin, 'auto'>;
+  style: UiStyle;
   accent: string;
   accent2: string;
   ambience: boolean;
@@ -104,7 +159,7 @@ export interface ApplyThemeArgs {
   hour?: number;
 }
 
-export function applyTheme({ skin, accent, accent2, ambience, motion, hour }: ApplyThemeArgs): void {
+export function applyTheme({ skin, style, accent, accent2, ambience, motion, hour }: ApplyThemeArgs): void {
   if (typeof document === 'undefined') return;
   const t = SKINS[skin];
   const light = isLightSkin(skin);
@@ -126,6 +181,15 @@ export function applyTheme({ skin, accent, accent2, ambience, motion, hour }: Ap
   set('--dur-fast', `${Math.round(140 * MOTION_SCALE[motion])}ms`);
   set('--dur-base', `${Math.round(240 * MOTION_SCALE[motion])}ms`);
 
+  const st = STYLES[style];
+  set('--radius', st.radius); set('--radius-sm', st.radiusSm);
+  set('--font-head', st.fontHead);
+  set('--head-size', st.headSize); set('--head-weight', st.headWeight);
+  set('--head-tracking', st.headTracking); set('--head-transform', st.headTransform);
+  set('--meta-size', st.metaSize); set('--meta-tracking', st.metaTracking); set('--meta-weight', st.metaWeight);
+  set('--border-width', st.borderWidth);
+
+  document.documentElement.dataset.style = style;
   document.documentElement.dataset.theme = light ? 'light' : 'dark';
   document.documentElement.style.colorScheme = light ? 'light' : 'dark';
   const meta = document.querySelector('meta[name="theme-color"]');

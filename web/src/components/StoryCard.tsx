@@ -95,7 +95,7 @@ interface Props {
 export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppressBreaking, clusterCard }: Props) {
   const { navigate } = useRouter();
   const { toggleSave, isSaved } = useSaved();
-  const { showClusterSummary, showBiasDots, showCardImages, cardDensity, timeFormat, autoMarkRead, feedLayout, motionLevel } = useSettings();
+  const { showClusterSummary, showBiasDots, showCardImages, cardDensity, timeFormat, autoMarkRead, feedLayout, motionLevel, uiStyle } = useSettings();
   const [imgError, setImgError] = useState(false);
   const saved = isSaved(story.id);
 
@@ -170,6 +170,36 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
     return () => { if (t != null) clearTimeout(t); obs.disconnect(); };
   }, [autoMarkRead, readState, story.id]);
 
+  // Form tokens: shape and type come from the UI style, not the palette.
+  const headStyle = {
+    fontFamily: 'var(--font-head)',
+    fontSize: 'var(--head-size)',
+    fontWeight: 'var(--head-weight)',
+    letterSpacing: 'var(--head-tracking)',
+    textTransform: 'var(--head-transform)',
+  } as React.CSSProperties;
+  const metaStyle = {
+    fontSize: 'var(--meta-size)',
+    letterSpacing: 'var(--meta-tracking)',
+    fontWeight: 'var(--meta-weight)',
+  } as React.CSSProperties;
+
+  const cardShadow =
+    uiStyle === 'brutal'    ? '7px 7px 0 var(--accent)'
+    : uiStyle === 'editorial' ? '0 1px 3px rgba(var(--shadow-rgb),0.35)'
+    : uiStyle === 'glass'   ? '0 12px 44px rgba(var(--shadow-rgb),0.5)'
+    : `
+        0 8px 22px rgba(var(--shadow-rgb),0.55),
+        0 0 ${pressed ? 110 : 90}px ${accent}${pressed ? 'aa' : '88'},
+        0 0 ${pressed ? 70 : 56}px ${dominant}${pressed ? 'cc' : 'aa'},
+        0 22px 70px ${dominant}99
+      `;
+  const cardBorder =
+    uiStyle === 'brutal' ? '2px solid var(--text)'
+    : uiStyle === 'glass' ? '1px solid rgba(var(--fg-rgb),0.16)'
+    : uiStyle === 'editorial' ? '1px solid var(--line)'
+    : 'none';
+
   const baseHeight = DENSITY_HEIGHT[cardDensity] ?? CARD_HEIGHT_BASE;
   const cardHeight = feedLayout === 'magazine' ? Math.round(baseHeight * 1.18) : baseHeight;
 
@@ -200,6 +230,50 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
       img.style.transform = '';
     };
   }, [motionLevel, showCardImages, story.imageUrl]);
+
+  if (uiStyle === 'editorial' && feedLayout !== 'list') {
+    const standfirst = story.aiSummary || story.summary || '';
+    return (
+      <div
+        ref={cardRef}
+        onClick={handleClick}
+        style={{
+          width: cardWidth, height: cardHeight, display: 'flex', flexDirection: 'column',
+          borderRadius: 'var(--radius)', overflow: 'hidden',
+          background: 'var(--surface)', border: cardBorder, boxShadow: cardShadow,
+          cursor: 'pointer', opacity: readState ? 0.55 : 1,
+          animation: 'cardIn var(--dur-base) ease both',
+          WebkitTapHighlightColor: 'transparent',
+        }}
+      >
+        <div style={{ position: 'relative', flex: '0 0 50%', minHeight: 0, background: dominant, overflow: 'hidden' }}>
+          {showCardImages && !imgError && story.imageUrl && (
+            <img ref={imgRef} src={story.imageUrl} alt="" onError={() => setImgError(true)}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+          )}
+        </div>
+        <div style={{ flex: '1 1 auto', minHeight: 0, overflow: 'hidden', padding: '13px 16px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--muted-2)', ...metaStyle }}>
+            <span style={{ width: 14, height: 2, background: dominant, flexShrink: 0 }} />
+            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{source.toUpperCase()}</span>
+            <span style={{ color: 'var(--muted-4)' }}>
+              {timeFormat === 'absolute' ? timeAbs(story.publishedAt) : timeAgo(story.publishedAt)}
+            </span>
+          </div>
+          <div style={{
+            color: 'var(--text)', lineHeight: 1.28, ...headStyle,
+            display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          }}>{story.headline}</div>
+          {showClusterSummary && standfirst && (
+            <div style={{
+              color: 'var(--muted-2)', fontSize: 12.5, lineHeight: 1.55,
+              display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+            }}>{standfirst}</div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // Text-only rows — a different shape, not a squashed card.
   if (feedLayout === 'list') {
@@ -249,19 +323,15 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
       onPointerLeave={() => setPressed(false)}
       onPointerCancel={() => setPressed(false)}
       style={{
-        width: cardWidth, height: cardHeight, borderRadius: 20, overflow: 'hidden',
+        width: cardWidth, height: cardHeight, borderRadius: 'var(--radius)', overflow: 'hidden',
+        border: cardBorder,
         animation: 'cardIn var(--dur-base) cubic-bezier(.2,.7,.3,1) both',
         opacity: readState ? 0.55 : 1,
         position: 'relative', flexShrink: 0, cursor: 'pointer',
         // Particle-style colour bleed: bright accent halo + layered dominant
         // glow. Numbers tuned to push the colour ~80-100 px past the card
         // edge so adjacent cards/background pick up the tint.
-        boxShadow: `
-          0 8px 22px rgba(var(--shadow-rgb),0.55),
-          0 0 ${pressed ? 110 : 90}px ${accent}${pressed ? 'aa' : '88'},
-          0 0 ${pressed ? 70 : 56}px ${dominant}${pressed ? 'cc' : 'aa'},
-          0 22px 70px ${dominant}99
-        `,
+        boxShadow: cardShadow,
         WebkitTapHighlightColor: 'transparent',
         transform: pressed ? 'scale(0.97)' : 'scale(1)',
         transition: 'transform 0.16s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.24s ease, opacity 0.3s ease',
@@ -302,7 +372,19 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
       </div>
 
       {/* Content overlay bottom */}
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 14, paddingLeft: clusterCard ? 20 : 14 }}>
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        padding: 14, paddingLeft: clusterCard ? 20 : 14,
+        // Glass frosts the text panel rather than relying on the scrim.
+        ...(uiStyle === 'glass' ? {
+          margin: 10,
+          borderRadius: 'var(--radius-sm)',
+          background: 'rgba(var(--shadow-rgb),0.34)',
+          backdropFilter: 'blur(16px) saturate(140%)',
+          WebkitBackdropFilter: 'blur(16px) saturate(140%)',
+          border: '1px solid rgba(var(--fg-rgb),0.14)',
+        } : {}),
+      }}>
         {/* Meta row */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
           <div style={{ width: 18, height: 18, borderRadius: 9, background: 'rgba(var(--fg-rgb),0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: 'var(--text)', flexShrink: 0 }}>
@@ -335,7 +417,7 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
         </div>
 
         {/* Headline */}
-        <div style={{ color: 'var(--text)', fontSize: 17, fontWeight: 800, lineHeight: 1.3, letterSpacing: -0.2, marginBottom: compact ? 0 : 5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+        <div style={{ color: 'var(--text)', lineHeight: 1.3, ...headStyle, marginBottom: compact ? 0 : 5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
           {story.headline}
         </div>
 

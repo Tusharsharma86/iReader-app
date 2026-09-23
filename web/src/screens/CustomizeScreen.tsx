@@ -10,7 +10,7 @@
 // match current behavior — existing users see no change until they toggle.
 import React, { useCallback } from 'react';
 import { useRouter } from '../contexts/RouterContext';
-import { ACCENTS, type ThemeSkin, type AccentPreset, type MotionLevel, type FeedLayout } from '../theme/theme';
+import { ACCENTS, type ThemeSkin, type AccentPreset, type MotionLevel, type FeedLayout, type UiStyle } from '../theme/theme';
 import {
   useSettings,
   type CardDensity, type ArticleTab, type SummaryLength, type SummaryFormat,
@@ -42,6 +42,13 @@ const THEME_OPTIONS: { label: string; value: ThemeMode }[] = [
   { label: 'Dark',  value: 'dark' },
   { label: 'Auto',  value: 'auto' },
   { label: 'Light', value: 'light' },
+];
+
+const STYLE_OPTIONS: { label: string; value: UiStyle }[] = [
+  { label: 'Signal',    value: 'signal' },
+  { label: 'Editorial', value: 'editorial' },
+  { label: 'Brutal',    value: 'brutal' },
+  { label: 'Glass',     value: 'glass' },
 ];
 
 const SKIN_OPTIONS: { label: string; value: ThemeSkin }[] = [
@@ -421,7 +428,11 @@ export default function CustomizeScreen() {
       {/* APPEARANCE */}
       <div style={sectionHeader}>APPEARANCE</div>
       <div style={card}>
-        <RowSegmented label="Theme"
+        <RowSegmented label="UI style"
+          sub="Changes card shape and typography — Editorial sets stories in serif on a light card, Brutal is hard-edged caps, Glass is frosted."
+          options={STYLE_OPTIONS}
+          value={s.uiStyle} onChange={s.setUiStyle} />
+        <RowSegmented border label="Theme"
           sub="Midnight, OLED (true black), Auto (follows system) or Paper."
           options={SKIN_OPTIONS}
           value={s.themeSkin} onChange={s.setThemeSkin} />

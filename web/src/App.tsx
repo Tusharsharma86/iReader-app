@@ -122,7 +122,7 @@ function ThemeApplier({ children }: { children: React.ReactNode }) {
   // Applies the design tokens in src/theme/theme.ts as CSS custom properties.
   // This replaced a whole-page `filter: invert(1) hue-rotate(180deg)` light
   // mode, which also inverted photographs.
-  const { themeSkin, accentPreset, ambience, motionLevel } = useSettings();
+  const { themeSkin, accentPreset, ambience, motionLevel, uiStyle } = useSettings();
   const [systemLight, setSystemLight] = React.useState(
     () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: light)').matches,
   );
@@ -150,8 +150,8 @@ function ThemeApplier({ children }: { children: React.ReactNode }) {
     // 'dynamic' follows the open story's colour; screens override --accent
     // themselves, so fall back to violet for the chrome until one does.
     const a = accentPreset === 'dynamic' ? ACCENTS.violet : ACCENTS[accentPreset];
-    applyTheme({ skin, accent: a.accent, accent2: a.accent2, ambience, motion: motionLevel, hour });
-  }, [skin, accentPreset, ambience, motionLevel, hour]);
+    applyTheme({ skin, style: uiStyle, accent: a.accent, accent2: a.accent2, ambience, motion: motionLevel, hour });
+  }, [skin, uiStyle, accentPreset, ambience, motionLevel, hour]);
 
   return (
     <div style={{
