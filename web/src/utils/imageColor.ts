@@ -8,7 +8,13 @@
 // already has these images in cache, so sampling costs no extra download.
 
 const memo = new Map<string, string>();
+// Hosts that refused a CORS read. Sampling one of their images costs a second
+// download (the crossOrigin request fails, then the browser fetches again for
+// display) and logs a console error, so each host is tried once and then
+// skipped for good.
+const blockedHosts = new Set<string>();
 const LS_KEY = '@ireader_img_colors';
+const LS_BLOCKED = '@ireader_img_cors_blocked';
 const MAX_PERSISTED = 400;
 let loaded = false;
 
@@ -17,8 +23,11 @@ function hydrate(): void {
   loaded = true;
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return;
-    for (const [k, v] of Object.entries(JSON.parse(raw) as Record<string, string>)) memo.set(k, v);
+    if (raw) {
+      for (const [k, v] of Object.entries(JSON.parse(raw) as Record<string, string>)) memo.set(k, v);
+    }
+    const blocked = localStorage.getItem(LS_BLOCKED);
+    if (blocked) for (const h of JSON.parse(blocked) as string[]) blockedHosts.add(h);
   } catch { /* private mode or corrupt payload — sampling still works */ }
 }
 
@@ -38,6 +47,16 @@ export function cachedImageColor(url?: string): string | null {
   if (!url) return null;
   hydrate();
   return memo.get(url) ?? null;
+}
+
+function hostOf(url: string): string {
+  try { return new URL(url, location.href).host; } catch { return ''; }
+}
+
+function markHostBlocked(host: string): void {
+  if (!host || blockedHosts.has(host)) return;
+  blockedHosts.add(host);
+  try { localStorage.setItem(LS_BLOCKED, JSON.stringify([...blockedHosts].slice(-80))); } catch { /* quota */ }
 }
 
 function toHex(r: number, g: number, b: number): string {
@@ -79,6 +98,8 @@ export function sampleImageColor(url?: string): Promise<string | null> {
   hydrate();
   const hit = memo.get(url);
   if (hit) return Promise.resolve(hit);
+  const host = hostOf(url);
+  if (blockedHosts.has(host)) return Promise.resolve(null);
 
   return new Promise(resolve => {
     const img = new Image();
@@ -120,10 +141,11 @@ export function sampleImageColor(url?: string): Promise<string | null> {
         persist();
         resolve(hex);
       } catch {
-        resolve(null);   // tainted canvas — caller falls back
+        markHostBlocked(host);   // tainted canvas — don't retry this host
+        resolve(null);
       }
     };
-    img.onerror = () => resolve(null);
+    img.onerror = () => { markHostBlocked(host); resolve(null); };
     img.src = url;
   });
 }

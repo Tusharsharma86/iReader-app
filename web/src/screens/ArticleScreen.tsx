@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ArticleParams, Story, BiasRating } from '../types';
 import { BIAS_CONFIG } from '../types';
 import { darken, lighten, getArticleColor } from '../utils/colors';
+import { HERO_NAME } from '../utils/viewTransition';
 import { useRouter } from '../contexts/RouterContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useTabBar } from '../contexts/TabBarContext';
@@ -645,7 +646,11 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
               alt=""
               onError={() => setHeroImageFailed(true)}
               className="hero-zoom-in"
-              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              style={{
+                width: '100%', height: '100%', objectFit: 'cover', display: 'block',
+                // Pairs with the tapped card's photo for the hero morph.
+                viewTransitionName: HERO_NAME,
+              }}
             />
             <div style={{ position: 'absolute', inset: 0, background: `${dominant}33` }} />
             <div style={{

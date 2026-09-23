@@ -12,6 +12,8 @@ import { annotateUpdates, unfollow, markSeen } from '../utils/followStore';
 import { TOPIC_SUBTOPICS, storyMatchesSubTopic } from '../utils/topics';
 import { getCached, setCached, TTL } from '../utils/cache';
 import { isBlockedHeadline } from '../utils/contentFilters';
+import { getArticleColor } from '../utils/colors';
+import { cachedImageColor } from '../utils/imageColor';
 
 const API_BASE = 'https://ireader.onrender.com/api/news/feed';
 const CARD_GAP = 12;
@@ -145,6 +147,15 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
   const clusterCardWidth = Math.min(Math.round(window.innerWidth * 0.78), 360);
   // CSS calc uses the actual container width (not window.innerWidth) — matches standalone centering
   const sideMargin = `max(0px, calc((100% - ${soloCardWidth}px) / 2))`;
+
+  // Same colour precedence as the card itself: server value, then the colour
+  // sampled from the photo, then the hashed fallback.
+  const lead = cluster.stories[0];
+  const leadColor =
+    lead?.dominantColor ||
+    cachedImageColor(lead?.imageUrl) ||
+    getArticleColor(lead?.id || lead?.headline || '');
+  const ambientWash = `radial-gradient(130% 65% at 50% 0%, ${leadColor}26 0%, transparent 68%)`;
   const snapInterval = clusterCardWidth + CARD_GAP;
   const [activeIdx, setActiveIdx] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -162,7 +173,7 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
       summary: cluster.subtitle || cluster.stories[0].summary,
     };
     return (
-      <div style={{ marginBottom: clusterGap }}>
+      <div style={{ marginBottom: clusterGap, background: ambientWash, transition: 'background var(--dur-base) ease' }}>
         {showMetaPill && (() => {
           const tier = breakingTier(cluster.stories[0]?.publishedAt, isBreaking);
           if (!tier) return null;
@@ -194,7 +205,7 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
   }
 
   return (
-    <div style={{ marginBottom: clusterGap }}>
+    <div style={{ marginBottom: clusterGap, background: ambientWash, transition: 'background var(--dur-base) ease' }}>
       {/* Topic label */}
       <div
         onClick={canTimeline ? openTimeline : undefined}

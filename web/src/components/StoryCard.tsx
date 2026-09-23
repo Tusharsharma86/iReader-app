@@ -18,6 +18,7 @@ import { trackArticleOpen } from '../utils/personalization';
 import { FALLBACK_IMG } from '../utils/fallback';
 import { isRead, markRead, subscribeRead } from '../utils/readStore';
 import { sampleImageColor, cachedImageColor } from '../utils/imageColor';
+import { withHeroTransition } from '../utils/viewTransition';
 
 const CARD_HEIGHT_BASE = 420;
 const DENSITY_HEIGHT: Record<string, number> = { compact: 320, comfortable: 420, spacious: 500 };
@@ -137,7 +138,8 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
       allStories: JSON.stringify((allStories ?? []).slice(0, 30)),
       sourceBias: story.sourceBias,
     };
-    navigate({ name: 'Article', params });
+    // Morph this card's photo into the article hero.
+    withHeroTransition(imgRef.current, () => navigate({ name: 'Article', params }), motionLevel !== 'off');
   };
 
   const gradient = `linear-gradient(to bottom, transparent 0%, ${dominant}55 25%, ${dominant}CC 60%, ${dominant} 100%)`;
