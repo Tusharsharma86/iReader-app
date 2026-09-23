@@ -15,6 +15,9 @@ import { isBlockedHeadline } from '../utils/contentFilters';
 
 const API_BASE = 'https://ireader.onrender.com/api/news/feed';
 const CARD_GAP = 12;
+// Single horizontal gutter for the feed: cards, section headings and the
+// category pills all align to it.
+const GUTTER = 16;
 const BG_REFRESH_THRESHOLD_MS = 10 * 60 * 1000;
 
 const CATEGORIES = [
@@ -144,7 +147,7 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
   }
   const clusterCardWidth = Math.min(Math.round(window.innerWidth * 0.78), 360);
   // CSS calc uses the actual container width (not window.innerWidth) — matches standalone centering
-  const sideMargin = `max(0px, calc((100% - ${soloCardWidth}px) / 2))`;
+  const sideMargin = `${GUTTER}px`;
   const snapInterval = clusterCardWidth + CARD_GAP;
   const [activeIdx, setActiveIdx] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -185,9 +188,9 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
           );
         })()}
         <div style={{ display: 'flex', justifyContent: 'center' }}>
-          {/* suppressBreaking: singleton cards already show the tier pill above — showing
-              it again inline in the card's meta row would duplicate it. */}
-          <StoryCard story={clusterStory} cardWidth={soloCardWidth} allStories={allStories} suppressBreaking />
+          {/* The tier pill is rendered above the card, so suppress the card's
+              own copy — but only when that header pill is actually shown. */}
+          <StoryCard story={clusterStory} cardWidth={soloCardWidth} allStories={allStories} suppressBreaking={showMetaPill} />
         </div>
       </div>
     );
@@ -283,10 +286,19 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
 
       {/* Horizontal carousel — narrower cards, next card peeks */}
       <div ref={scrollRef} onScroll={handleScroll}
-        style={{ display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', paddingLeft: sideMargin, paddingRight: sideMargin, gap: CARD_GAP, scrollbarWidth: 'none' }}>
+        style={{
+          display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory',
+          WebkitOverflowScrolling: 'touch', gap: CARD_GAP, scrollbarWidth: 'none',
+          paddingLeft: sideMargin, paddingRight: sideMargin,
+          // scroll-snap aligns a child's start edge to the SCROLLPORT edge and
+          // ignores padding, so the list quietly scrolled itself by exactly the
+          // gutter and the first card sat flush against the screen. scroll-
+          // padding insets the snapport to match.
+          scrollPaddingLeft: sideMargin, scrollPaddingRight: sideMargin,
+        }}>
         {cluster.stories.map((story, idx) => (
           <div key={story.id} style={{ scrollSnapAlign: 'start', flexShrink: 0 }}>
-            <StoryCard story={story} cardWidth={clusterCardWidth} allStories={allStories} clusterCard={idx === 0} />
+            <StoryCard story={story} cardWidth={clusterCardWidth} allStories={allStories} clusterCard={idx === 0} suppressBreaking={showMetaPill} />
           </div>
         ))}
       </div>
@@ -430,9 +442,9 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   useEffect(() => { try { trackVisit(); } catch {} }, []);
   const [followV, setFollowV] = useState(0);
 
-  const [cardWidth, setCardWidth] = useState(() => Math.min(window.innerWidth - 28, 452));
+  const [cardWidth, setCardWidth] = useState(() => Math.min(window.innerWidth - GUTTER * 2, 452));
   useEffect(() => {
-    const update = () => setCardWidth(Math.min(window.innerWidth - 28, 452));
+    const update = () => setCardWidth(Math.min(window.innerWidth - GUTTER * 2, 452));
     window.addEventListener('resize', update);
     return () => window.removeEventListener('resize', update);
   }, []);
