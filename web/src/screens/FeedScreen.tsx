@@ -240,7 +240,7 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
               </svg>
             )}
             <div style={{
-              color: '#fff', fontSize: 15.5, fontWeight: 800, letterSpacing: -0.2, lineHeight: 1.3,
+              color: '#fff', fontSize: 12.5, fontWeight: 800, letterSpacing: -0.2, lineHeight: 1.3,
               display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
             }}>
               {cluster.topicLabel}
