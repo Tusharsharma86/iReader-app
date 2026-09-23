@@ -10,7 +10,6 @@
 // match current behavior — existing users see no change until they toggle.
 import React, { useCallback } from 'react';
 import { useRouter } from '../contexts/RouterContext';
-import { ACCENTS, type ThemeSkin, type AccentPreset, type MotionLevel, type FeedLayout, type UiStyle, type BackgroundFx } from '../theme/theme';
 import {
   useSettings,
   type CardDensity, type ArticleTab, type SummaryLength, type SummaryFormat,
@@ -43,80 +42,6 @@ const THEME_OPTIONS: { label: string; value: ThemeMode }[] = [
   { label: 'Auto',  value: 'auto' },
   { label: 'Light', value: 'light' },
 ];
-
-const STYLE_OPTIONS: { label: string; value: UiStyle }[] = [
-  { label: 'Signal',    value: 'signal' },
-  { label: 'Editorial', value: 'editorial' },
-  { label: 'Brutal',    value: 'brutal' },
-  { label: 'Glass',     value: 'glass' },
-];
-
-const BACKGROUND_OPTIONS: { label: string; value: BackgroundFx }[] = [
-  { label: 'None',    value: 'none' },
-  { label: 'Network', value: 'constellation' },
-  { label: 'Grid',    value: 'grid' },
-  { label: 'Aurora',  value: 'aurora' },
-];
-
-const SKIN_OPTIONS: { label: string; value: ThemeSkin }[] = [
-  { label: 'Midnight', value: 'midnight' },
-  { label: 'OLED',     value: 'oled' },
-  { label: 'Auto',     value: 'auto' },
-  { label: 'Paper',    value: 'paper' },
-];
-
-const MOTION_OPTIONS: { label: string; value: MotionLevel }[] = [
-  { label: 'Full',   value: 'full' },
-  { label: 'Subtle', value: 'subtle' },
-  { label: 'Off',    value: 'off' },
-];
-
-const LAYOUT_OPTIONS: { label: string; value: FeedLayout }[] = [
-  { label: 'Magazine', value: 'magazine' },
-  { label: 'Standard', value: 'standard' },
-  { label: 'List',     value: 'list' },
-];
-
-const ACCENT_SWATCHES: { value: AccentPreset; label: string; swatch: string }[] = [
-  { value: 'violet', label: 'Violet', swatch: ACCENTS.violet.accent },
-  { value: 'cyan',   label: 'Cyan',   swatch: ACCENTS.cyan.accent },
-  { value: 'amber',  label: 'Amber',  swatch: ACCENTS.amber.accent },
-  { value: 'rose',   label: 'Rose',   swatch: ACCENTS.rose.accent },
-  { value: 'mono',   label: 'Mono',   swatch: ACCENTS.mono.accent },
-  // Follows the open story's own colour instead of a fixed hue.
-  { value: 'dynamic', label: 'Story', swatch: 'linear-gradient(135deg,#FB7185,#B994FF,#22D3EE)' },
-];
-
-function AccentRow({ value, onChange, border }: {
-  value: AccentPreset; onChange: (v: AccentPreset) => void; border?: boolean;
-}) {
-  return (
-    <div style={{ ...(border ? rowBorder : {}), padding: '14px 16px' }}>
-      <div style={rowLabel}>Accent</div>
-      <div style={rowSub}>Tints pills, links and highlights. &ldquo;Story&rdquo; follows each article&apos;s own colour.</div>
-      <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
-        {ACCENT_SWATCHES.map(a => {
-          const active = a.value === value;
-          return (
-            <button key={a.value} onClick={() => onChange(a.value)}
-              aria-label={a.label} aria-pressed={active}
-              style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
-                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-              }}>
-              <span style={{
-                width: 30, height: 30, borderRadius: '50%', background: a.swatch,
-                boxShadow: active ? '0 0 0 2px var(--bg), 0 0 0 4px var(--accent)' : 'none',
-                transition: 'box-shadow var(--dur-fast) ease',
-              }} />
-              <span style={{ fontSize: 10, color: active ? 'var(--text-3)' : 'var(--muted-3)', fontWeight: 600 }}>{a.label}</span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 const FONT_OPTIONS: { label: string; value: FontFamily }[] = [
   { label: 'Inter',  value: 'inter' },
@@ -153,12 +78,12 @@ const TIME_FORMAT_OPTIONS: { label: string; value: TimeFormat }[] = [
   { label: 'Absolute', value: 'absolute' },
 ];
 
-const VIOLET = 'var(--accent)';
-const CARD_BG = 'var(--surface)';
-const BORDER = 'var(--line)';
+const VIOLET = '#b994ff';
+const CARD_BG = '#0E0E0E';
+const BORDER = '#1A1A1A';
 
 const sectionHeader: React.CSSProperties = {
-  color: 'var(--muted-5)', fontSize: 11, fontWeight: 700, letterSpacing: 1.5,
+  color: '#444', fontSize: 11, fontWeight: 700, letterSpacing: 1.5,
   padding: '20px 20px 8px',
 };
 const card: React.CSSProperties = {
@@ -172,25 +97,25 @@ const rowBorder: React.CSSProperties = {
   borderTop: '1px solid #1F1F22',
 };
 const rowLabel: React.CSSProperties = {
-  color: 'var(--text-2)', fontSize: 15, fontWeight: 600,
+  color: '#EEE', fontSize: 15, fontWeight: 600,
 };
 const rowSub: React.CSSProperties = {
-  color: 'var(--muted-3)', fontSize: 12, marginTop: 2,
+  color: '#666', fontSize: 12, marginTop: 2,
 };
 
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   return (
     <div onClick={() => onChange(!value)} style={{
       width: 46, height: 27, borderRadius: 14,
-      background: value ? 'rgba(185,148,255,0.32)' : 'var(--line)',
+      background: value ? 'rgba(185,148,255,0.32)' : '#1A1A1A',
       position: 'relative', cursor: 'pointer', transition: 'background 0.2s',
       flexShrink: 0,
     }}>
       <div style={{
         position: 'absolute', top: 3, left: value ? 22 : 3,
         width: 21, height: 21, borderRadius: 11,
-        background: value ? VIOLET : 'var(--muted-3)',
-        transition: 'left 0.2s', boxShadow: '0 2px 4px rgba(var(--shadow-rgb),0.5)',
+        background: value ? VIOLET : '#666',
+        transition: 'left 0.2s', boxShadow: '0 2px 4px rgba(0,0,0,0.5)',
       }} />
     </div>
   );
@@ -203,8 +128,8 @@ function Segmented<T extends string | number>({ options, value, onChange }: {
 }) {
   return (
     <div style={{
-      display: 'flex', background: 'var(--bg)', borderRadius: 10,
-      padding: 3, gap: 2, marginTop: 10, border: '1px solid var(--line)',
+      display: 'flex', background: '#0A0A0A', borderRadius: 10,
+      padding: 3, gap: 2, marginTop: 10, border: '1px solid #1A1A1A',
     }}>
       {options.map(o => {
         const active = o.value === value;
@@ -216,7 +141,7 @@ function Segmented<T extends string | number>({ options, value, onChange }: {
               flex: 1, padding: '8px 6px', borderRadius: 8, border: 'none',
               cursor: 'pointer',
               background: active ? VIOLET : 'transparent',
-              color: active ? 'var(--pill-text)' : 'var(--muted-2)',
+              color: active ? '#000' : '#888',
               fontSize: 11.5, fontWeight: 700, letterSpacing: 0.2,
               transition: 'all 0.15s',
             }}
@@ -333,7 +258,7 @@ export default function CustomizeScreen() {
   }, [s]);
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch', background: 'var(--bg)', color: 'var(--text)', paddingBottom: 80 }}>
+    <div style={{ height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch', background: '#050505', color: '#FFF', paddingBottom: 80 }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 12,
         padding: 'calc(16px + env(safe-area-inset-top, 0px)) 16px 12px',
@@ -342,13 +267,13 @@ export default function CustomizeScreen() {
           width: 36, height: 36, borderRadius: 18, background: CARD_BG,
           display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
         }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2.5">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5">
             <polyline points="15 18 9 12 15 6"/>
           </svg>
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 22, fontWeight: 800 }}>Customize</div>
-          <div style={{ color: 'var(--muted-2)', fontSize: 12, marginTop: 2 }}>UI tweaks · defaults · density</div>
+          <div style={{ color: '#888', fontSize: 12, marginTop: 2 }}>UI tweaks · defaults · density</div>
         </div>
       </div>
 
@@ -435,30 +360,10 @@ export default function CustomizeScreen() {
       {/* APPEARANCE */}
       <div style={sectionHeader}>APPEARANCE</div>
       <div style={card}>
-        <RowSegmented label="UI style"
-          sub="Changes card shape and typography — Editorial sets stories in serif on a light card, Brutal is hard-edged caps, Glass is frosted."
-          options={STYLE_OPTIONS}
-          value={s.uiStyle} onChange={s.setUiStyle} />
-        <RowSegmented border label="Theme"
-          sub="Midnight, OLED (true black), Auto (follows system) or Paper."
-          options={SKIN_OPTIONS}
-          value={s.themeSkin} onChange={s.setThemeSkin} />
-        <AccentRow border value={s.accentPreset} onChange={s.setAccentPreset} />
-        <RowSegmented border label="Feed backdrop"
-          sub="Animated layer behind the cards. Network echoes the app mark; Grid is a moving tech grid; Aurora drifts soft colour."
-          options={BACKGROUND_OPTIONS}
-          value={s.backgroundFx} onChange={s.setBackgroundFx} />
-        <RowSegmented border label="Feed layout"
-          sub="Magazine leads with a large card, List is text-only rows."
-          options={LAYOUT_OPTIONS}
-          value={s.feedLayout} onChange={s.setFeedLayout} />
-        <RowSegmented border label="Motion"
-          sub="Card entrances, parallax and transitions."
-          options={MOTION_OPTIONS}
-          value={s.motionLevel} onChange={s.setMotionLevel} />
-        <RowToggle border label="Time-of-day ambience"
-          sub="A subtle warm/cool wash that drifts with the clock."
-          value={s.ambience} onChange={s.setAmbience} />
+        <RowSegmented label="Theme"
+          sub="Dark (default), Auto (follows system), Light."
+          options={THEME_OPTIONS}
+          value={s.themeMode} onChange={s.setThemeMode} />
         <RowToggle border label="Entity highlights"
           sub="Highlight people / companies in article body."
           value={s.showEntityHighlights} onChange={s.setShowEntityHighlights} />
@@ -525,9 +430,9 @@ export default function CustomizeScreen() {
                   onClick={() => !locked && s.toggleHiddenTab(t.key)}
                   style={{
                     padding: '7px 14px', borderRadius: 999,
-                    border: `1px solid ${hidden ? 'var(--line-2)' : 'rgba(185,148,255,0.4)'}`,
-                    background: hidden ? 'var(--bg)' : 'rgba(185,148,255,0.14)',
-                    color: hidden ? 'var(--muted-4)' : VIOLET,
+                    border: `1px solid ${hidden ? '#222' : 'rgba(185,148,255,0.4)'}`,
+                    background: hidden ? '#0A0A0A' : 'rgba(185,148,255,0.14)',
+                    color: hidden ? '#555' : VIOLET,
                     fontSize: 12, fontWeight: 700, letterSpacing: 0.3,
                     cursor: locked ? 'not-allowed' : 'pointer',
                     opacity: locked ? 0.45 : 1,
@@ -550,9 +455,9 @@ export default function CustomizeScreen() {
                   onClick={() => s.toggleHiddenTopic(t.key)}
                   style={{
                     padding: '7px 14px', borderRadius: 999,
-                    border: `1px solid ${hidden ? 'var(--line-2)' : 'rgba(185,148,255,0.4)'}`,
-                    background: hidden ? 'var(--bg)' : 'rgba(185,148,255,0.14)',
-                    color: hidden ? 'var(--muted-4)' : VIOLET,
+                    border: `1px solid ${hidden ? '#222' : 'rgba(185,148,255,0.4)'}`,
+                    background: hidden ? '#0A0A0A' : 'rgba(185,148,255,0.14)',
+                    color: hidden ? '#555' : VIOLET,
                     fontSize: 12, fontWeight: 700, letterSpacing: 0.3,
                     cursor: 'pointer',
                   }}
@@ -584,16 +489,16 @@ export default function CustomizeScreen() {
             <div style={rowLabel}>Clear all caches</div>
             <div style={rowSub}>Removes cached feed, AI summaries, scroll positions. Saved articles are kept.</div>
           </div>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--muted-3)" strokeWidth="2">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2">
             <polyline points="9 18 15 12 9 6"/>
           </svg>
         </div>
         <div onClick={resetAll} style={{ ...row, ...rowBorder, cursor: 'pointer' }}>
           <div style={{ flex: 1 }}>
-            <div style={{ ...rowLabel, color: 'var(--danger)' }}>Reset Customize</div>
+            <div style={{ ...rowLabel, color: '#FF6B6B' }}>Reset Customize</div>
             <div style={rowSub}>Restore all Customize options to defaults.</div>
           </div>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" strokeWidth="2">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FF6B6B" strokeWidth="2">
             <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>
           </svg>
         </div>

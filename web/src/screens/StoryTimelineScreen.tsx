@@ -7,10 +7,10 @@ import { getArticleColor } from '../utils/colors';
 type EventType = 'breaking' | 'update' | 'analysis' | 'reaction';
 
 const EVENT_META: Record<EventType, { label: string; color: string }> = {
-  breaking: { label: 'BREAKING',  color: 'var(--danger)' },
-  update:   { label: 'UPDATE',    color: 'var(--accent-2)' },
-  analysis: { label: 'ANALYSIS',  color: 'var(--topic)' },
-  reaction: { label: 'REACTION',  color: 'var(--warn)' },
+  breaking: { label: 'BREAKING',  color: '#FF3B30' },
+  update:   { label: 'UPDATE',    color: '#4A90D9' },
+  analysis: { label: 'ANALYSIS',  color: '#A29BFE' },
+  reaction: { label: 'REACTION',  color: '#F5A623' },
 };
 
 function detectEventType(headline: string, summary: string): EventType {
@@ -66,21 +66,21 @@ export default function StoryTimelineScreen({ params }: { params: { clusterId: s
   }
 
   return (
-    <div style={{ height: '100%', background: 'var(--bg)', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+    <div style={{ height: '100%', background: '#080808', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
       {/* Header */}
-      <div style={{ position: 'sticky', top: 0, background: 'var(--bg)', borderBottom: '1px solid var(--surface-3)', zIndex: 10, padding: 'calc(16px + env(safe-area-inset-top, 0px)) 16px 12px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-        <button onClick={goBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0', color: 'var(--text)', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+      <div style={{ position: 'sticky', top: 0, background: '#080808', borderBottom: '1px solid #141414', zIndex: 10, padding: 'calc(16px + env(safe-area-inset-top, 0px)) 16px 12px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <button onClick={goBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0', color: '#fff', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
         </button>
         <div style={{ flex: 1 }}>
-          <div style={{ color: 'var(--accent-2)', fontSize: 11, fontWeight: 700, letterSpacing: 1.2, marginBottom: 4 }}>STORY TIMELINE</div>
-          <div style={{ color: 'var(--text)', fontSize: 16, fontWeight: 700, lineHeight: 1.35, letterSpacing: -0.2 }}>{params.headline}</div>
+          <div style={{ color: '#4A90D9', fontSize: 11, fontWeight: 700, letterSpacing: 1.2, marginBottom: 4 }}>STORY TIMELINE</div>
+          <div style={{ color: '#fff', fontSize: 16, fontWeight: 700, lineHeight: 1.35, letterSpacing: -0.2 }}>{params.headline}</div>
         </div>
       </div>
 
       {/* Events */}
       <div style={{ padding: '16px 20px 48px' }}>
-        <div style={{ color: 'var(--muted-5)', fontSize: 11, fontWeight: 600, letterSpacing: 0.4, marginBottom: 20 }}>
+        <div style={{ color: '#333', fontSize: 11, fontWeight: 600, letterSpacing: 0.4, marginBottom: 20 }}>
           {sorted.length} sources · oldest first
         </div>
 
@@ -95,8 +95,8 @@ export default function StoryTimelineScreen({ params }: { params: { clusterId: s
             <div key={story.id ?? idx} style={{ display: 'flex', gap: 14 }}>
               {/* Spine */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 14, flexShrink: 0 }}>
-                <div style={{ width: 12, height: 12, borderRadius: 6, border: `2px solid ${meta.color}`, background: 'var(--bg)', marginTop: 3, flexShrink: 0 }} />
-                {!isLast && <div style={{ width: 1, flex: 1, background: 'var(--line)', marginTop: 4, minHeight: 24 }} />}
+                <div style={{ width: 12, height: 12, borderRadius: 6, border: `2px solid ${meta.color}`, background: '#080808', marginTop: 3, flexShrink: 0 }} />
+                {!isLast && <div style={{ width: 1, flex: 1, background: '#1A1A1A', marginTop: 4, minHeight: 24 }} />}
               </div>
 
               {/* Card */}
@@ -107,10 +107,10 @@ export default function StoryTimelineScreen({ params }: { params: { clusterId: s
                 {/* Meta row */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 7, flexWrap: 'wrap' }}>
                   <span style={{ color: meta.color, fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>{meta.label}</span>
-                  <span style={{ color: 'var(--line-3)', fontSize: 10 }}>·</span>
+                  <span style={{ color: '#2A2A2A', fontSize: 10 }}>·</span>
                   <span style={{ color: '#3A3A3A', fontSize: 11 }}>{timeAgo(story.publishedAt)}</span>
-                  <span style={{ color: 'var(--line-3)', fontSize: 10 }}>·</span>
-                  <span style={{ color: 'var(--muted-5)', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>{source}</span>
+                  <span style={{ color: '#2A2A2A', fontSize: 10 }}>·</span>
+                  <span style={{ color: '#444', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>{source}</span>
                   {(story as any).sourceBias && (story as any).sourceBias !== 'unknown' && (
                     <div style={{ width: 6, height: 6, borderRadius: 3, background: BIAS_CONFIG[(story as any).sourceBias as BiasRating]?.color, flexShrink: 0 }} />
                   )}
@@ -119,7 +119,7 @@ export default function StoryTimelineScreen({ params }: { params: { clusterId: s
                 {/* Content row */}
                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ color: 'var(--text-4)', fontSize: 14, fontWeight: 600, lineHeight: 1.45, marginBottom: 4, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    <div style={{ color: '#CCC', fontSize: 14, fontWeight: 600, lineHeight: 1.45, marginBottom: 4, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                       {story.headline}
                     </div>
                     {snippet && (

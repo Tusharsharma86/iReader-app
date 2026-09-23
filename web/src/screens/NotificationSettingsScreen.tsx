@@ -11,25 +11,25 @@ import React from 'react';
 import { useRouter } from '../contexts/RouterContext';
 import { useSettings, type BreakingSensitivity } from '../contexts/SettingsContext';
 
-const VIOLET = 'var(--accent)';
-const BLUE = 'var(--accent-2)';
-const CARD_BG = 'var(--surface)';
-const BORDER = 'var(--line)';
+const VIOLET = '#b994ff';
+const BLUE = '#4A90D9';
+const CARD_BG = '#0E0E0E';
+const BORDER = '#1A1A1A';
 
 function Toggle({ value, onChange, accent = BLUE }: { value: boolean; onChange: (v: boolean) => void; accent?: string }) {
   return (
-    <div onClick={() => onChange(!value)} style={{ width: 51, height: 31, borderRadius: 16, background: value ? (accent === VIOLET ? 'rgba(185,148,255,0.32)' : '#1C3A6A') : 'var(--line)', position: 'relative', cursor: 'pointer', transition: 'background 0.2s', flexShrink: 0 }}>
-      <div style={{ position: 'absolute', top: 3, left: value ? 22 : 2, width: 25, height: 25, borderRadius: 13, background: value ? accent : 'var(--muted-5)', transition: 'left 0.2s', boxShadow: '0 2px 4px rgba(var(--shadow-rgb),0.5)' }} />
+    <div onClick={() => onChange(!value)} style={{ width: 51, height: 31, borderRadius: 16, background: value ? (accent === VIOLET ? 'rgba(185,148,255,0.32)' : '#1C3A6A') : '#1A1A1A', position: 'relative', cursor: 'pointer', transition: 'background 0.2s', flexShrink: 0 }}>
+      <div style={{ position: 'absolute', top: 3, left: value ? 22 : 2, width: 25, height: 25, borderRadius: 13, background: value ? accent : '#444', transition: 'left 0.2s', boxShadow: '0 2px 4px rgba(0,0,0,0.5)' }} />
     </div>
   );
 }
 
-const sectionHeader: React.CSSProperties = { color: 'var(--muted-5)', fontSize: 11, fontWeight: 700, letterSpacing: 1.5, padding: '16px 20px 8px' };
+const sectionHeader: React.CSSProperties = { color: '#444', fontSize: 11, fontWeight: 700, letterSpacing: 1.5, padding: '16px 20px 8px' };
 const card: React.CSSProperties = { background: CARD_BG, margin: '0 16px', borderRadius: 14, border: `1px solid ${BORDER}`, overflow: 'hidden' };
 const row: React.CSSProperties = { display: 'flex', alignItems: 'center', padding: '14px 16px', gap: 12 };
 const rowBorder: React.CSSProperties = { ...row, borderTop: '1px solid #1F1F22' };
-const rowLabel: React.CSSProperties = { color: 'var(--text-2)', fontSize: 15, fontWeight: 600 };
-const rowSub: React.CSSProperties = { color: 'var(--muted-3)', fontSize: 12, marginTop: 2 };
+const rowLabel: React.CSSProperties = { color: '#EEE', fontSize: 15, fontWeight: 600 };
+const rowSub: React.CSSProperties = { color: '#666', fontSize: 12, marginTop: 2 };
 
 export default function NotificationSettingsScreen() {
   const { goBack, navigate } = useRouter();
@@ -46,14 +46,14 @@ export default function NotificationSettingsScreen() {
   const starredCount = Object.values(topicInterests).filter(v => v > 0).length;
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch', background: 'var(--bg)', color: 'var(--text)', paddingBottom: 80 }}>
+    <div style={{ height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch', background: '#050505', color: '#FFF', paddingBottom: 80 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 'calc(16px + env(safe-area-inset-top, 0px)) 16px 12px' }}>
         <div onClick={goBack} style={{ width: 36, height: 36, borderRadius: 18, background: CARD_BG, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 22, fontWeight: 800 }}>Notifications</div>
-          <div style={{ color: 'var(--muted-2)', fontSize: 12, marginTop: 2 }}>Pushes, themes, digest, history</div>
+          <div style={{ color: '#888', fontSize: 12, marginTop: 2 }}>Pushes, themes, digest, history</div>
         </div>
       </div>
 
@@ -93,12 +93,12 @@ export default function NotificationSettingsScreen() {
                   onClick={() => setBreakingSensitivity(opt.key)}
                   style={{
                     flex: 1, padding: '8px 0', borderRadius: 8,
-                    background: active ? '#1C3A6A' : 'var(--line)',
+                    background: active ? '#1C3A6A' : '#1A1A1A',
                     textAlign: 'center', cursor: 'pointer',
                   }}
                 >
-                  <div style={{ color: active ? 'var(--text)' : 'var(--muted-2)', fontSize: 12, fontWeight: 700 }}>{opt.label}</div>
-                  <div style={{ color: active ? '#AAC' : 'var(--muted-4)', fontSize: 9, marginTop: 2 }}>{opt.desc}</div>
+                  <div style={{ color: active ? '#FFF' : '#888', fontSize: 12, fontWeight: 700 }}>{opt.label}</div>
+                  <div style={{ color: active ? '#AAC' : '#555', fontSize: 9, marginTop: 2 }}>{opt.desc}</div>
                 </div>
               );
             })}
@@ -106,10 +106,10 @@ export default function NotificationSettingsScreen() {
         </div>
         <div onClick={() => navigate({ name: 'BreakingThemes' })} style={{ ...rowBorder, paddingLeft: 36, cursor: 'pointer' }}>
           <div style={{ flex: 1 }}>
-            <div style={{ color: 'var(--text-4)', fontSize: 14, fontWeight: 500 }}>Themes</div>
+            <div style={{ color: '#CCC', fontSize: 14, fontWeight: 500 }}>Themes</div>
             <div style={rowSub}>Mute themes — applies to Main + AI Feed</div>
           </div>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted-3)" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
         </div>
       </div>
 
@@ -125,10 +125,10 @@ export default function NotificationSettingsScreen() {
         </div>
         <div onClick={() => navigate({ name: 'TopicInterests' })} style={{ ...rowBorder, paddingLeft: 36, cursor: 'pointer' }}>
           <div style={{ flex: 1 }}>
-            <div style={{ color: 'var(--text-4)', fontSize: 14, fontWeight: 500 }}>Topics & Sources</div>
+            <div style={{ color: '#CCC', fontSize: 14, fontWeight: 500 }}>Topics & Sources</div>
             <div style={rowSub}>Choose what triggers your alerts</div>
           </div>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted-3)" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
         </div>
       </div>
 
@@ -155,7 +155,7 @@ export default function NotificationSettingsScreen() {
             <div style={rowLabel}>Notification History</div>
             <div style={rowSub}>Past pushes — tap to reopen</div>
           </div>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--muted-3)" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
         </div>
       </div>
     </div>

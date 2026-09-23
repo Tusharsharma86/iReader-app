@@ -17,8 +17,6 @@ import { useSettings } from '../contexts/SettingsContext';
 import { trackArticleOpen } from '../utils/personalization';
 import { FALLBACK_IMG } from '../utils/fallback';
 import { isRead, markRead, subscribeRead } from '../utils/readStore';
-import { sampleImageColor, cachedImageColor } from '../utils/imageColor';
-import { withHeroTransition } from '../utils/viewTransition';
 
 const CARD_HEIGHT_BASE = 420;
 const DENSITY_HEIGHT: Record<string, number> = { compact: 320, comfortable: 420, spacious: 500 };
@@ -44,7 +42,7 @@ function clientDifficulty(text: string): 'Easy' | 'Medium' | 'Hard' {
   return score >= 70 ? 'Easy' : score >= 50 ? 'Medium' : 'Hard';
 }
 
-const DIFFICULTY_COLORS: Record<string, string> = { Easy: 'var(--success)', Medium: 'var(--warn)', Hard: 'var(--danger)' };
+const DIFFICULTY_COLORS: Record<string, string> = { Easy: '#34C759', Medium: '#FF9500', Hard: '#FF3B30' };
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -95,23 +93,12 @@ interface Props {
 export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppressBreaking, clusterCard }: Props) {
   const { navigate } = useRouter();
   const { toggleSave, isSaved } = useSaved();
-  const { showClusterSummary, showBiasDots, showCardImages, cardDensity, timeFormat, autoMarkRead, feedLayout, motionLevel, uiStyle } = useSettings();
+  const { showClusterSummary, showBiasDots, showCardImages, cardDensity, timeFormat, autoMarkRead } = useSettings();
   const [imgError, setImgError] = useState(false);
   const saved = isSaved(story.id);
 
   const cardWidth = cwProp ?? Math.min(window.innerWidth - 28, 452);
-  // Colour precedence: server-provided → sampled from the photo → hashed
-  // palette. The hash is deterministic but unrelated to the story, so it is
-  // the last resort rather than the default.
-  const [sampled, setSampled] = useState<string | null>(() => cachedImageColor(story.imageUrl));
-  React.useEffect(() => {
-    if (!showCardImages || !story.imageUrl || story.dominantColor || sampled) return;
-    let alive = true;
-    sampleImageColor(story.imageUrl).then(c => { if (alive && c) setSampled(c); });
-    return () => { alive = false; };
-  }, [story.imageUrl, story.dominantColor, showCardImages, sampled]);
-
-  const dominant = story.dominantColor || sampled || getArticleColor(story.id || story.headline);
+  const dominant = getArticleColor(story.id || story.headline);
   const accent = lighten(dominant, 0.55);
 
   const source = story.sources?.[0]?.name ?? 'Unknown';
@@ -138,8 +125,7 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
       allStories: JSON.stringify((allStories ?? []).slice(0, 30)),
       sourceBias: story.sourceBias,
     };
-    // Morph this card's photo into the article hero.
-    withHeroTransition(imgRef.current, () => navigate({ name: 'Article', params }), motionLevel !== 'off');
+    navigate({ name: 'Article', params });
   };
 
   const gradient = `linear-gradient(to bottom, transparent 0%, ${dominant}55 25%, ${dominant}CC 60%, ${dominant} 100%)`;
@@ -170,150 +156,6 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
     return () => { if (t != null) clearTimeout(t); obs.disconnect(); };
   }, [autoMarkRead, readState, story.id]);
 
-  // Form tokens: shape and type come from the UI style, not the palette.
-  const headStyle = {
-    fontFamily: 'var(--font-head)',
-    fontSize: 'var(--head-size)',
-    fontWeight: 'var(--head-weight)',
-    letterSpacing: 'var(--head-tracking)',
-    textTransform: 'var(--head-transform)',
-  } as React.CSSProperties;
-  const metaStyle = {
-    fontSize: 'var(--meta-size)',
-    letterSpacing: 'var(--meta-tracking)',
-    fontWeight: 'var(--meta-weight)',
-  } as React.CSSProperties;
-
-  const cardShadow =
-    uiStyle === 'brutal'    ? '7px 7px 0 var(--accent)'
-    : uiStyle === 'editorial' ? '0 1px 3px rgba(var(--shadow-rgb),0.35)'
-    : uiStyle === 'glass'   ? '0 12px 44px rgba(var(--shadow-rgb),0.5)'
-    : `
-        0 8px 22px rgba(var(--shadow-rgb),0.55),
-        0 0 ${pressed ? 110 : 90}px ${accent}${pressed ? 'aa' : '88'},
-        0 0 ${pressed ? 70 : 56}px ${dominant}${pressed ? 'cc' : 'aa'},
-        0 22px 70px ${dominant}99
-      `;
-  const cardBorder =
-    uiStyle === 'brutal' ? '2px solid var(--text)'
-    : uiStyle === 'glass' ? '1px solid rgba(var(--fg-rgb),0.16)'
-    : uiStyle === 'editorial' ? '1px solid var(--line)'
-    : 'none';
-
-  const baseHeight = DENSITY_HEIGHT[cardDensity] ?? CARD_HEIGHT_BASE;
-  const cardHeight = feedLayout === 'magazine' ? Math.round(baseHeight * 1.18) : baseHeight;
-
-  // Parallax: drift the photo against the card as it crosses the viewport.
-  // Scroll events don't bubble, so listen on window in the capture phase to
-  // catch the feed container's own scrolling.
-  const imgRef = React.useRef<HTMLImageElement | null>(null);
-  React.useEffect(() => {
-    const img = imgRef.current;
-    if (motionLevel !== 'full' || !img) return;
-    let raf = 0;
-    const update = () => {
-      raf = 0;
-      const host = cardRef.current;
-      if (!host) return;
-      const r = host.getBoundingClientRect();
-      const vh = window.innerHeight || 1;
-      if (r.bottom < -120 || r.top > vh + 120) return;
-      const progress = (r.top + r.height / 2 - vh / 2) / vh;   // -0.5 … 0.5
-      img.style.transform = `scale(1.14) translateY(${(-progress * 18).toFixed(2)}px)`;
-    };
-    const onScroll = () => { if (!raf) raf = requestAnimationFrame(update); };
-    update();
-    window.addEventListener('scroll', onScroll, { passive: true, capture: true });
-    return () => {
-      window.removeEventListener('scroll', onScroll, true);
-      if (raf) cancelAnimationFrame(raf);
-      img.style.transform = '';
-    };
-  }, [motionLevel, showCardImages, story.imageUrl]);
-
-  if (uiStyle === 'editorial' && feedLayout !== 'list') {
-    const standfirst = story.aiSummary || story.summary || '';
-    return (
-      <div
-        ref={cardRef}
-        onClick={handleClick}
-        style={{
-          width: cardWidth, height: cardHeight, display: 'flex', flexDirection: 'column',
-          borderRadius: 'var(--radius)', overflow: 'hidden',
-          background: 'var(--surface)', border: cardBorder, boxShadow: cardShadow,
-          cursor: 'pointer', opacity: readState ? 0.55 : 1,
-          animation: 'cardIn var(--dur-base) ease both',
-          WebkitTapHighlightColor: 'transparent',
-        }}
-      >
-        <div style={{ position: 'relative', flex: '0 0 50%', minHeight: 0, background: dominant, overflow: 'hidden' }}>
-          {showCardImages && !imgError && story.imageUrl && (
-            <img ref={imgRef} src={story.imageUrl} alt="" onError={() => setImgError(true)}
-              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-          )}
-        </div>
-        <div style={{ flex: '1 1 auto', minHeight: 0, overflow: 'hidden', padding: '13px 16px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--muted-2)', ...metaStyle }}>
-            <span style={{ width: 14, height: 2, background: dominant, flexShrink: 0 }} />
-            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{source.toUpperCase()}</span>
-            <span style={{ color: 'var(--muted-4)' }}>
-              {timeFormat === 'absolute' ? timeAbs(story.publishedAt) : timeAgo(story.publishedAt)}
-            </span>
-          </div>
-          <div style={{
-            color: 'var(--text)', lineHeight: 1.28, ...headStyle,
-            display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-          }}>{story.headline}</div>
-          {showClusterSummary && standfirst && (
-            <div style={{
-              color: 'var(--muted-2)', fontSize: 12.5, lineHeight: 1.55,
-              display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-            }}>{standfirst}</div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // Text-only rows — a different shape, not a squashed card.
-  if (feedLayout === 'list') {
-    return (
-      <div
-        ref={cardRef}
-        onClick={handleClick}
-        style={{
-          display: 'flex', gap: 12, alignItems: 'center', width: cardWidth,
-          padding: '12px 4px', borderBottom: '1px solid var(--line)',
-          cursor: 'pointer', opacity: readState ? 0.55 : 1,
-          animation: 'cardIn var(--dur-base) ease both',
-          WebkitTapHighlightColor: 'transparent',
-        }}
-      >
-        {showCardImages && story.imageUrl && !imgError ? (
-          <img src={story.imageUrl} alt="" onError={() => setImgError(true)}
-            style={{ width: 74, height: 74, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
-        ) : (
-          <div style={{ width: 74, height: 74, borderRadius: 10, flexShrink: 0, background: dominant }} />
-        )}
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 4 }}>
-            <span style={{ width: 6, height: 6, borderRadius: 3, background: dominant, flexShrink: 0 }} />
-            <span style={{ color: 'var(--muted-2)', fontSize: 10, fontWeight: 700, letterSpacing: 0.6 }}>
-              {source.toUpperCase()}
-            </span>
-            <span style={{ color: 'var(--muted-4)', fontSize: 10 }}>
-              {timeFormat === 'absolute' ? timeAbs(story.publishedAt) : timeAgo(story.publishedAt)}
-            </span>
-          </div>
-          <div style={{
-            color: 'var(--text)', fontSize: 15, fontWeight: 600, lineHeight: 1.3,
-            display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-          }}>{story.headline}</div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div
       ref={cardRef}
@@ -323,15 +165,18 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
       onPointerLeave={() => setPressed(false)}
       onPointerCancel={() => setPressed(false)}
       style={{
-        width: cardWidth, height: cardHeight, borderRadius: 'var(--radius)', overflow: 'hidden',
-        border: cardBorder,
-        animation: 'cardIn var(--dur-base) cubic-bezier(.2,.7,.3,1) both',
+        width: cardWidth, height: DENSITY_HEIGHT[cardDensity] ?? CARD_HEIGHT_BASE, borderRadius: 20, overflow: 'hidden',
         opacity: readState ? 0.55 : 1,
         position: 'relative', flexShrink: 0, cursor: 'pointer',
         // Particle-style colour bleed: bright accent halo + layered dominant
         // glow. Numbers tuned to push the colour ~80-100 px past the card
         // edge so adjacent cards/background pick up the tint.
-        boxShadow: cardShadow,
+        boxShadow: `
+          0 8px 22px rgba(0,0,0,0.55),
+          0 0 ${pressed ? 110 : 90}px ${accent}${pressed ? 'aa' : '88'},
+          0 0 ${pressed ? 70 : 56}px ${dominant}${pressed ? 'cc' : 'aa'},
+          0 22px 70px ${dominant}99
+        `,
         WebkitTapHighlightColor: 'transparent',
         transform: pressed ? 'scale(0.97)' : 'scale(1)',
         transition: 'transform 0.16s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.24s ease, opacity 0.3s ease',
@@ -340,11 +185,8 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
       {/* Background image or typographic fallback. Hidden when Customize →
           showCardImages is off (text-only feed mode). */}
       {showCardImages && !imgError && story.imageUrl ? (
-        <img ref={imgRef} src={story.imageUrl} alt="" onError={() => setImgError(true)}
-          style={{
-            position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
-            willChange: motionLevel === 'full' ? 'transform' : undefined,
-          }} />
+        <img src={story.imageUrl} alt="" onError={() => setImgError(true)}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
       ) : (
         <div style={{
           position: 'absolute', inset: 0, background: '#05060c',
@@ -365,50 +207,38 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
       {/* Source circles top-right */}
       <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex' }}>
         {story.sources.slice(0, 3).map((src, i) => (
-          <div key={i} style={{ width: 28, height: 28, borderRadius: 14, border: '2px solid var(--bg)', overflow: 'hidden', background: dominant, marginLeft: i > 0 ? -8 : 0 }}>
+          <div key={i} style={{ width: 28, height: 28, borderRadius: 14, border: '2px solid #000', overflow: 'hidden', background: dominant, marginLeft: i > 0 ? -8 : 0 }}>
             <img src={faviconUrl(src.name)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
         ))}
       </div>
 
       {/* Content overlay bottom */}
-      <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0,
-        padding: 14, paddingLeft: clusterCard ? 20 : 14,
-        // Glass frosts the text panel rather than relying on the scrim.
-        ...(uiStyle === 'glass' ? {
-          margin: 10,
-          borderRadius: 'var(--radius-sm)',
-          background: 'rgba(var(--shadow-rgb),0.34)',
-          backdropFilter: 'blur(16px) saturate(140%)',
-          WebkitBackdropFilter: 'blur(16px) saturate(140%)',
-          border: '1px solid rgba(var(--fg-rgb),0.14)',
-        } : {}),
-      }}>
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 14, paddingLeft: clusterCard ? 20 : 14 }}>
         {/* Meta row */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-          <div style={{ width: 18, height: 18, borderRadius: 9, background: 'rgba(var(--fg-rgb),0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: 'var(--text)', flexShrink: 0 }}>
+          <div style={{ width: 18, height: 18, borderRadius: 9, background: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
             {source.charAt(0).toUpperCase()}
           </div>
-          <span style={{ color: 'rgba(var(--fg-rgb),0.75)', fontSize: 9.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{source.toUpperCase()}</span>
+          <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 9.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{source.toUpperCase()}</span>
           {showBiasDots && story.sourceBias && story.sourceBias !== 'unknown' && (
             <div style={{ width: 6, height: 6, borderRadius: 3, background: BIAS_CONFIG[story.sourceBias as BiasRating]?.color, flexShrink: 0 }} />
           )}
-          <span style={{ color: 'rgba(var(--fg-rgb),0.4)', fontSize: 9.5, flexShrink: 0 }}>·</span>
-          <span style={{ color: 'rgba(var(--fg-rgb),0.75)', fontSize: 9.5, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>{timeFormat === 'absolute' ? timeAbs(story.publishedAt) : timeAgo(story.publishedAt)}</span>
+          <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9.5, flexShrink: 0 }}>·</span>
+          <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 9.5, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>{timeFormat === 'absolute' ? timeAbs(story.publishedAt) : timeAgo(story.publishedAt)}</span>
           {isBreakingBadge && !suppressBreaking && (() => {
             const tier = breakingTier(story.publishedAt, true);
-            const dot = <span style={{ color: 'rgba(var(--fg-rgb),0.4)', fontSize: 11 }}>·</span>;
-            if (tier === 'live') return <><span style={{ color: 'rgba(var(--fg-rgb),0.4)', fontSize: 11 }}>·</span><span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--danger)', display: 'inline-block' }} /><span style={{ color: 'var(--danger)', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>LIVE</span></span></>;
-            if (tier === 'developing') return <>{dot}<span style={{ color: 'var(--warn)', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>DEVELOPING</span></>;
-            return <>{dot}<span style={{ color: 'var(--danger)', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>BREAKING</span></>;
+            const dot = <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>·</span>;
+            if (tier === 'live') return <><span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>·</span><span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#FF3B30', display: 'inline-block' }} /><span style={{ color: '#FF3B30', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>LIVE</span></span></>;
+            if (tier === 'developing') return <>{dot}<span style={{ color: '#FF9500', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>DEVELOPING</span></>;
+            return <>{dot}<span style={{ color: '#FF3B30', fontSize: 10, fontWeight: 800, letterSpacing: 0.6 }}>BREAKING</span></>;
           })()}
           {isTrending && !isBreakingBadge && <span style={{ fontSize: 12 }}>🔥</span>}
           {isOngoing && <span style={{ fontSize: 12 }}>📍</span>}
           <div style={{ flex: 1 }} />
           <button onClick={e => { e.stopPropagation(); try { navigator.vibrate?.(10); } catch {} toggleSave(story); }}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: saved ? 'var(--accent-2)' : 'rgba(var(--fg-rgb),0.7)', fontSize: 18, lineHeight: 1, WebkitTapHighlightColor: 'transparent' }}>
-            <svg key={saved ? 'on' : 'off'} width="19" height="19" viewBox="0 0 24 24" fill={saved ? 'var(--accent-2)' : 'none'} stroke={saved ? 'var(--accent-2)' : 'rgba(var(--fg-rgb),0.7)'} strokeWidth="2"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: saved ? '#4A90D9' : 'rgba(255,255,255,0.7)', fontSize: 18, lineHeight: 1, WebkitTapHighlightColor: 'transparent' }}>
+            <svg key={saved ? 'on' : 'off'} width="19" height="19" viewBox="0 0 24 24" fill={saved ? '#4A90D9' : 'none'} stroke={saved ? '#4A90D9' : 'rgba(255,255,255,0.7)'} strokeWidth="2"
               style={{ display: 'block', animation: saved ? 'bookPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none' }}>
               <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" />
             </svg>
@@ -417,7 +247,7 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
         </div>
 
         {/* Headline */}
-        <div style={{ color: 'var(--text)', lineHeight: 1.3, ...headStyle, marginBottom: compact ? 0 : 5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+        <div style={{ color: '#fff', fontSize: 17, fontWeight: 800, lineHeight: 1.3, letterSpacing: -0.2, marginBottom: compact ? 0 : 5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
           {story.headline}
         </div>
 
@@ -432,7 +262,7 @@ export function StoryCard({ story, compact, cardWidth: cwProp, allStories, suppr
           if (!raw) return null;
           const words = raw.split(/\s+/);
           const text = words.length > 25 ? words.slice(0, 25).join(' ') + '…' : raw;
-          return <div style={{ color: 'rgba(var(--fg-rgb),0.65)', fontSize: 10.5, lineHeight: 1.5 }}>{text}</div>;
+          return <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: 10.5, lineHeight: 1.5 }}>{text}</div>;
         })()}
       </div>
     </div>

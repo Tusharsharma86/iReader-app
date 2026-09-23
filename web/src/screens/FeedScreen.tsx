@@ -12,8 +12,6 @@ import { annotateUpdates, unfollow, markSeen } from '../utils/followStore';
 import { TOPIC_SUBTOPICS, storyMatchesSubTopic } from '../utils/topics';
 import { getCached, setCached, TTL } from '../utils/cache';
 import { isBlockedHeadline } from '../utils/contentFilters';
-import { getArticleColor } from '../utils/colors';
-import { cachedImageColor } from '../utils/imageColor';
 
 const API_BASE = 'https://ireader.onrender.com/api/news/feed';
 const CARD_GAP = 12;
@@ -32,7 +30,7 @@ const CATEGORIES = [
 type CategoryIconName = typeof CATEGORIES[number]['icon'];
 
 function CategoryIcon({ name, active }: { name: CategoryIconName; active: boolean }) {
-  const c = active ? 'var(--pill-text)' : 'var(--muted-2)';
+  const c = active ? '#000' : '#888';
   const s = 13;
   if (name === 'for-you') return (
     <svg width={s} height={s} viewBox="0 0 24 24" fill={c}>
@@ -110,12 +108,12 @@ interface StoryCluster {
 }
 
 const TOPIC_META_WEB: Record<string, { label: string; color: string }> = {
-  'breaking':       { label: 'Breaking', color: 'var(--danger)' },
-  'technology':     { label: 'Tech',     color: 'var(--accent-2)' },
-  'india-politics': { label: 'India',    color: 'var(--warn)' },
-  'geopolitics':    { label: 'World',    color: 'var(--info)' },
-  'markets':        { label: 'Markets',  color: 'var(--success)' },
-  'business':       { label: 'Business', color: 'var(--topic)' },
+  'breaking':       { label: 'Breaking', color: '#FF5555' },
+  'technology':     { label: 'Tech',     color: '#4A90D9' },
+  'india-politics': { label: 'India',    color: '#FF9500' },
+  'geopolitics':    { label: 'World',    color: '#4ECDC4' },
+  'markets':        { label: 'Markets',  color: '#22C55E' },
+  'business':       { label: 'Business', color: '#A29BFE' },
 };
 
 function generateTopicLabel(headline: string): string {
@@ -136,7 +134,7 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
   cluster: StoryCluster; soloCardWidth: number; allStories: Story[];
 }) {
   const { navigate } = useRouter();
-  const { showMetaPill, showClusterSummary, cardDensity: density, feedLayout } = useSettings();
+  const { showMetaPill, showClusterSummary, cardDensity: density } = useSettings();
   const clusterGap = density === 'compact' ? 14 : density === 'spacious' ? 44 : 28;
   const isBreaking = cluster.isBreaking;
   const canTimeline = cluster.stories.length >= 3;
@@ -147,15 +145,6 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
   const clusterCardWidth = Math.min(Math.round(window.innerWidth * 0.78), 360);
   // CSS calc uses the actual container width (not window.innerWidth) — matches standalone centering
   const sideMargin = `max(0px, calc((100% - ${soloCardWidth}px) / 2))`;
-
-  // Same colour precedence as the card itself: server value, then the colour
-  // sampled from the photo, then the hashed fallback.
-  const lead = cluster.stories[0];
-  const leadColor =
-    lead?.dominantColor ||
-    cachedImageColor(lead?.imageUrl) ||
-    getArticleColor(lead?.id || lead?.headline || '');
-  const ambientWash = `radial-gradient(130% 65% at 50% 0%, ${leadColor}26 0%, transparent 68%)`;
   const snapInterval = clusterCardWidth + CARD_GAP;
   const [activeIdx, setActiveIdx] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -173,11 +162,11 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
       summary: cluster.subtitle || cluster.stories[0].summary,
     };
     return (
-      <div style={{ marginBottom: clusterGap, background: ambientWash, transition: 'background var(--dur-base) ease' }}>
+      <div style={{ marginBottom: clusterGap }}>
         {showMetaPill && (() => {
           const tier = breakingTier(cluster.stories[0]?.publishedAt, isBreaking);
           if (!tier) return null;
-          const color = tier === 'developing' ? 'var(--warn)' : 'var(--danger)';
+          const color = tier === 'developing' ? '#FF9500' : '#FF3B30';
           const bg = tier === 'developing' ? 'rgba(255,149,0,0.12)' : 'rgba(255,59,48,0.12)';
           const border = tier === 'developing' ? 'rgba(255,149,0,0.3)' : 'rgba(255,59,48,0.3)';
           return (
@@ -205,7 +194,7 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
   }
 
   return (
-    <div style={{ marginBottom: clusterGap, background: ambientWash, transition: 'background var(--dur-base) ease' }}>
+    <div style={{ marginBottom: clusterGap }}>
       {/* Topic label */}
       <div
         onClick={canTimeline ? openTimeline : undefined}
@@ -216,7 +205,7 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             {cluster.collection && cluster.stories.length >= 3 && (
               <span style={{
-                color: 'var(--accent)', fontSize: 9, fontWeight: 800, letterSpacing: 1,
+                color: '#b994ff', fontSize: 9, fontWeight: 800, letterSpacing: 1,
                 padding: '2px 7px', borderRadius: 999,
                 background: 'rgba(185,148,255,0.12)', border: '1px solid rgba(185,148,255,0.28)',
               }}>TREND</span>
@@ -225,15 +214,15 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
               const tier = breakingTier(cluster.stories[0]?.publishedAt, isBreaking);
               if (tier === 'live') return (
                 <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span className="live-dot" style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--danger)', display: 'inline-block', flexShrink: 0 }} />
-                  <span style={{ color: 'var(--danger)', fontSize: 9, fontWeight: 800, letterSpacing: 1 }}>LIVE</span>
+                  <span className="live-dot" style={{ width: 7, height: 7, borderRadius: '50%', background: '#FF3B30', display: 'inline-block', flexShrink: 0 }} />
+                  <span style={{ color: '#FF3B30', fontSize: 9, fontWeight: 800, letterSpacing: 1 }}>LIVE</span>
                 </span>
               );
               if (tier === 'developing') return (
-                <span style={{ color: 'var(--warn)', fontSize: 9, fontWeight: 800, letterSpacing: 1, padding: '2px 7px', borderRadius: 999, background: 'rgba(255,149,0,0.12)', border: '1px solid rgba(255,149,0,0.3)' }}>DEVELOPING</span>
+                <span style={{ color: '#FF9500', fontSize: 9, fontWeight: 800, letterSpacing: 1, padding: '2px 7px', borderRadius: 999, background: 'rgba(255,149,0,0.12)', border: '1px solid rgba(255,149,0,0.3)' }}>DEVELOPING</span>
               );
               if (tier === 'breaking') return (
-                <span style={{ color: 'var(--danger)', fontSize: 9, fontWeight: 800, letterSpacing: 1, padding: '2px 7px', borderRadius: 999, background: 'rgba(255,59,48,0.12)', border: '1px solid rgba(255,59,48,0.3)' }}>BREAKING</span>
+                <span style={{ color: '#FF3B30', fontSize: 9, fontWeight: 800, letterSpacing: 1, padding: '2px 7px', borderRadius: 999, background: 'rgba(255,59,48,0.12)', border: '1px solid rgba(255,59,48,0.3)' }}>BREAKING</span>
               );
               return null;
             })()}
@@ -248,7 +237,7 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
               </svg>
             )}
             <div style={{
-              color: 'var(--text)', fontSize: 15.5, fontWeight: 800, letterSpacing: -0.2, lineHeight: 1.3,
+              color: '#fff', fontSize: 15.5, fontWeight: 800, letterSpacing: -0.2, lineHeight: 1.3,
               display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
             }}>
               {cluster.topicLabel}
@@ -257,10 +246,10 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
           {showMetaPill && cluster.stories.length > 1 && (
             <span style={{
               flexShrink: 0, marginTop: 2,
-              color: 'var(--muted-2)', fontSize: 10, fontWeight: 700, letterSpacing: 0.6,
+              color: '#888', fontSize: 10, fontWeight: 700, letterSpacing: 0.6,
               padding: '3px 9px', borderRadius: 999,
-              background: 'rgba(var(--fg-rgb),0.05)',
-              border: '1px solid rgba(var(--fg-rgb),0.08)',
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.08)',
               whiteSpace: 'nowrap',
             }}>
               {cluster.stories.length} stories
@@ -279,7 +268,7 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
                 <div style={{ display: 'flex', height: 3, borderRadius: 2, overflow: 'hidden', width: 60 }}>
                   <div style={{ flex: bd!.left || 0.001, background: '#1E5CFF' }} />
                   <div style={{ flex: bd!.center || 0.001, background: '#9B9B9B' }} />
-                  <div style={{ flex: bd!.right || 0.001, background: 'var(--danger)' }} />
+                  <div style={{ flex: bd!.right || 0.001, background: '#FF3B30' }} />
                 </div>
               )}
               {hasDiversity && (
@@ -292,36 +281,22 @@ function ClusterSection({ cluster, soloCardWidth, allStories }: {
         })()}
       </div>
 
-      {/* List layout stacks the cluster vertically — a horizontal carousel of
-          text rows reads as a bug, and the peek/dots affordances are pointless
-          when every row is already visible. */}
-      {feedLayout === 'list' ? (
-        <div style={{ display: 'flex', flexDirection: 'column', padding: '0 16px' }}>
-          {cluster.stories.map((story, idx) => (
-            <StoryCard key={story.id} story={story} cardWidth={soloCardWidth}
-              allStories={allStories} clusterCard={idx === 0} />
-          ))}
-        </div>
-      ) : (
-        <>
-          {/* Horizontal carousel — narrower cards, next card peeks */}
-          <div ref={scrollRef} onScroll={handleScroll}
-            style={{ display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', paddingLeft: sideMargin, paddingRight: sideMargin, gap: CARD_GAP, scrollbarWidth: 'none' }}>
-            {cluster.stories.map((story, idx) => (
-              <div key={story.id} style={{ scrollSnapAlign: 'start', flexShrink: 0 }}>
-                <StoryCard story={story} cardWidth={clusterCardWidth} allStories={allStories} clusterCard={idx === 0} />
-              </div>
-            ))}
+      {/* Horizontal carousel — narrower cards, next card peeks */}
+      <div ref={scrollRef} onScroll={handleScroll}
+        style={{ display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', paddingLeft: sideMargin, paddingRight: sideMargin, gap: CARD_GAP, scrollbarWidth: 'none' }}>
+        {cluster.stories.map((story, idx) => (
+          <div key={story.id} style={{ scrollSnapAlign: 'start', flexShrink: 0 }}>
+            <StoryCard story={story} cardWidth={clusterCardWidth} allStories={allStories} clusterCard={idx === 0} />
           </div>
+        ))}
+      </div>
 
-          {/* Dot indicators */}
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 12 }}>
-            {cluster.stories.map((_, i) => (
-              <div key={i} style={{ height: 6, borderRadius: 3, background: i === activeIdx ? 'var(--text)' : 'var(--muted-5)', width: i === activeIdx ? 18 : 6, transition: 'all 0.2s' }} />
-            ))}
-          </div>
-        </>
-      )}
+      {/* Dot indicators */}
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 12 }}>
+        {cluster.stories.map((_, i) => (
+          <div key={i} style={{ height: 6, borderRadius: 3, background: i === activeIdx ? '#fff' : '#333', width: i === activeIdx ? 18 : 6, transition: 'all 0.2s' }} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -340,7 +315,7 @@ function MyspaceTopicZone({ clusters, category, cardWidth, allStories }: {
   clusters: StoryCluster[]; category: string; cardWidth: number; allStories: Story[];
 }) {
   const [expanded, setExpanded] = useState(false);
-  const meta = TOPIC_META_WEB[category] ?? { label: category || 'News', color: 'var(--muted-2)' };
+  const meta = TOPIC_META_WEB[category] ?? { label: category || 'News', color: '#888888' };
   const PREVIEW = 3;
   const visible = expanded ? clusters : clusters.slice(0, PREVIEW);
   const remaining = clusters.length - PREVIEW;
@@ -354,10 +329,10 @@ function MyspaceTopicZone({ clusters, category, cardWidth, allStories }: {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 3, height: 18, borderRadius: 2, background: meta.color, flexShrink: 0 }} />
-          <span style={{ color: 'var(--text)', fontSize: 13, fontWeight: 800, letterSpacing: 0.8 }}>{meta.label.toUpperCase()}</span>
-          <span style={{ color: 'var(--muted-3)', fontSize: 11, fontWeight: 600, background: 'rgba(var(--fg-rgb),0.07)', padding: '2px 7px', borderRadius: 10 }}>{clusters.length}</span>
+          <span style={{ color: '#fff', fontSize: 13, fontWeight: 800, letterSpacing: 0.8 }}>{meta.label.toUpperCase()}</span>
+          <span style={{ color: '#666', fontSize: 11, fontWeight: 600, background: 'rgba(255,255,255,0.07)', padding: '2px 7px', borderRadius: 10 }}>{clusters.length}</span>
         </div>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted-4)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           {expanded ? <polyline points="18 15 12 9 6 15" /> : <polyline points="6 9 12 15 18 9" />}
         </svg>
       </div>
@@ -367,10 +342,10 @@ function MyspaceTopicZone({ clusters, category, cardWidth, allStories }: {
       {!expanded && remaining > 0 && (
         <div onClick={() => setExpanded(true)} style={{
           margin: '4px 20px 12px', padding: '11px 0', borderRadius: 12,
-          background: 'rgba(var(--fg-rgb),0.04)', border: '1px solid rgba(var(--fg-rgb),0.08)',
+          background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
           textAlign: 'center', cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
         }}>
-          <span style={{ color: 'var(--muted-2)', fontSize: 12, fontWeight: 600 }}>Show {remaining} more</span>
+          <span style={{ color: '#888', fontSize: 12, fontWeight: 600 }}>Show {remaining} more</span>
         </div>
       )}
     </div>
@@ -446,7 +421,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
     activeTopics, activeSubTopics, showSports, showEntertainment, topicInterests,
     showClusterSummary, showBiasDots, showMetaPill, showCardImages, cardDensity,
     defaultTopic, pullToRefresh, hiddenTopics,
-    summaryLength, keyPointsCount, eli5Tone, backgroundFx,
+    summaryLength, keyPointsCount, eli5Tone,
   } = useSettings();
   const { navigate } = useRouter();
   const { reportScroll } = useTabBar();
@@ -856,14 +831,14 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
   return (
     <div ref={containerRef} onScroll={handleScroll}
       onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
-      style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', background: backgroundFx === 'none' ? 'var(--bg)' : 'transparent', WebkitOverflowScrolling: 'touch' }}>
+      style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', background: '#000', WebkitOverflowScrolling: 'touch' }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px', paddingTop: 'calc(16px + env(safe-area-inset-top, 0px))' }}>
         <img src="/icons/header-logo.png" alt="iReader" style={{ width: 82, height: 82, objectFit: 'contain', background: 'transparent', margin: '-12px -8px -12px -8px' }} />
         <div>
-          <div style={{ color: 'var(--text)', fontSize: 26, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.2 }}>{greeting()}</div>
-          <div style={{ color: 'var(--muted-5)', fontSize: 12, fontWeight: 500, marginTop: 3 }}>
+          <div style={{ color: '#fff', fontSize: 26, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.2 }}>{greeting()}</div>
+          <div style={{ color: '#444', fontSize: 12, fontWeight: 500, marginTop: 3 }}>
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </div>
         </div>
@@ -879,8 +854,8 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
         }}>
           <div style={{
             width: 16, height: 16, borderRadius: '50%',
-            border: '2px solid rgba(var(--fg-rgb),0.08)',
-            borderTop: `2px solid ${pullProgress >= 1 && !refreshing ? 'var(--text)' : 'rgba(var(--fg-rgb),0.45)'}`,
+            border: '2px solid rgba(255,255,255,0.08)',
+            borderTop: `2px solid ${pullProgress >= 1 && !refreshing ? '#fff' : 'rgba(255,255,255,0.45)'}`,
             animation: refreshing ? 'spin 0.7s linear infinite' : 'none',
             transform: refreshing ? undefined : `rotate(${pullProgress * 360}deg)`,
           }} />
@@ -901,14 +876,14 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
                   display: 'flex', alignItems: 'center', gap: 5,
                   padding: '6px 12px',
                   borderRadius: 999,
-                  background: active ? 'var(--text)' : 'rgba(var(--fg-rgb),0.06)',
-                  border: active ? 'none' : '1px solid rgba(var(--fg-rgb),0.08)',
+                  background: active ? '#fff' : 'rgba(255,255,255,0.06)',
+                  border: active ? 'none' : '1px solid rgba(255,255,255,0.08)',
                   cursor: 'pointer',
                   transition: 'background 0.2s',
                 }}
               >
                 <CategoryIcon name={cat.icon as CategoryIconName} active={active} />
-                <span style={{ color: active ? 'var(--pill-text)' : '#aaa', fontSize: 12.5, fontWeight: 700, letterSpacing: 0.1 }}>{cat.label}</span>
+                <span style={{ color: active ? '#000' : '#aaa', fontSize: 12.5, fontWeight: 700, letterSpacing: 0.1 }}>{cat.label}</span>
               </button>
             );
           })}
@@ -921,16 +896,16 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
             style={{
               flexShrink: 0, marginRight: 14, position: 'relative',
               width: 32, height: 32, borderRadius: '50%',
-              background: filterOpen || techSourceFilter.size > 0 ? 'rgba(74,144,217,0.18)' : 'rgba(var(--fg-rgb),0.08)',
-              border: `1px solid ${filterOpen || techSourceFilter.size > 0 ? 'var(--accent-2)' : 'rgba(var(--fg-rgb),0.12)'}`,
+              background: filterOpen || techSourceFilter.size > 0 ? 'rgba(74,144,217,0.18)' : 'rgba(255,255,255,0.08)',
+              border: `1px solid ${filterOpen || techSourceFilter.size > 0 ? '#4A90D9' : 'rgba(255,255,255,0.12)'}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
             }}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={filterOpen || techSourceFilter.size > 0 ? 'var(--accent-2)' : 'var(--muted-2)'} strokeWidth="2.5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={filterOpen || techSourceFilter.size > 0 ? '#4A90D9' : '#888'} strokeWidth="2.5">
               <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
             </svg>
             {techSourceFilter.size > 0 && (
-              <div style={{ position: 'absolute', top: 2, right: 2, width: 7, height: 7, borderRadius: '50%', background: 'var(--accent-2)', border: '1.5px solid #0a0a0f' }} />
+              <div style={{ position: 'absolute', top: 2, right: 2, width: 7, height: 7, borderRadius: '50%', background: '#4A90D9', border: '1.5px solid #0a0a0f' }} />
             )}
           </button>
         )}
@@ -940,14 +915,14 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
       {activeTopic === 'technology' && techSources.length > 0 && filterOpen && (
         <div style={{ display: 'flex', overflowX: 'auto', padding: '6px 16px 10px', gap: 10, scrollbarWidth: 'none', alignItems: 'center' }}>
           {/* All */}
-          <button onClick={() => setTechSourceFilter(new Set())} style={{ flexShrink: 0, width: 34, height: 34, borderRadius: '50%', background: techSourceFilter.size === 0 ? 'rgba(74,144,217,0.15)' : 'rgba(var(--fg-rgb),0.07)', border: `2px solid ${techSourceFilter.size === 0 ? 'var(--accent-2)' : 'transparent'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={techSourceFilter.size === 0 ? 'var(--accent-2)' : 'var(--muted-3)'} strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          <button onClick={() => setTechSourceFilter(new Set())} style={{ flexShrink: 0, width: 34, height: 34, borderRadius: '50%', background: techSourceFilter.size === 0 ? 'rgba(74,144,217,0.15)' : 'rgba(255,255,255,0.07)', border: `2px solid ${techSourceFilter.size === 0 ? '#4A90D9' : 'transparent'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={techSourceFilter.size === 0 ? '#4A90D9' : '#666'} strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
           </button>
           {techSources.map(src => {
             const active = techSourceFilter.has(src.name);
             return (
               <button key={src.name} onClick={() => setTechSourceFilter(prev => { const next = new Set(prev); if (next.has(src.name)) next.delete(src.name); else next.add(src.name); return next; })}
-                style={{ flexShrink: 0, width: 34, height: 34, borderRadius: '50%', background: active ? 'rgba(74,144,217,0.15)' : 'rgba(var(--fg-rgb),0.07)', border: `2px solid ${active ? 'var(--accent-2)' : 'transparent'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0 }}>
+                style={{ flexShrink: 0, width: 34, height: 34, borderRadius: '50%', background: active ? 'rgba(74,144,217,0.15)' : 'rgba(255,255,255,0.07)', border: `2px solid ${active ? '#4A90D9' : 'transparent'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0 }}>
                 <img src={src.favicon} alt={src.name} style={{ width: 20, height: 20, borderRadius: 5 }} />
               </button>
             );
@@ -958,7 +933,7 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
       {/* New stories banner */}
       {newCount > 0 && (
         <div onClick={applyPending} style={{ margin: '0 20px 8px', padding: '8px 16px', borderRadius: 20, background: '#1A3A5C', textAlign: 'center', cursor: 'pointer' }}>
-          <span style={{ color: 'var(--accent-2)', fontSize: 13, fontWeight: 700, letterSpacing: 0.2 }}>↑ {newCount} new {newCount === 1 ? 'story' : 'stories'} — tap to refresh</span>
+          <span style={{ color: '#4A90D9', fontSize: 13, fontWeight: 700, letterSpacing: 0.2 }}>↑ {newCount} new {newCount === 1 ? 'story' : 'stories'} — tap to refresh</span>
         </div>
       )}
 
@@ -968,18 +943,18 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
           {[0, 1, 2, 3].map(i => (
             <div key={i} className="skel-card" style={{
               height: 180, borderRadius: 20, marginBottom: 16,
-              background: 'linear-gradient(90deg, var(--surface) 0%, var(--line) 50%, var(--surface) 100%)',
+              background: 'linear-gradient(90deg, #0E0E0E 0%, #1A1A1A 50%, #0E0E0E 100%)',
               backgroundSize: '200% 100%',
               animation: 'shimmer 1.4s ease-in-out infinite',
             }} />
           ))}
-          <div style={{ height: 14, width: '40%', borderRadius: 4, marginBottom: 10, background: 'var(--line)', animation: 'shimmer 1.4s ease-in-out infinite' }} />
-          <div style={{ height: 12, width: '70%', borderRadius: 4, background: 'var(--line)', animation: 'shimmer 1.4s ease-in-out infinite' }} />
+          <div style={{ height: 14, width: '40%', borderRadius: 4, marginBottom: 10, background: '#1A1A1A', animation: 'shimmer 1.4s ease-in-out infinite' }} />
+          <div style={{ height: 12, width: '70%', borderRadius: 4, background: '#161616', animation: 'shimmer 1.4s ease-in-out infinite' }} />
         </div>
       ) : error ? (
         <div style={{ textAlign: 'center', padding: 40 }}>
-          <div style={{ color: 'var(--text)', fontSize: 16, fontWeight: 600, marginBottom: 6 }}>Failed to load</div>
-          <div style={{ color: 'var(--muted-4)', fontSize: 13 }}>{error}</div>
+          <div style={{ color: '#fff', fontSize: 16, fontWeight: 600, marginBottom: 6 }}>Failed to load</div>
+          <div style={{ color: '#555', fontSize: 13 }}>{error}</div>
         </div>
       ) : (
         <>
@@ -989,15 +964,15 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
             if (followed.length === 0) return null;
             return (
               <div style={{ padding: '4px 16px 14px' }}>
-                <div style={{ color: 'var(--muted-3)', fontSize: 11, fontWeight: 800, letterSpacing: 1.4, marginBottom: 10 }}>FOLLOWING</div>
+                <div style={{ color: '#666', fontSize: 11, fontWeight: 800, letterSpacing: 1.4, marginBottom: 10 }}>FOLLOWING</div>
                 <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
                   {followed.map(f => {
                     const target = rankedClusters.find(c => c.id === (f.latestId ?? f.id));
                     return (
                       <div key={f.id} style={{
                         flexShrink: 0, width: 200, padding: '10px 12px', borderRadius: 14,
-                        background: f.hasUpdate ? 'rgba(185,148,255,0.12)' : 'var(--surface)',
-                        border: `1px solid ${f.hasUpdate ? 'rgba(185,148,255,0.4)' : 'var(--line)'}`,
+                        background: f.hasUpdate ? 'rgba(185,148,255,0.12)' : '#0E0E0E',
+                        border: `1px solid ${f.hasUpdate ? 'rgba(185,148,255,0.4)' : '#1A1A1A'}`,
                         cursor: target ? 'pointer' : 'default', position: 'relative',
                       }}
                         onClick={() => {
@@ -1005,12 +980,12 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
                           markSeen(f.id, target.id, target.topicLabel);
                           navigate({ name: 'StoryTimeline', params: { clusterId: target.id, headline: target.topicLabel, stories: JSON.stringify(target.stories) } });
                         }}>
-                        {f.hasUpdate && <div style={{ position: 'absolute', top: 8, right: 8, fontSize: 9, fontWeight: 800, color: 'var(--accent)', background: 'rgba(185,148,255,0.2)', padding: '2px 6px', borderRadius: 8 }}>🆕 NEW</div>}
-                        <div style={{ color: 'var(--text-3)', fontSize: 13, fontWeight: 600, lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', paddingRight: f.hasUpdate ? 44 : 0 }}>
+                        {f.hasUpdate && <div style={{ position: 'absolute', top: 8, right: 8, fontSize: 9, fontWeight: 800, color: '#b994ff', background: 'rgba(185,148,255,0.2)', padding: '2px 6px', borderRadius: 8 }}>🆕 NEW</div>}
+                        <div style={{ color: '#ddd', fontSize: 13, fontWeight: 600, lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', paddingRight: f.hasUpdate ? 44 : 0 }}>
                           {f.hasUpdate && f.latestHeadline ? f.latestHeadline : f.headline}
                         </div>
                         <div onClick={(e) => { e.stopPropagation(); unfollow(f.id); setFollowV(v => v + 1); }}
-                          style={{ marginTop: 8, color: 'var(--muted-3)', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'inline-block' }}>
+                          style={{ marginTop: 8, color: '#666', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'inline-block' }}>
                           Unfollow
                         </div>
                       </div>

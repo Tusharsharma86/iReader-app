@@ -22,54 +22,10 @@
          already used 100dvh correctly; html/body now match so the very
          first paint is correct without needing a later resize to fix it. */
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-      /* Default (midnight) token values so the very first paint is correct
-         before React mounts and ThemeApplier writes the active skin. */
-      :root {
-        --bg:#080808; --surface:#0E0E0E; --surface-2:#111111; --surface-3:#141414;
-        --line:#1A1A1A; --line-2:#222222; --line-3:#2A2A2A;
-        --text:#FFFFFF; --text-2:#EEEEEE; --text-3:#DDDDDD; --text-4:#CCCCCC;
-        --muted:#999999; --muted-2:#888888; --muted-3:#666666; --muted-4:#555555; --muted-5:#444444;
-        --pill:#FFFFFF; --pill-text:#000000;
-        --fg-rgb:255,255,255; --shadow-rgb:0,0,0; --scrim:rgba(0,0,0,0.6);
-        --accent:#B994FF; --accent-2:#4A90D9;
-        --danger:#FF3B30; --success:#34C759; --warn:#FF9500;
-        --star:#FFC542; --info:#4ECDC4; --topic:#A29BFE;
-        --ambience:transparent; --motion:1; --dur-fast:140ms; --dur-base:240ms;
-        color-scheme: dark;
-      }
-      ::view-transition-old(root), ::view-transition-new(root) {
-        animation-duration: var(--dur-base);
-      }
-
-      .aurora-blob {
-        position: absolute; border-radius: 50%; filter: blur(54px); opacity: 0.66;
-        will-change: transform;
-      }
-      .aurora-a { width: 60vw; height: 60vw; left: -15vw; top: -10vh;
-        background: var(--accent); animation: auroraA 26s ease-in-out infinite alternate; }
-      .aurora-b { width: 55vw; height: 55vw; right: -18vw; top: 22vh;
-        background: var(--accent-2); animation: auroraB 32s ease-in-out infinite alternate; }
-      .aurora-c { width: 50vw; height: 50vw; left: 10vw; bottom: -12vh;
-        background: var(--info); animation: auroraC 38s ease-in-out infinite alternate; }
-      @keyframes auroraA { to { transform: translate3d(14vw, 10vh, 0) scale(1.15); } }
-      @keyframes auroraB { to { transform: translate3d(-12vw, -8vh, 0) scale(1.1); } }
-      @keyframes auroraC { to { transform: translate3d(8vw, -12vh, 0) scale(0.92); } }
-      @media (prefers-reduced-motion: reduce) { .aurora-blob { animation: none !important; } }
-
-      @keyframes cardIn {
-        from { opacity: 0; transform: translateY(10px) scale(0.992); }
-        to   { opacity: 1; transform: none; }
-      }
-      @keyframes shimmer { to { background-position: 200% 0; } }
-
-      @media (prefers-reduced-motion: reduce) {
-        :root { --motion:0; --dur-fast:0ms; --dur-base:0ms; }
-      }
       html {
         height: 100%;
         height: 100dvh;
-        background: var(--bg);
+        background: #000;
         overscroll-behavior: none;
       }
       body {

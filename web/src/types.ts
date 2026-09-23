@@ -5,7 +5,7 @@ export const BIAS_CONFIG: Record<BiasRating, { color: string; label: string }> =
   'lean-left':  { color: '#4D9EFF', label: 'LL' },
   'center':     { color: '#9B9B9B', label: 'C' },
   'lean-right': { color: '#FF7A4D', label: 'LR' },
-  'right':      { color: 'var(--danger)', label: 'R' },
+  'right':      { color: '#FF3B30', label: 'R' },
   'unknown':    { color: 'transparent', label: '' },
 };
 
@@ -18,8 +18,6 @@ export interface BiasBreakdown {
 }
 
 export interface Story {
-  /** Dominant colour sampled from the story image, server-side. */
-  dominantColor?: string;
   id: string;
   headline: string;
   summary: string;

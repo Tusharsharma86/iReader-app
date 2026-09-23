@@ -1,12 +1,10 @@
 import React, { Suspense, lazy } from 'react';
-import { applyTheme, ACCENTS, type ThemeSkin } from './theme/theme';
 import { RouterProvider, useRouter } from './contexts/RouterContext';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import { SourceProvider } from './contexts/SourceContext';
 import { SavedProvider } from './contexts/SavedContext';
 import { TabBarProvider } from './contexts/TabBarContext';
 import { TabBar } from './components/TabBar';
-import { BackgroundFX } from './components/BackgroundFX';
 // AI Feed prewarm DISABLED — free-tier AI quotas (Gemini 1500/day, 10/min)
 // can't fund speculative deep dives; on-demand generation + 7-day server
 // cache keeps opens fast enough.
@@ -33,8 +31,8 @@ const NotifHistoryScreen    = lazy(() => import('./screens/NotifHistoryScreen'))
 const CustomizeScreen       = lazy(() => import('./screens/CustomizeScreen'));
 
 const spinner = (
-  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: 'var(--bg)' }}>
-    <div style={{ width: 36, height: 36, border: '3px solid var(--line)', borderTop: '3px solid var(--accent-2)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: '#000' }}>
+    <div style={{ width: 36, height: 36, border: '3px solid #1A1A1A', borderTop: '3px solid #4A90D9', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
     <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
   </div>
 );
@@ -120,10 +118,10 @@ function KeyboardShortcuts() {
 }
 
 function ThemeApplier({ children }: { children: React.ReactNode }) {
-  // Applies the design tokens in src/theme/theme.ts as CSS custom properties.
-  // This replaced a whole-page `filter: invert(1) hue-rotate(180deg)` light
-  // mode, which also inverted photographs.
-  const { themeSkin, accentPreset, ambience, motionLevel, uiStyle } = useSettings();
+  // Customize → themeMode. Applies a CSS `filter: invert(1) hue-rotate(180deg)`
+  // on light mode — a pragmatic stop-gap since every screen uses inline-styled
+  // hex colours. Auto follows prefers-color-scheme.
+  const { themeMode } = useSettings();
   const [systemLight, setSystemLight] = React.useState(
     () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: light)').matches,
   );
@@ -134,45 +132,15 @@ function ThemeApplier({ children }: { children: React.ReactNode }) {
     mq.addEventListener?.('change', h);
     return () => mq.removeEventListener?.('change', h);
   }, []);
-
-  // Ambience drifts with the clock, so re-apply on the hour rather than only
-  // when a setting changes.
-  const [hour, setHour] = React.useState(() => new Date().getHours());
-  React.useEffect(() => {
-    if (!ambience) return;
-    const id = setInterval(() => setHour(new Date().getHours()), 5 * 60 * 1000);
-    return () => clearInterval(id);
-  }, [ambience]);
-
-  const skin: Exclude<ThemeSkin, 'auto'> =
-    themeSkin === 'auto' ? (systemLight ? 'daylight' : 'midnight') : themeSkin;
-
-  React.useEffect(() => {
-    // 'dynamic' follows the open story's colour; screens override --accent
-    // themselves, so fall back to violet for the chrome until one does.
-    const a = accentPreset === 'dynamic' ? ACCENTS.violet : ACCENTS[accentPreset];
-    applyTheme({ skin, style: uiStyle, accent: a.accent, accent2: a.accent2, ambience, motion: motionLevel, hour });
-  }, [skin, uiStyle, accentPreset, ambience, motionLevel, hour]);
-
+  const lightActive = themeMode === 'light' || (themeMode === 'auto' && systemLight);
   return (
     <div style={{
       width: '100%',
       height: '100dvh',
-      background: 'var(--bg)',
-      transition: 'background var(--dur-base) ease',
+      filter: lightActive ? 'invert(1) hue-rotate(180deg)' : 'none',
+      transition: 'filter 0.25s ease',
     }}>
       {children}
-      {ambience && (
-        <div
-          aria-hidden
-          style={{
-            position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 3,
-            background: 'var(--ambience)',
-            mixBlendMode: 'soft-light',
-            transition: 'background 1.2s ease',
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -190,16 +158,11 @@ export default function App() {
                   width: '100%',
                   height: '100%',
                   margin: '0 auto',
-                  background: 'var(--bg)',
+                  background: '#000',
                   overflow: 'hidden',
                   position: 'relative',
                 }}>
-                  {/* Behind everything; the feed is transparent so it shows
-                      through, other screens keep their own surface. */}
-                  <BackgroundFX />
-                  <div style={{ position: 'relative', zIndex: 1, height: '100%' }}>
-                    <ScreenRenderer />
-                  </div>
+                  <ScreenRenderer />
                   <TabBar /> 
                 </div>
               </ThemeApplier>

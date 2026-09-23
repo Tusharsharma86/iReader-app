@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ArticleParams, Story, BiasRating } from '../types';
 import { BIAS_CONFIG } from '../types';
 import { darken, lighten, getArticleColor } from '../utils/colors';
-import { HERO_NAME } from '../utils/viewTransition';
 import { useRouter } from '../contexts/RouterContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useTabBar } from '../contexts/TabBarContext';
@@ -46,7 +45,7 @@ function renderParagraphHighlights(
       // Reset lastIndex (global regex state)
       QUOTE_RE.lastIndex = 0;
       return (
-        <span key={i} style={{ color: 'var(--star)', fontStyle: 'italic', fontWeight: 500 }}>{seg}</span>
+        <span key={i} style={{ color: '#FFC542', fontStyle: 'italic', fontWeight: 500 }}>{seg}</span>
       );
     }
     QUOTE_RE.lastIndex = 0;
@@ -54,7 +53,7 @@ function renderParagraphHighlights(
   });
 }
 
-function renderEntities(text: string, entities: string[], color: string = 'var(--text)'): React.ReactNode {
+function renderEntities(text: string, entities: string[], color: string = '#fff'): React.ReactNode {
   if (!entities || entities.length === 0) return text;
   const escaped = [...new Set(entities)]
     .filter(e => e && e.length > 2)
@@ -210,7 +209,6 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     showEntityHighlights, showQuoteHighlights, showReadingDifficulty,
     fontFamily, lineHeightMode, columnWidth,
     eli5Tone,
-    accentPreset,
   } = useSettings();
 
   // Customize: font / line-height / column width. Inter + Merriweather are
@@ -237,19 +235,6 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
   const fontSizePx = FONT_SIZE_MAP[fontSizeName] ?? 17;
 
   const dominant = params.dominantColor;
-
-  // Accent → "Story": the chrome borrows this article's own colour while it
-  // is open, then hands the previous accent back on unmount.
-  React.useEffect(() => {
-    if (accentPreset !== 'dynamic' || !dominant) return;
-    const root = document.documentElement;
-    const prev = root.style.getPropertyValue('--accent');
-    root.style.setProperty('--accent', lighten(dominant, 0.5));
-    return () => {
-      if (prev) root.style.setProperty('--accent', prev);
-      else root.style.removeProperty('--accent');
-    };
-  }, [accentPreset, dominant]);
   const accent = lighten(dominant, 0.45);
   // AI Summary tab: follow the same font-size customization as Long Form
   // (was hardcoded 15/13.5px, ignoring the user's Customize setting), but
@@ -453,9 +438,9 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
       <div>
         {paragraphsLoading ? <Spinner /> : (
           <>
-            {paragraphsError && <div style={{ color: 'var(--danger)', fontSize: 12, marginBottom: 12 }}>Full text unavailable from this publisher</div>}
+            {paragraphsError && <div style={{ color: '#FF6B6B', fontSize: 12, marginBottom: 12 }}>Full text unavailable from this publisher</div>}
             {paragraphs.map((p, i) => (
-              <p key={i} style={{ color: 'var(--text-3)', fontSize: fontSizePx, lineHeight: lineHeightCss, fontFamily: fontFamilyCss, marginBottom: 16 }}>
+              <p key={i} style={{ color: '#DDD', fontSize: fontSizePx, lineHeight: lineHeightCss, fontFamily: fontFamilyCss, marginBottom: 16 }}>
                 {renderParagraphHighlights(p, [...entities.people, ...entities.companies], accent, {
                   showEntities: showEntityHighlights,
                   showQuotes: showQuoteHighlights,
@@ -465,7 +450,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
             <a href={params.url}
               target={linkOpen === 'external' ? '_blank' : '_self'}
               rel="noopener noreferrer"
-              style={{ display: 'block', marginTop: 20, padding: '14px', borderRadius: 12, background: 'rgba(var(--fg-rgb),0.12)', border: '1px solid rgba(var(--fg-rgb),0.2)', textAlign: 'center', color: 'var(--text)', fontSize: 15, fontWeight: 700, textDecoration: 'none' }}>
+              style={{ display: 'block', marginTop: 20, padding: '14px', borderRadius: 12, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', textAlign: 'center', color: '#fff', fontSize: 15, fontWeight: 700, textDecoration: 'none' }}>
               Read Full Article →
             </a>
           </>
@@ -476,15 +461,15 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
 
     let aiContent: React.ReactNode;
     if (!hasBeenRead) {
-      aiContent = <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--muted-5)' }}>Keep reading… AI summary generating</div>;
+      aiContent = <div style={{ textAlign: 'center', padding: '48px 0', color: '#444' }}>Keep reading… AI summary generating</div>;
     } else if (aiLoading) {
       aiContent = <Spinner />;
     } else if (aiError) {
       aiContent = (
         <div style={{ textAlign: 'center', paddingBlock: 40 }}>
-          <div style={{ color: 'var(--muted-3)', marginBottom: 16 }}>{aiError}</div>
+          <div style={{ color: '#666', marginBottom: 16 }}>{aiError}</div>
           <button onClick={regenerateAiSummary}
-            style={{ padding: '14px 24px', borderRadius: 12, background: 'rgba(var(--fg-rgb),0.12)', border: '1px solid rgba(var(--fg-rgb),0.2)', color: 'var(--text)', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+            style={{ padding: '14px 24px', borderRadius: 12, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
             ↻ Regenerate
           </button>
         </div>
@@ -535,8 +520,8 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
               <p key={i} style={{ color: summarySecondaryTextColor, fontSize: summarySecondaryFontSizePx, lineHeight: 1.55, fontFamily: fontFamilyCss, margin: '0 0 14px 0' }}>{renderEntities(p, summaryEntities, accent)}</p>
             ))}
             {showKeyPoints && bullets.length > 0 && (
-              <div style={{ marginTop: 14, paddingTop: 16, borderTop: '1px solid rgba(var(--fg-rgb),0.08)' }}>
-                <div style={{ color: 'rgba(var(--fg-rgb),0.4)', fontSize: 10.5, fontWeight: 700, letterSpacing: 1, marginBottom: 10 }}>KEY POINTS</div>
+              <div style={{ marginTop: 14, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10.5, fontWeight: 700, letterSpacing: 1, marginBottom: 10 }}>KEY POINTS</div>
                 {bullets.map((line, i) => (
                   <div key={i} style={{ display: 'flex', gap: 12, marginBottom: 10, alignItems: 'flex-start' }}>
                     <div style={{ width: 6, height: 6, borderRadius: 3, background: dominant, flexShrink: 0, marginTop: 7 }} />
@@ -560,21 +545,21 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
           </div>
         );
       } else {
-        aiContent = <div style={{ color: 'var(--muted-5)', textAlign: 'center', paddingBlock: 40 }}>No summary available.</div>;
+        aiContent = <div style={{ color: '#444', textAlign: 'center', paddingBlock: 40 }}>No summary available.</div>;
       }
     } else if (activeTab === '5 Ws') {
       const lines = aiResult?.fiveWs ?? [];
-      aiContent = !lines.length ? <div style={{ color: 'var(--muted-5)', textAlign: 'center', paddingBlock: 40 }}>Not available.</div> : (
+      aiContent = !lines.length ? <div style={{ color: '#444', textAlign: 'center', paddingBlock: 40 }}>Not available.</div> : (
         <div>{lines.map((line, i) => {
           const match = line.match(/^(WHO|WHAT|WHEN|WHERE|WHY)\s*:\s*/i);
           const label = match ? match[1].toUpperCase() : line.slice(0,5).toUpperCase();
           const body = match ? line.slice(match[0].length) : line;
-          return (<div key={i} style={{ marginBottom: 20 }}><div style={{ color: accent, fontSize: 10, fontWeight: 800, letterSpacing: 1.5, marginBottom: 5 }}>{label}</div><p style={{ color: 'var(--text-3)', fontSize: 15, lineHeight: 1.53, margin: 0 }}>{body}</p></div>);
+          return (<div key={i} style={{ marginBottom: 20 }}><div style={{ color: accent, fontSize: 10, fontWeight: 800, letterSpacing: 1.5, marginBottom: 5 }}>{label}</div><p style={{ color: '#DDD', fontSize: 15, lineHeight: 1.53, margin: 0 }}>{body}</p></div>);
         })}</div>
       );
     } else {
-      aiContent = !aiResult?.eli5 ? <div style={{ color: 'var(--muted-5)', textAlign: 'center', paddingBlock: 40 }}>Not available.</div> : (
-        <p style={{ color: 'var(--text)', fontSize: 20, lineHeight: 1.6, fontWeight: 500, margin: 0 }}>{aiResult.eli5}</p>
+      aiContent = !aiResult?.eli5 ? <div style={{ color: '#444', textAlign: 'center', paddingBlock: 40 }}>Not available.</div> : (
+        <p style={{ color: '#fff', fontSize: 20, lineHeight: 1.6, fontWeight: 500, margin: 0 }}>{aiResult.eli5}</p>
       );
     }
 
@@ -584,14 +569,14 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
       <div>
         <div style={{
           padding: '14px 14px', borderRadius: 12, marginBottom: 20,
-          background: isLimitedSource ? 'rgba(245,158,11,0.06)' : 'rgba(var(--shadow-rgb),0.3)',
-          border: `1px solid ${isLimitedSource ? 'rgba(245,158,11,0.25)' : 'rgba(var(--fg-rgb),0.08)'}`,
+          background: isLimitedSource ? 'rgba(245,158,11,0.06)' : 'rgba(0,0,0,0.3)',
+          border: `1px solid ${isLimitedSource ? 'rgba(245,158,11,0.25)' : 'rgba(255,255,255,0.08)'}`,
         }}>
           {!paragraphsLoading && inputWords > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 12 }}>
               {isLimitedSource && <span style={{ fontSize: 11 }}>⚠️</span>}
               <span style={{
-                color: isLimitedSource ? 'var(--warn)' : 'rgba(var(--fg-rgb),0.2)',
+                color: isLimitedSource ? '#f59e0b' : 'rgba(255,255,255,0.2)',
                 fontSize: 9.5, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase',
               }}>
                 {isLimitedSource
@@ -616,11 +601,11 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     <div style={{ height: '100%', background: gradient, overflowY: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative' }}>
       {/* Back + share — float over hero, scroll away naturally */}
       <div style={{ position: 'absolute', top: 'calc(env(safe-area-inset-top, 0px) + 20px)', left: 12, right: 12, zIndex: 10, display: 'flex', justifyContent: 'space-between', pointerEvents: 'none' }}>
-        <button onClick={goBack} style={{ pointerEvents: 'auto', background: `${dominant}90`, border: '1px solid rgba(var(--fg-rgb),0.15)', borderRadius: 22, padding: 9, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+        <button onClick={goBack} style={{ pointerEvents: 'auto', background: `${dominant}90`, border: '1px solid rgba(255,255,255,0.15)', borderRadius: 22, padding: 9, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
         </button>
-        <a href={params.url} target="_blank" rel="noopener noreferrer" style={{ pointerEvents: 'auto', background: `${dominant}90`, border: '1px solid rgba(var(--fg-rgb),0.15)', borderRadius: 22, padding: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" /></svg>
+        <a href={params.url} target="_blank" rel="noopener noreferrer" style={{ pointerEvents: 'auto', background: `${dominant}90`, border: '1px solid rgba(255,255,255,0.15)', borderRadius: 22, padding: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" /></svg>
         </a>
       </div>
 
@@ -646,11 +631,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
               alt=""
               onError={() => setHeroImageFailed(true)}
               className="hero-zoom-in"
-              style={{
-                width: '100%', height: '100%', objectFit: 'cover', display: 'block',
-                // Pairs with the tapped card's photo for the hero morph.
-                viewTransitionName: HERO_NAME,
-              }}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
             />
             <div style={{ position: 'absolute', inset: 0, background: `${dominant}33` }} />
             <div style={{
@@ -672,7 +653,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
           marginBottom: 14,
         }}>{articleCategory}</div>
 
-        <h1 style={{ color: 'var(--text)', fontSize: 24, fontWeight: 800, lineHeight: 1.33, margin: 0 }}>
+        <h1 style={{ color: '#fff', fontSize: 24, fontWeight: 800, lineHeight: 1.33, margin: 0 }}>
           {renderHeadlineHighlights(params.headline, [...entities.people, ...entities.companies], accent)}
         </h1>
 
@@ -695,11 +676,11 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
                   <span style={{ color: accent, fontSize: 12, fontWeight: 800 }}>{primary.name.charAt(0)}</span>
                 )}
               </div>
-              <span style={{ color: 'var(--text)', fontSize: 14, fontWeight: 700 }}>{primary.name}</span>
+              <span style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>{primary.name}</span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="#3B9EFF">
                 <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" fill="none" stroke="#3B9EFF" strokeWidth="2"/>
                 <circle cx="12" cy="12" r="10" fill="#3B9EFF" />
-                <path d="M9 12l2 2 4-4" fill="none" stroke="var(--text)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M9 12l2 2 4-4" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               {params.sourceBias && params.sourceBias !== 'unknown' && (() => {
                 const cfg = BIAS_CONFIG[params.sourceBias as BiasRating];
@@ -720,7 +701,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
 
         {/* Inline meta: date · time · reading · difficulty */}
         {(() => {
-          const diffColor = { Easy: 'var(--success)', Medium: 'var(--warn)', Hard: 'var(--danger)' }[difficulty ?? 'Medium'] ?? 'var(--warn)';
+          const diffColor = { Easy: '#34C759', Medium: '#FF9500', Hard: '#FF3B30' }[difficulty ?? 'Medium'] ?? '#FF9500';
           return (
             <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
               <span style={{ color: lighten(dominant, 0.35), fontSize: 12, fontWeight: 500 }}>
@@ -744,25 +725,25 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
           );
         })()}
 
-        {showArticleRssSummary && params.summary && <p style={{ color: 'rgba(var(--fg-rgb),0.6)', fontSize: 10.5, lineHeight: 1.55, margin: '14px 0 0' }}>{params.summary}</p>}
+        {showArticleRssSummary && params.summary && <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 10.5, lineHeight: 1.55, margin: '14px 0 0' }}>{params.summary}</p>}
 
         {biasModalVisible && params.sourceBias && params.sourceBias !== 'unknown' && (() => {
           const cfg = BIAS_CONFIG[params.sourceBias as BiasRating];
           const label = params.sourceBias.replace('-', ' ').replace(/\b\w/g, c => c.toUpperCase());
           return (
-            <div onClick={() => setBiasModalVisible(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(var(--shadow-rgb),0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-              <div onClick={e => e.stopPropagation()} style={{ background: 'var(--line)', borderRadius: 16, padding: 20, maxWidth: 320, width: '100%' }}>
+            <div onClick={() => setBiasModalVisible(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+              <div onClick={e => e.stopPropagation()} style={{ background: '#1A1A1A', borderRadius: 16, padding: 20, maxWidth: 320, width: '100%' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                   <div style={{ width: 10, height: 10, borderRadius: 5, background: cfg?.color }} />
-                  <span style={{ color: 'var(--text)', fontSize: 15, fontWeight: 700 }}>Rated: {label}</span>
+                  <span style={{ color: '#fff', fontSize: 15, fontWeight: 700 }}>Rated: {label}</span>
                 </div>
-                <p style={{ color: 'rgba(var(--fg-rgb),0.6)', fontSize: 13, lineHeight: 1.55, margin: 0 }}>
+                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, lineHeight: 1.55, margin: 0 }}>
                   This source is rated based on publicly available media bias data (AllSides, Ad Fontes Media). Ratings are reference points, not endorsements.
                 </p>
-                <p style={{ color: 'rgba(var(--fg-rgb),0.6)', fontSize: 13, lineHeight: 1.55, margin: '8px 0 0' }}>
+                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, lineHeight: 1.55, margin: '8px 0 0' }}>
                   Consider reading multiple perspectives for a complete picture.
                 </p>
-                <button onClick={() => setBiasModalVisible(false)} style={{ marginTop: 16, width: '100%', background: 'var(--line-2)', border: 'none', borderRadius: 10, padding: '10px 0', color: 'var(--text)', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Got it</button>
+                <button onClick={() => setBiasModalVisible(false)} style={{ marginTop: 16, width: '100%', background: '#222', border: 'none', borderRadius: 10, padding: '10px 0', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Got it</button>
               </div>
             </div>
           );
@@ -777,7 +758,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
       }}>
         {(blockLongform ? TABS.filter(t => t !== 'Long Form') : TABS).map(tab => {
           const active = activeTab === tab;
-          const color = active ? 'var(--text)' : 'rgba(var(--fg-rgb),0.4)';
+          const color = active ? '#fff' : 'rgba(255,255,255,0.4)';
           return (
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={active ? 'tab-active-pill' : undefined}
@@ -829,7 +810,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
                 display: 'flex', alignItems: 'center', gap: 8,
                 margin: '0 16px 12px', padding: '14px',
                 borderRadius: 14, border: `1px solid ${borderColor}55`,
-                background: 'rgba(var(--shadow-rgb),0.25)',
+                background: 'rgba(0,0,0,0.25)',
               }}>
                 <div style={{
                   width: 32, height: 32, borderRadius: 16,
@@ -840,7 +821,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
                 <span style={{ color: accent, fontSize: 14 }}>→</span>
                 <StatCell value={postWords} label="AFTER" accent={accent} />
                 <div style={{ width: 1, height: 28, background: `${borderColor}55`, margin: '0 4px' }} />
-                <span style={{ fontSize: 16, color: reduction > 0 ? 'var(--success)' : 'rgba(var(--fg-rgb),0.4)' }}>↘</span>
+                <span style={{ fontSize: 16, color: reduction > 0 ? '#34C759' : 'rgba(255,255,255,0.4)' }}>↘</span>
                 <StatCell value={`${reduction}%`} label={dedupedFlag ? (paraReduction > 0 ? `LESS (-${paraReduction} ¶)` : 'LESS') : 'NO DEDUP'} accent={accent} />
               </div>
               {showVerifyDedupSetting && (
@@ -850,7 +831,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                     margin: '0 16px', padding: '10px 14px',
                     borderRadius: 999, border: `1px solid ${borderColor}55`,
-                    background: 'rgba(var(--shadow-rgb),0.18)', color: accent,
+                    background: 'rgba(0,0,0,0.18)', color: accent,
                     fontSize: 10, fontWeight: 700, letterSpacing: 1.2, cursor: 'pointer',
                     width: 'calc(100% - 32px)',
                   }}
@@ -881,7 +862,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
             display: 'flex', alignItems: 'center', gap: 8,
             margin: '0 16px 24px', padding: '14px',
             borderRadius: 14, border: `1px solid ${borderColor}55`,
-            background: 'rgba(var(--shadow-rgb),0.25)',
+            background: 'rgba(0,0,0,0.25)',
           }}>
             <div style={{
               width: 32, height: 32, borderRadius: 16,
@@ -892,7 +873,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
             <span style={{ color: accent, fontSize: 14 }}>→</span>
             <StatCell value={aiWords} label="DISTILLED" accent={accent} />
             <div style={{ width: 1, height: 28, background: `${borderColor}55`, margin: '0 4px' }} />
-            <span style={{ fontSize: 16, color: 'var(--success)' }}>↘</span>
+            <span style={{ fontSize: 16, color: '#34C759' }}>↘</span>
             <StatCell value={`${reduction}%`} label="LESS" accent={accent} />
           </div>
         );
@@ -906,7 +887,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
             const faviconUri = src.url ? faviconFromUrl(src.url) : '';
             return (
             <a key={i} href={src.url || undefined} target="_blank" rel="noopener noreferrer"
-              style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBlock: 12, borderTop: '1px solid rgba(var(--fg-rgb),0.08)', textDecoration: 'none' }}>
+              style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBlock: 12, borderTop: '1px solid rgba(255,255,255,0.08)', textDecoration: 'none' }}>
               <div style={{ width: 44, height: 44, borderRadius: 10, background: lighten(dominant, 0.2), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 800, color: accent, flexShrink: 0, overflow: 'hidden' }}>
                 {faviconUri
                   ? <img src={faviconUri} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
@@ -915,9 +896,9 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ color: accent, fontSize: 10, fontWeight: 700, letterSpacing: 1, marginBottom: 4 }}>{src.name.toUpperCase()}</div>
-                <div style={{ color: 'var(--text-3)', fontSize: 14, fontWeight: 500, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{params.headline}</div>
+                <div style={{ color: '#DDD', fontSize: 14, fontWeight: 500, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{params.headline}</div>
               </div>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(var(--fg-rgb),0.3)" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
             </a>
             );
           })}
@@ -928,8 +909,8 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
       {(entities.people.length > 0 || entities.companies.length > 0) && (
         <div style={{ margin: '20px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
           {entities.people.length > 0 && (
-            <div style={{ padding: '14px 16px', borderRadius: 14, background: 'rgba(15,15,22,0.5)', border: '1px solid rgba(var(--fg-rgb),0.06)' }}>
-              <div style={{ color: 'var(--muted-3)', fontSize: 9, fontWeight: 800, letterSpacing: 1.4, marginBottom: 10 }}>KEY PEOPLE</div>
+            <div style={{ padding: '14px 16px', borderRadius: 14, background: 'rgba(15,15,22,0.5)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ color: '#666', fontSize: 9, fontWeight: 800, letterSpacing: 1.4, marginBottom: 10 }}>KEY PEOPLE</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {entities.people.map(p => {
                   const isOn = followedEntities.has(p.toLowerCase());
@@ -940,9 +921,9 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
                     }} style={{
                       padding: '5px 11px', borderRadius: 999, cursor: 'pointer',
                       display: 'inline-flex', alignItems: 'center', gap: 4,
-                      background: isOn ? 'rgba(52,199,89,0.18)' : 'rgba(var(--fg-rgb),0.05)',
-                      border: isOn ? '1px solid var(--success)' : '1px solid rgba(var(--fg-rgb),0.1)',
-                      color: isOn ? 'var(--success)' : '#e8e8e8',
+                      background: isOn ? 'rgba(52,199,89,0.18)' : 'rgba(255,255,255,0.05)',
+                      border: isOn ? '1px solid #34C759' : '1px solid rgba(255,255,255,0.1)',
+                      color: isOn ? '#34C759' : '#e8e8e8',
                       fontSize: 11.5, fontWeight: isOn ? 700 : 500,
                       transition: 'background 0.18s, border-color 0.18s, color 0.18s',
                     }}>
@@ -955,8 +936,8 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
             </div>
           )}
           {entities.companies.length > 0 && (
-            <div style={{ padding: '14px 16px', borderRadius: 14, background: 'rgba(15,15,22,0.5)', border: '1px solid rgba(var(--fg-rgb),0.06)' }}>
-              <div style={{ color: 'var(--muted-3)', fontSize: 9, fontWeight: 800, letterSpacing: 1.4, marginBottom: 10 }}>KEY ORGANIZATIONS</div>
+            <div style={{ padding: '14px 16px', borderRadius: 14, background: 'rgba(15,15,22,0.5)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ color: '#666', fontSize: 9, fontWeight: 800, letterSpacing: 1.4, marginBottom: 10 }}>KEY ORGANIZATIONS</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {entities.companies.map(c => {
                   const isOn = followedEntities.has(c.toLowerCase());
@@ -967,9 +948,9 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
                     }} style={{
                       padding: '5px 11px', borderRadius: 999, cursor: 'pointer',
                       display: 'inline-flex', alignItems: 'center', gap: 4,
-                      background: isOn ? 'rgba(52,199,89,0.18)' : 'rgba(var(--fg-rgb),0.05)',
-                      border: isOn ? '1px solid var(--success)' : '1px solid rgba(var(--fg-rgb),0.1)',
-                      color: isOn ? 'var(--success)' : '#e8e8e8',
+                      background: isOn ? 'rgba(52,199,89,0.18)' : 'rgba(255,255,255,0.05)',
+                      border: isOn ? '1px solid #34C759' : '1px solid rgba(255,255,255,0.1)',
+                      color: isOn ? '#34C759' : '#e8e8e8',
                       fontSize: 11.5, fontWeight: isOn ? 700 : 500,
                       transition: 'background 0.18s, border-color 0.18s, color 0.18s',
                     }}>
@@ -987,17 +968,17 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
       {/* Related stories */}
       {related.length > 0 && (
         <div style={{ marginTop: 24 }}>
-          <div style={{ color: 'var(--text)', fontSize: 15, fontWeight: 700, padding: '0 16px', marginBottom: 12 }}>Related Stories</div>
+          <div style={{ color: '#fff', fontSize: 15, fontWeight: 700, padding: '0 16px', marginBottom: 12 }}>Related Stories</div>
           <div style={{ display: 'flex', overflowX: 'auto', padding: '0 16px', gap: 10, scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
             {related.map((s: any, idx) => {
               const color = getArticleColor(s.id || s.headline);
               return (
                 <div key={s.id || idx} onClick={() => navigate({ name: 'Article', params: { id: s.id, url: s.sources?.[0]?.url ?? '', image: s.imageUrl ?? '', headline: s.headline, summary: s.summary ?? '', source: s.sources?.[0]?.name ?? '', publishedAt: s.publishedAt ?? '', dominantColor: color, sources: JSON.stringify(s.sources ?? []), allStories: params.allStories } })}
-                  style={{ width: 180, background: 'var(--surface-2)', borderRadius: 14, overflow: 'hidden', flexShrink: 0, cursor: 'pointer' }}>
+                  style={{ width: 180, background: '#111', borderRadius: 14, overflow: 'hidden', flexShrink: 0, cursor: 'pointer' }}>
                   <img src={s.imageUrl || FALLBACK_IMG} alt="" style={{ width: 180, height: 100, objectFit: 'cover', display: 'block' }} />
                   <div style={{ padding: 10 }}>
-                    <div style={{ color: 'var(--text)', fontSize: 12, fontWeight: 600, lineHeight: 1.42, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{s.headline}</div>
-                    <div style={{ color: 'rgba(var(--fg-rgb),0.5)', fontSize: 10, marginTop: 4 }}>{s.sources?.[0]?.name}</div>
+                    <div style={{ color: '#fff', fontSize: 12, fontWeight: 600, lineHeight: 1.42, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{s.headline}</div>
+                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, marginTop: 4 }}>{s.sources?.[0]?.name}</div>
                   </div>
                 </div>
               );
@@ -1020,7 +1001,7 @@ function formatPublishedAt(iso: string) {
 function Spinner() {
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', paddingBlock: 48 }}>
-      <div style={{ width: 36, height: 36, border: '3px solid var(--line-3)', borderTopColor: 'var(--muted-2)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <div style={{ width: 36, height: 36, border: '3px solid #333', borderTopColor: '#888', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
       <style>{`
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes heroZoomIn { from { transform: scale(1.12); opacity: 0.4; } to { transform: scale(1); opacity: 1; } }
@@ -1088,7 +1069,7 @@ function StatCell({ value, label, accent }: { value: number | string; label: str
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       <span style={{ color: accent, fontSize: 17, fontWeight: 700, letterSpacing: -0.2 }}>{value}</span>
-      <span style={{ color: 'rgba(var(--fg-rgb),0.45)', fontSize: 9, fontWeight: 700, letterSpacing: 1.2, marginTop: 2 }}>
+      <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 9, fontWeight: 700, letterSpacing: 1.2, marginTop: 2 }}>
         {label}
       </span>
     </div>
@@ -1116,21 +1097,21 @@ function DedupModal({ onClose, originalParagraphs, paragraphs, dedupedFlag, apiU
 
   return (
     <div onClick={onClose} style={{
-      position: 'fixed', inset: 0, background: 'rgba(var(--shadow-rgb),0.78)',
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.78)',
       zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: 16,
     }}>
       <div onClick={e => e.stopPropagation()} style={{
-        background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line-2)',
+        background: '#0E0E0E', borderRadius: 14, border: '1px solid #222',
         padding: 16, maxWidth: 480, width: '100%', maxHeight: '88vh', overflowY: 'auto',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <span style={{ color: 'var(--text)', fontSize: 12, fontWeight: 800, letterSpacing: 1.4 }}>DEDUP VALIDATION</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)', fontSize: 18 }}>✕</button>
+          <span style={{ color: '#fff', fontSize: 12, fontWeight: 800, letterSpacing: 1.4 }}>DEDUP VALIDATION</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fff', fontSize: 18 }}>✕</button>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-          <Cell label="SERVER FLAG" value={dedupedFlag ? 'deduped: true' : 'deduped: false'} color={dedupedFlag ? 'var(--success)' : 'var(--warn)'} />
+          <Cell label="SERVER FLAG" value={dedupedFlag ? 'deduped: true' : 'deduped: false'} color={dedupedFlag ? '#34C759' : '#FF9500'} />
           <Cell label="WORDS" value={`${preWords} → ${postWords}  (${wordsReduction}% less)`} />
           <Cell label="PARAGRAPHS" value={`${originalParagraphs.length} → ${paragraphs.length}  (${paraReduction}% less)`} />
           <Cell label="REMOVED COUNT" value={String(removed.length)} />
@@ -1139,8 +1120,8 @@ function DedupModal({ onClose, originalParagraphs, paragraphs, dedupedFlag, apiU
         <Label text="API ENDPOINT" />
         <a href={apiUrl || '#'} target="_blank" rel="noopener noreferrer" style={{
           display: 'block', textDecoration: 'none',
-          background: 'var(--line)', borderRadius: 8, padding: 10,
-          border: '1px solid var(--line-2)', marginBottom: 16,
+          background: '#161616', borderRadius: 8, padding: 10,
+          border: '1px solid #222', marginBottom: 16,
         }}>
           <div style={{ color: '#9AD0FF', fontSize: 11, fontFamily: 'monospace', lineHeight: 1.4, wordBreak: 'break-all' }}>
             {apiUrl || '—'}
@@ -1170,16 +1151,16 @@ function DedupModal({ onClose, originalParagraphs, paragraphs, dedupedFlag, apiU
 
 function Cell({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div style={{ background: 'var(--line)', borderRadius: 8, padding: 10, border: '1px solid var(--line-2)' }}>
-      <div style={{ color: 'rgba(var(--fg-rgb),0.4)', fontSize: 10, fontWeight: 700, letterSpacing: 1.2, marginBottom: 4 }}>{label}</div>
-      <div style={{ color: color ?? 'var(--text)', fontSize: 13, fontWeight: 600, fontFamily: 'monospace' }}>{value}</div>
+    <div style={{ background: '#161616', borderRadius: 8, padding: 10, border: '1px solid #222' }}>
+      <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: 700, letterSpacing: 1.2, marginBottom: 4 }}>{label}</div>
+      <div style={{ color: color ?? '#fff', fontSize: 13, fontWeight: 600, fontFamily: 'monospace' }}>{value}</div>
     </div>
   );
 }
 
 function Label({ text }: { text: string }) {
   return (
-    <div style={{ color: 'rgba(var(--fg-rgb),0.45)', fontSize: 10, fontWeight: 700, letterSpacing: 1.4, marginTop: 16, marginBottom: 8 }}>
+    <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10, fontWeight: 700, letterSpacing: 1.4, marginTop: 16, marginBottom: 8 }}>
       {text}
     </div>
   );
@@ -1191,13 +1172,13 @@ function DiffRow({ type, text }: { type: 'removed' | 'kept'; text: string }) {
     <div style={{
       display: 'flex', gap: 8,
       background: isRemoved ? 'rgba(255,59,48,0.08)' : 'rgba(52,199,89,0.06)',
-      borderLeft: `2px solid ${isRemoved ? 'var(--danger)' : 'var(--success)'}`,
+      borderLeft: `2px solid ${isRemoved ? '#FF3B30' : '#34C759'}`,
       padding: 8, marginBottom: 6, borderRadius: 4,
     }}>
-      <span style={{ color: isRemoved ? 'var(--danger)' : 'var(--success)', fontFamily: 'monospace', fontWeight: 800, fontSize: 13 }}>
+      <span style={{ color: isRemoved ? '#FF3B30' : '#34C759', fontFamily: 'monospace', fontWeight: 800, fontSize: 13 }}>
         {isRemoved ? '−' : '+'}
       </span>
-      <span style={{ flex: 1, color: 'rgba(var(--fg-rgb),0.8)', fontSize: 12, lineHeight: 1.5 }}>{text}</span>
+      <span style={{ flex: 1, color: 'rgba(255,255,255,0.8)', fontSize: 12, lineHeight: 1.5 }}>{text}</span>
     </div>
   );
 }

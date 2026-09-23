@@ -352,17 +352,17 @@ export default function DigestScreen() {
         scrollOffsetRef.current = top;
       }}
       style={{
-        height: '100%', background: 'var(--bg)', overflowY: 'auto', overflowX: 'hidden',
-        WebkitOverflowScrolling: 'touch', color: 'var(--text)',
+        height: '100%', background: '#080808', overflowY: 'auto', overflowX: 'hidden',
+        WebkitOverflowScrolling: 'touch', color: '#fff',
       }}
     >
       <div style={{ padding: 'calc(16px + env(safe-area-inset-top, 0px)) 16px 90px' }}>
         {/* Header */}
         <div style={{ padding: '8px 0 16px' }}>
-          <div style={{ color: 'var(--text)', fontSize: 30, fontWeight: 800, letterSpacing: -0.5 }}>
+          <div style={{ color: '#fff', fontSize: 30, fontWeight: 800, letterSpacing: -0.5 }}>
             {greeting()}.
           </div>
-          <div style={{ color: 'var(--muted-2)', fontSize: 14, marginTop: 4 }}>
+          <div style={{ color: '#888', fontSize: 14, marginTop: 4 }}>
             Your daily digest, distilled.
           </div>
         </div>
@@ -371,7 +371,7 @@ export default function DigestScreen() {
         {snapshot && (
           <div style={{
             display: 'flex', alignItems: 'center',
-            background: 'var(--surface-3)', borderRadius: 14,
+            background: '#141414', borderRadius: 14,
             padding: '14px 10px', marginBottom: 20,
           }}>
             <Stat value={snapshot.estimatedReadMin} label="MIN READ" />
@@ -385,7 +385,7 @@ export default function DigestScreen() {
               style={{
                 flex: 1, background: 'none', border: 'none', cursor: 'pointer',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-                color: 'var(--text)', fontSize: 9, fontWeight: 700, letterSpacing: 1.2,
+                color: '#fff', fontSize: 9, fontWeight: 700, letterSpacing: 1.2,
               }}
             >
               <span style={{ fontSize: 22 }}>↻</span>
@@ -397,18 +397,18 @@ export default function DigestScreen() {
         {/* Loading / error */}
         {loading && !snapshot && (
           <div style={{ textAlign: 'center', padding: '56px 0' }}>
-            <div style={{ width: 28, height: 28, border: '3px solid var(--line-2)', borderTopColor: 'var(--muted-2)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
+            <div style={{ width: 28, height: 28, border: '3px solid #222', borderTopColor: '#888', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
             <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-            <div style={{ color: 'var(--muted-3)', fontSize: 12, marginTop: 12 }}>Building today's digest…</div>
+            <div style={{ color: '#666', fontSize: 12, marginTop: 12 }}>Building today's digest…</div>
           </div>
         )}
         {error && !snapshot && (
-          <div style={{ textAlign: 'center', padding: '56px 0', color: 'var(--muted-3)', fontSize: 12 }}>
+          <div style={{ textAlign: 'center', padding: '56px 0', color: '#666', fontSize: 12 }}>
             {error}
             <div>
               <button onClick={() => load(true)} style={{
-                marginTop: 12, background: 'none', color: 'var(--text)',
-                border: '1px solid var(--line-3)', borderRadius: 999,
+                marginTop: 12, background: 'none', color: '#fff',
+                border: '1px solid #2A2A2A', borderRadius: 999,
                 padding: '10px 18px', cursor: 'pointer', fontSize: 11, fontWeight: 700, letterSpacing: 1.2,
               }}>RETRY</button>
             </div>
@@ -425,7 +425,7 @@ export default function DigestScreen() {
               borderRadius: 16, overflow: 'hidden', marginBottom: 24,
               background: darken(dominant, 0.3), cursor: 'pointer',
             }}>
-              <div style={{ height: 180, position: 'relative', background: 'var(--line)' }}>
+              <div style={{ height: 180, position: 'relative', background: '#1A1A1A' }}>
                 {story.imageUrl ? (
                   <img src={story.imageUrl} alt="" style={{
                     position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
@@ -442,7 +442,7 @@ export default function DigestScreen() {
                 }} />
                 <div style={{
                   position: 'absolute', top: 12, left: 12,
-                  background: 'rgba(var(--shadow-rgb),0.6)',
+                  background: 'rgba(0,0,0,0.6)',
                   padding: '4px 8px', borderRadius: 999,
                   display: 'flex', alignItems: 'center', gap: 4,
                   color: '#FFD166', fontSize: 9, fontWeight: 800, letterSpacing: 1.2,
@@ -454,7 +454,7 @@ export default function DigestScreen() {
                 <div style={{ color: accent, fontSize: 11, fontWeight: 700, letterSpacing: 1.2 }}>
                   {(story.sources?.[0]?.name ?? '').toUpperCase()}
                 </div>
-                <div style={{ color: 'var(--text)', fontSize: 19, fontWeight: 800, lineHeight: 1.3, letterSpacing: -0.2 }}>
+                <div style={{ color: '#fff', fontSize: 19, fontWeight: 800, lineHeight: 1.3, letterSpacing: -0.2 }}>
                   {story.headline}
                 </div>
                 {bullets.length > 0 && (
@@ -462,7 +462,7 @@ export default function DigestScreen() {
                     {bullets.slice(0, 3).map((b, i) => (
                       <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                         <div style={{ width: 5, height: 5, borderRadius: 3, background: accent, marginTop: 8, flexShrink: 0 }} />
-                        <div style={{ flex: 1, color: 'rgba(var(--fg-rgb),0.85)', fontSize: 13, lineHeight: 1.5 }}>{b}</div>
+                        <div style={{ flex: 1, color: 'rgba(255,255,255,0.85)', fontSize: 13, lineHeight: 1.5 }}>{b}</div>
                       </div>
                     ))}
                   </div>
@@ -480,10 +480,10 @@ export default function DigestScreen() {
               {snapshot.numbers.map((n, i) => (
                 <div key={i} style={{
                   flex: 1, padding: 12, borderRadius: 12,
-                  background: 'var(--surface-3)', border: '1px solid var(--line-2)',
+                  background: '#141414', border: '1px solid #222',
                 }}>
-                  <div style={{ color: 'var(--text)', fontSize: 17, fontWeight: 800, letterSpacing: -0.3 }}>{n.value}</div>
-                  <div style={{ color: 'var(--muted-3)', fontSize: 9, fontWeight: 700, letterSpacing: 1.2, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div style={{ color: '#fff', fontSize: 17, fontWeight: 800, letterSpacing: -0.3 }}>{n.value}</div>
+                  <div style={{ color: '#666', fontSize: 9, fontWeight: 700, letterSpacing: 1.2, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {n.label || '—'}
                   </div>
                 </div>
@@ -498,7 +498,7 @@ export default function DigestScreen() {
           return (
             <div key={section.key} style={{
               marginBottom: 22, borderRadius: 14,
-              background: 'var(--surface)', border: '1px solid var(--line)', overflow: 'hidden',
+              background: '#0E0E0E', border: '1px solid #1A1A1A', overflow: 'hidden',
             }}>
               <div
                 onClick={() => toggleSection(section.key)}
@@ -508,18 +508,18 @@ export default function DigestScreen() {
                 }}
               >
                 <span style={{ fontSize: 16 }}>{section.emoji}</span>
-                <span style={{ flex: 1, color: 'var(--text)', fontSize: 15, fontWeight: 800 }}>{section.label}</span>
+                <span style={{ flex: 1, color: '#fff', fontSize: 15, fontWeight: 800 }}>{section.label}</span>
                 <span style={{
-                  color: 'var(--muted-3)', fontSize: 11, fontWeight: 700,
-                  background: 'var(--surface-3)', padding: '3px 8px', borderRadius: 999,
+                  color: '#666', fontSize: 11, fontWeight: 700,
+                  background: '#141414', padding: '3px 8px', borderRadius: 999,
                 }}>{section.stories.length}</span>
-                <span style={{ color: 'var(--muted-3)', fontSize: 14 }}>{isCollapsed ? '▾' : '▴'}</span>
+                <span style={{ color: '#666', fontSize: 14 }}>{isCollapsed ? '▾' : '▴'}</span>
               </div>
               {!isCollapsed && (
                 <>
                   {section.oneLiner && (
                     <div style={{
-                      padding: '0 16px 12px', color: 'var(--muted)', fontSize: 13,
+                      padding: '0 16px 12px', color: '#999', fontSize: 13,
                       lineHeight: 1.4, fontStyle: 'italic',
                     }}>{section.oneLiner}</div>
                   )}
@@ -529,14 +529,14 @@ export default function DigestScreen() {
                       padding: 14, cursor: 'pointer',
                       borderBottom: i < section.stories.length - 1 ? '1px solid #1A1A1A' : 'none',
                     }}>
-                      <span style={{ color: 'var(--muted-5)', fontSize: 11, fontWeight: 800, letterSpacing: 0.6, width: 22, marginTop: 2 }}>
+                      <span style={{ color: '#444', fontSize: 11, fontWeight: 800, letterSpacing: 0.6, width: 22, marginTop: 2 }}>
                         {String(i + 1).padStart(2, '0')}
                       </span>
                       <div style={{ flex: 1 }}>
-                        <div style={{ color: 'var(--muted-2)', fontSize: 10, fontWeight: 700, letterSpacing: 1.2 }}>
+                        <div style={{ color: '#888', fontSize: 10, fontWeight: 700, letterSpacing: 1.2 }}>
                           {(s.sources?.[0]?.name ?? '').toUpperCase()}
                         </div>
-                        <div style={{ color: 'var(--text)', fontSize: 14, fontWeight: 700, lineHeight: 1.35, marginTop: 4 }}>
+                        <div style={{ color: '#fff', fontSize: 14, fontWeight: 700, lineHeight: 1.35, marginTop: 4 }}>
                           {s.headline}
                         </div>
                         {s.summary && (
@@ -546,7 +546,7 @@ export default function DigestScreen() {
                         )}
                       </div>
                       {s.imageUrl ? (
-                        <img src={s.imageUrl} alt="" style={{ width: 60, height: 60, borderRadius: 8, objectFit: 'cover', background: 'var(--line)' }} />
+                        <img src={s.imageUrl} alt="" style={{ width: 60, height: 60, borderRadius: 8, objectFit: 'cover', background: '#1A1A1A' }} />
                       ) : (
                         <div style={{ width: 60, height: 60, borderRadius: 8, background: getArticleColor(s.id) }} />
                       )}
@@ -564,25 +564,25 @@ export default function DigestScreen() {
             <SectionLabel text="WHAT YOU MISSED YESTERDAY" />
             <div onClick={() => yesterdaySnapshot.hero && openArticle(yesterdaySnapshot.hero.story)} style={{
               display: 'flex', alignItems: 'center', gap: 14,
-              padding: 14, background: 'var(--surface)',
-              borderRadius: 14, border: '1px solid var(--line)',
+              padding: 14, background: '#0E0E0E',
+              borderRadius: 14, border: '1px solid #1A1A1A',
               cursor: 'pointer',
             }}>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ color: 'var(--text)', fontSize: 11, fontWeight: 800, letterSpacing: 0.5 }}>
+                <div style={{ color: '#fff', fontSize: 11, fontWeight: 800, letterSpacing: 0.5 }}>
                   {new Date(yesterdaySnapshot.generatedAt).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                 </div>
-                <div style={{ color: 'var(--muted-4)', fontSize: 9, fontWeight: 700, letterSpacing: 0.8, marginTop: 2 }}>
+                <div style={{ color: '#555', fontSize: 9, fontWeight: 700, letterSpacing: 0.8, marginTop: 2 }}>
                   {yesterdaySnapshot.totalStories} stories
                 </div>
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ color: 'var(--muted-4)', fontSize: 9, fontWeight: 800, letterSpacing: 1.2 }}>TOP STORY</div>
-                <div style={{ color: 'var(--text)', fontSize: 13, fontWeight: 700, lineHeight: 1.4, marginTop: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                <div style={{ color: '#555', fontSize: 9, fontWeight: 800, letterSpacing: 1.2 }}>TOP STORY</div>
+                <div style={{ color: '#fff', fontSize: 13, fontWeight: 700, lineHeight: 1.4, marginTop: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                   {yesterdaySnapshot.hero.story.headline}
                 </div>
               </div>
-              <span style={{ color: 'var(--muted-5)', fontSize: 16 }}>›</span>
+              <span style={{ color: '#444', fontSize: 16 }}>›</span>
             </div>
           </div>
         )}
@@ -590,13 +590,13 @@ export default function DigestScreen() {
         {/* Footer */}
         {snapshot && (
           <div style={{ textAlign: 'center', paddingTop: 8 }}>
-            <div style={{ color: 'var(--muted-5)', fontSize: 11 }}>
+            <div style={{ color: '#444', fontSize: 11 }}>
               Generated {new Date(snapshot.generatedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} · Next auto-refresh at 7 AM tomorrow
             </div>
             <button onClick={() => load(true)} style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               marginTop: 12, padding: '10px 18px', borderRadius: 999,
-              background: 'var(--line)', border: 'none', color: 'var(--text)',
+              background: '#1A1A1A', border: 'none', color: '#fff',
               fontSize: 10, fontWeight: 800, letterSpacing: 1.4, cursor: 'pointer',
             }}>
               ↻ REGENERATE NOW
@@ -611,20 +611,20 @@ export default function DigestScreen() {
 function Stat({ value, label }: { value: number; label: string }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <span style={{ color: 'var(--text)', fontSize: 18, fontWeight: 700 }}>{value}</span>
-      <span style={{ color: 'var(--muted-3)', fontSize: 9, fontWeight: 700, letterSpacing: 1.2, marginTop: 2 }}>{label}</span>
+      <span style={{ color: '#fff', fontSize: 18, fontWeight: 700 }}>{value}</span>
+      <span style={{ color: '#666', fontSize: 9, fontWeight: 700, letterSpacing: 1.2, marginTop: 2 }}>{label}</span>
     </div>
   );
 }
 
 function Divider() {
-  return <div style={{ width: 1, height: 28, background: 'var(--line-3)' }} />;
+  return <div style={{ width: 1, height: 28, background: '#2A2A2A' }} />;
 }
 
 function SectionLabel({ text }: { text: string }) {
   return (
     <div style={{
-      color: 'var(--muted-4)', fontSize: 10, fontWeight: 800,
+      color: '#555', fontSize: 10, fontWeight: 800,
       letterSpacing: 1.4, marginBottom: 10, marginLeft: 4,
     }}>{text}</div>
   );

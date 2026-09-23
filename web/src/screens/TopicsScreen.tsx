@@ -15,8 +15,8 @@ const TOPIC_ITEMS: { key: TopicKey; label: string; icon: string }[] = [
 
 function Toggle({ value, onChange }: { value: boolean; onChange: () => void }) {
   return (
-    <div onClick={onChange} style={{ width: 51, height: 31, borderRadius: 16, background: value ? '#1C3A6A' : 'var(--line)', position: 'relative', cursor: 'pointer', transition: 'background 0.2s', flexShrink: 0 }}>
-      <div style={{ position: 'absolute', top: 3, left: value ? 22 : 2, width: 25, height: 25, borderRadius: 13, background: value ? 'var(--accent-2)' : 'var(--muted-5)', transition: 'left 0.2s', boxShadow: '0 2px 4px rgba(var(--shadow-rgb),0.5)' }} />
+    <div onClick={onChange} style={{ width: 51, height: 31, borderRadius: 16, background: value ? '#1C3A6A' : '#1A1A1A', position: 'relative', cursor: 'pointer', transition: 'background 0.2s', flexShrink: 0 }}>
+      <div style={{ position: 'absolute', top: 3, left: value ? 22 : 2, width: 25, height: 25, borderRadius: 13, background: value ? '#4A90D9' : '#444', transition: 'left 0.2s', boxShadow: '0 2px 4px rgba(0,0,0,0.5)' }} />
     </div>
   );
 }
@@ -38,18 +38,18 @@ export default function TopicsScreen() {
   }
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', background: 'var(--bg)', WebkitOverflowScrolling: 'touch' }}>
+    <div style={{ height: '100%', overflowY: 'auto', background: '#000', WebkitOverflowScrolling: 'touch' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 16px', paddingTop: 'calc(16px + env(safe-area-inset-top, 0px))', position: 'sticky', top: 0, background: 'var(--bg)', zIndex: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 16px', paddingTop: 'calc(16px + env(safe-area-inset-top, 0px))', position: 'sticky', top: 0, background: '#000', zIndex: 10 }}>
         <button onClick={goBack} style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 20 }}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        <span style={{ color: 'var(--text)', fontSize: 18, fontWeight: 700 }}>Topics</span>
+        <span style={{ color: '#FFF', fontSize: 18, fontWeight: 700 }}>Topics</span>
         <div style={{ width: 40 }} />
       </div>
 
       <div style={{ padding: '0 16px 40px' }}>
-        <p style={{ color: 'var(--muted-5)', fontSize: 12, marginBottom: 20, lineHeight: 1.5 }}>
+        <p style={{ color: '#444', fontSize: 12, marginBottom: 20, lineHeight: 1.5 }}>
           Toggle topics on/off. Tap sub-topic pills to filter what you see.
         </p>
 
@@ -58,11 +58,11 @@ export default function TopicsScreen() {
           const subs = TOPIC_SUBTOPICS[item.key] ?? [];
 
           return (
-            <div key={item.key} style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', marginBottom: 12, overflow: 'hidden' }}>
+            <div key={item.key} style={{ background: '#0E0E0E', borderRadius: 14, border: '1px solid #1A1A1A', marginBottom: 12, overflow: 'hidden' }}>
               {/* Topic row */}
               <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px' }}>
                 <span style={{ fontSize: 20, marginRight: 12 }}>{item.icon}</span>
-                <span style={{ flex: 1, color: topicOn ? 'var(--text)' : 'var(--muted-5)', fontSize: 15, fontWeight: 700, transition: 'color 0.2s' }}>
+                <span style={{ flex: 1, color: topicOn ? '#FFF' : '#444', fontSize: 15, fontWeight: 700, transition: 'color 0.2s' }}>
                   {item.label}
                 </span>
                 <Toggle value={topicOn} onChange={() => toggleTopic(item.key)} />
@@ -81,9 +81,9 @@ export default function TopicsScreen() {
                         style={{
                           padding: '8px 14px',
                           borderRadius: 999,
-                          border: `1px solid ${active ? 'var(--success)' : '#252525'}`,
-                          background: active ? '#0D2B1A' : 'var(--surface-2)',
-                          color: active ? 'var(--success)' : '#383838',
+                          border: `1px solid ${active ? '#22C55E' : '#252525'}`,
+                          background: active ? '#0D2B1A' : '#111',
+                          color: active ? '#22C55E' : '#383838',
                           fontSize: 13,
                           fontWeight: 600,
                           cursor: 'pointer',
@@ -101,27 +101,27 @@ export default function TopicsScreen() {
         })}
 
         {/* Content Filters */}
-        <p style={{ color: 'var(--muted-3)', fontSize: 12, fontWeight: 700, letterSpacing: 1, marginTop: 24, marginBottom: 12 }}>
+        <p style={{ color: '#666', fontSize: 12, fontWeight: 700, letterSpacing: 1, marginTop: 24, marginBottom: 12 }}>
           CONTENT FILTERS
         </p>
 
-        <div style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', marginBottom: 12, overflow: 'hidden' }}>
+        <div style={{ background: '#0E0E0E', borderRadius: 14, border: '1px solid #1A1A1A', marginBottom: 12, overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px' }}>
             <span style={{ fontSize: 20, marginRight: 12 }}>⚽</span>
             <div style={{ flex: 1 }}>
-              <div style={{ color: showSports ? 'var(--text)' : 'var(--muted-4)', fontSize: 15, fontWeight: 700, transition: 'color 0.2s' }}>Sports</div>
-              <div style={{ color: 'var(--muted-5)', fontSize: 12, marginTop: 2 }}>Cricket, football, tennis, F1 and more</div>
+              <div style={{ color: showSports ? '#FFF' : '#555', fontSize: 15, fontWeight: 700, transition: 'color 0.2s' }}>Sports</div>
+              <div style={{ color: '#444', fontSize: 12, marginTop: 2 }}>Cricket, football, tennis, F1 and more</div>
             </div>
             <Toggle value={showSports} onChange={() => setShowSports(!showSports)} />
           </div>
         </div>
 
-        <div style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', marginBottom: 12, overflow: 'hidden' }}>
+        <div style={{ background: '#0E0E0E', borderRadius: 14, border: '1px solid #1A1A1A', marginBottom: 12, overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px' }}>
             <span style={{ fontSize: 20, marginRight: 12 }}>🎬</span>
             <div style={{ flex: 1 }}>
-              <div style={{ color: showEntertainment ? 'var(--text)' : 'var(--muted-4)', fontSize: 15, fontWeight: 700, transition: 'color 0.2s' }}>Entertainment</div>
-              <div style={{ color: 'var(--muted-5)', fontSize: 12, marginTop: 2 }}>Bollywood, movies, celebrity, awards</div>
+              <div style={{ color: showEntertainment ? '#FFF' : '#555', fontSize: 15, fontWeight: 700, transition: 'color 0.2s' }}>Entertainment</div>
+              <div style={{ color: '#444', fontSize: 12, marginTop: 2 }}>Bollywood, movies, celebrity, awards</div>
             </div>
             <Toggle value={showEntertainment} onChange={() => setShowEntertainment(!showEntertainment)} />
           </div>
