@@ -842,7 +842,7 @@ function FullPreviewCard({ item, index, total, onOpen }: {
           // space at card height, so scale fonts UP as content shrinks. Caps
           // keep long content at base sizes — no overflow.
           const hLen = story.headline?.length ?? 0;
-          const headlineSize = hLen <= 50 ? 30 : hLen <= 80 ? 28 : hLen <= 110 ? 27 : 26;
+          const headlineSize = hLen <= 50 ? 36 : hLen <= 80 ? 34 : hLen <= 110 ? 32 : 31;
           // Single ~20-word summary line instead of a 3-bullet list — reuses
           // the already-fetched tldr[0] (no extra API call) rather than a
           // fresh 20-word-targeted generation.
@@ -1370,7 +1370,7 @@ function DeepDiveOverlay({ item, onClose, onOpenRelated }: { item: FeedItem; onC
       {/* Content */}
       <div style={{ padding: '4px 20px 80px', display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 720, margin: '0 auto' }}>
         <h1 style={{
-          margin: 0, color: '#fff', fontSize: 24, fontWeight: 800,
+          margin: 0, color: '#fff', fontSize: 29, fontWeight: 800,
           lineHeight: 1.22, letterSpacing: -0.4,
         }}>{story.headline}</h1>
 
