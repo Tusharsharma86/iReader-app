@@ -10,6 +10,7 @@ import { TabBar } from './components/TabBar';
 // cache keeps opens fast enough.
 // import('./screens/AIFeedScreen').then(m => m.startAIFeedPreWarm());
 
+const BriefingScreen   = lazy(() => import('./screens/BriefingScreen'));
 const FeedScreen       = lazy(() => import('./screens/FeedScreen'));
 const ExploreScreen    = lazy(() => import('./screens/ExploreScreen'));
 const ArticleScreen    = lazy(() => import('./screens/ArticleScreen'));
@@ -60,6 +61,7 @@ function ScreenRenderer() {
       {!isFeed && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 1 }}>
           <Suspense fallback={spinner}>
+            {currentScreen.name === 'Briefing'   && <BriefingScreen />}
             {currentScreen.name === 'Article'    && <ArticleScreen params={currentScreen.params} />}
             {currentScreen.name === 'Explore'    && <ExploreScreen />}
             {currentScreen.name === 'AIFeed'     && <AIFeedScreen />}

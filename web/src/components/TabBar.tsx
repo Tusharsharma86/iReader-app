@@ -4,9 +4,10 @@ import { useRouter } from '../contexts/RouterContext';
 import { useTabBar } from '../contexts/TabBarContext';
 import { useSettings } from '../contexts/SettingsContext';
 
-type IconName = 'feed' | 'explore' | 'digest' | 'aifeed' | 'saved' | 'profile';
+type IconName = 'briefing' | 'feed' | 'explore' | 'digest' | 'aifeed' | 'saved' | 'profile';
 
 const TAB_ITEMS: Array<{ tab: TabName; screen: NavScreen; icon: IconName; label: string }> = [
+  { tab: 'briefing', screen: { name: 'Briefing' }, icon: 'briefing', label: 'Briefing' },
   { tab: 'feed',     screen: { name: 'Feed' },     icon: 'feed',    label: 'Feed'    },
   { tab: 'explore',  screen: { name: 'Explore' },  icon: 'explore', label: 'Explore' },
   { tab: 'digest',   screen: { name: 'Digest' },   icon: 'digest',  label: 'Digest'  },
@@ -30,6 +31,17 @@ function TabIcon({ name, active }: { name: IconName; active: boolean }) {
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={active ? 2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="10" />
         <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" fill={active ? color : 'none'} />
+      </svg>
+    );
+  }
+  if (name === 'briefing') {
+    // Newspaper / briefing sheet — a page with a ranked list on it.
+    return (
+      <svg {...common} fill="none">
+        <rect x="72" y="72" width="368" height="368" rx="40" />
+        <path d="M136 168h120M136 240h240M136 312h200" />
+        <circle cx="376" cy="168" r="28" fill={active ? color : 'none'} />
+        {active && <rect x="72" y="72" width="368" height="368" rx="40" fill={color} fillOpacity="0.15" />}
       </svg>
     );
   }
@@ -124,7 +136,9 @@ export function TabBar() {
               key={item.tab}
               onClick={() => {
                 try { navigator.vibrate?.(6); } catch {}
-                if (active && item.tab === 'feed') {
+                if (active && item.tab === 'briefing') {
+                  window.dispatchEvent(new Event('briefing-scroll-top'));
+                } else if (active && item.tab === 'feed') {
                   window.dispatchEvent(new Event('feed-scroll-top'));
                 } else if (item.tab === 'aifeed') {
                   // Always jump to first card when AI Feed tab tapped (fresh or active).

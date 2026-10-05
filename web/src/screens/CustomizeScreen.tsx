@@ -20,6 +20,7 @@ import {
 import type { CategoryTopic } from '../types';
 
 const TAB_OPTIONS = [
+  { key: 'briefing', label: 'Briefing' },
   { key: 'feed',     label: 'Feed' },
   { key: 'digest',   label: 'Digest' },
   { key: 'aifeed',   label: 'AI Feed' },
@@ -424,7 +425,7 @@ export default function CustomizeScreen() {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
             {TAB_OPTIONS.map(t => {
               const hidden = s.hiddenTabs.includes(t.key);
-              const locked = t.key === 'feed' || t.key === 'settings';
+              const locked = t.key === 'briefing' || t.key === 'feed' || t.key === 'settings';
               return (
                 <div key={t.key}
                   onClick={() => !locked && s.toggleHiddenTab(t.key)}

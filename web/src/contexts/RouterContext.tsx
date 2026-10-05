@@ -24,6 +24,7 @@ const RouterContext = createContext<RouterCtx>({
 export function RouterProvider({ children }: { children: React.ReactNode }) {
   const [activeTab, setActiveTabState] = useState<TabName>('feed');
   const [stacks, setStacks] = useState<Record<TabName, NavScreen[]>>({
+    briefing: [{ name: 'Briefing' }],
     feed: [{ name: 'Feed' }],
     explore: [{ name: 'Explore' }],
     digest: [{ name: 'Digest' }],
