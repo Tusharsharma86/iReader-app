@@ -113,6 +113,15 @@ function toStory(item: RankedItem): Story {
   };
 }
 
+// Lives outside the component on purpose. App.tsx keeps only FeedScreen
+// mounted, so tapping into an article UNMOUNTS this screen and coming back
+// remounts it from scratch — which re-ran the whole build every single time.
+// A module-level copy survives that, so back-navigation is free.
+let memSnapshot: { key: string; snap: Snapshot } | null = null;
+// How stale the in-memory copy may be before a remount bothers to revalidate.
+// The server rebuilds at most every 6h, so re-asking within minutes is waste.
+const MEM_FRESH_MS = 10 * 60 * 1000;
+
 async function fetchBriefing(windowHours: WindowHours, force: boolean, signal: AbortSignal): Promise<Snapshot> {
   const res = await fetch(`${BRIEFING_API}?window=${windowHours}${force ? '&refresh=1' : ''}`, { signal });
   if (!res.ok) {
@@ -306,6 +315,7 @@ export default function BriefingScreen() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [phase, setPhase] = useState<'idle' | 'loading' | 'revalidating' | 'done'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [areaFilter, setAreaFilter] = useState<string>('all');
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -330,17 +340,30 @@ export default function BriefingScreen() {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setError(null);
+    const key = cacheKeyFor(hours);
+
+    // Returning from an article: if the in-memory copy is recent, show it and
+    // make NO request at all. This is the common path and it should be free.
+    if (!force && memSnapshot?.key === key && Date.now() - memSnapshot.snap.builtAt < MEM_FRESH_MS) {
+      setSnapshot(memSnapshot.snap);
+      setPhase('done');
+      return;
+    }
 
     // Paint the last good copy immediately, then revalidate behind it.
     let painted = false;
     if (!force) {
-      try {
-        const raw = localStorage.getItem(cacheKeyFor(hours));
-        if (raw) {
-          const parsed: Snapshot = JSON.parse(raw);
-          if (parsed.items?.length) { setSnapshot(parsed); painted = true; }
-        }
-      } catch { /* ignore a bad cache entry */ }
+      const fromMem = memSnapshot?.key === key ? memSnapshot.snap : null;
+      if (fromMem) { setSnapshot(fromMem); painted = true; }
+      else {
+        try {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const parsed: Snapshot = JSON.parse(raw);
+            if (parsed.items?.length) { setSnapshot(parsed); painted = true; }
+          }
+        } catch { /* ignore a bad cache entry */ }
+      }
     }
 
     setPhase(painted ? 'revalidating' : 'loading');
@@ -350,7 +373,8 @@ export default function BriefingScreen() {
       const snap = await fetchBriefing(hours, force, ctrl.signal);
       if (ctrl.signal.aborted) return;
       setSnapshot(snap);
-      try { localStorage.setItem(cacheKeyFor(hours), JSON.stringify(snap)); } catch { /* quota */ }
+      memSnapshot = { key, snap };
+      try { localStorage.setItem(key, JSON.stringify(snap)); } catch { /* quota */ }
       setPhase('done');
     } catch (e) {
       if (ctrl.signal.aborted) return;
@@ -411,6 +435,13 @@ export default function BriefingScreen() {
     return counts;
   }, [snapshot]);
 
+  // Ranks stay global, so a filtered view can open at #7 — that is the point:
+  // the number tells you where the story sits in the whole briefing, not in
+  // the slice you happen to be looking at.
+  const visibleItems = useMemo(
+    () => (snapshot?.items ?? []).filter(i => areaFilter === 'all' || i.area === areaFilter),
+    [snapshot, areaFilter],
+  );
   const busy = phase === 'loading' || phase === 'revalidating';
   const total = snapshot?.items.length ?? 0;
   const failedCount = snapshot?.items.filter(i => i.summaryFailed).length ?? 0;
@@ -566,24 +597,65 @@ export default function BriefingScreen() {
           </div>
         )}
 
-        {/* Spread + built-at */}
+        {/* Categories. These were static count chips; making them filters costs
+            nothing because all thirty items are already in memory, and it turns
+            a label into navigation. Sticky so you can switch while scrolling. */}
+        {snapshot && (
+          <div style={{
+            position: 'sticky', top: 0, zIndex: 5,
+            margin: '0 -16px 12px', padding: '8px 16px',
+            background: 'rgba(8,8,8,0.82)',
+            backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)',
+            borderBottom: '1px solid rgba(255,255,255,0.05)',
+          }}>
+            <div style={{
+              display: 'flex', gap: 7, overflowX: 'auto', scrollbarWidth: 'none',
+              WebkitOverflowScrolling: 'touch', paddingBottom: 2,
+            }}>
+              {([{ key: 'all', label: 'All', accent: '#4A90D9' }, ...AREAS] as Array<{ key: string; label: string; accent: string }>)
+                .filter(a => a.key === 'all' || areaCounts[a.key])
+                .map(a => {
+                  const active = areaFilter === a.key;
+                  const count = a.key === 'all' ? total : (areaCounts[a.key] ?? 0);
+                  return (
+                    <button
+                      key={a.key}
+                      onClick={() => {
+                        setAreaFilter(a.key);
+                        scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      style={{
+                        flexShrink: 0,
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '7px 13px', borderRadius: 999,
+                        border: `1px solid ${active ? a.accent : 'rgba(255,255,255,0.09)'}`,
+                        background: active ? `${a.accent}26` : '#0E0E0E',
+                        color: active ? a.accent : '#8A8A8E',
+                        fontSize: 11.5, fontWeight: 700, letterSpacing: 0.2,
+                        cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+                        transition: 'background 0.18s, border-color 0.18s, color 0.18s',
+                      }}
+                    >
+                      {a.label}
+                      <span style={{
+                        fontSize: 9.5, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+                        color: active ? a.accent : '#5A5A5E',
+                        background: active ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.05)',
+                        borderRadius: 999, padding: '1px 6px',
+                      }}>{count}</span>
+                    </button>
+                  );
+                })}
+            </div>
+          </div>
+        )}
+
+        {/* Built-at + how the ranking was scored */}
         {snapshot && !busy && (
           <div style={{
             background: '#0D0D0D', border: '1px solid rgba(255,255,255,0.05)',
             borderRadius: 14, padding: '11px 13px', marginBottom: 14,
           }}>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-              {AREAS.filter(a => areaCounts[a.key]).map(a => (
-                <span key={a.key} style={{
-                  fontSize: 9, fontWeight: 700, letterSpacing: 0.3,
-                  color: a.accent, background: `${a.accent}14`,
-                  border: `1px solid ${a.accent}30`,
-                  padding: '3px 8px', borderRadius: 999,
-                }}>
-                  {a.label} {areaCounts[a.key]}
-                </span>
-              ))}
-            </div>
             <div style={{ color: '#5A5A5E', fontSize: 9.5, lineHeight: 1.45 }}>
               Built {new Date(snapshot.builtAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} from{' '}
               {snapshot.poolSize} candidate stories · ranked on corroboration {W_CORROBORATION},
@@ -594,9 +666,15 @@ export default function BriefingScreen() {
         )}
 
         {/* The list */}
-        {snapshot?.items.map(item => (
+        {visibleItems.map(item => (
           <BriefingCard key={`${item.id}-${item.rank}`} item={item} onOpen={openArticle} />
         ))}
+
+        {snapshot && visibleItems.length === 0 && (
+          <div style={{ color: '#6E6E73', fontSize: 12, textAlign: 'center', padding: '32px 0' }}>
+            Nothing in this category for the {snapshot.windowHours}h window.
+          </div>
+        )}
 
         {!snapshot && !busy && !error && (
           <div style={{ color: '#6E6E73', fontSize: 12, textAlign: 'center', padding: '40px 0' }}>
