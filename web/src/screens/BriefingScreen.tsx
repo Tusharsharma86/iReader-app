@@ -313,7 +313,7 @@ export default function BriefingScreen() {
     return (WINDOW_OPTIONS as readonly number[]).includes(saved) ? (saved as WindowHours) : DEFAULT_WINDOW;
   });
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
-  const [phase, setPhase] = useState<'idle' | 'loading' | 'revalidating' | 'done'>('idle');
+  const [phase, setPhase] = useState<'idle' | 'loading' | 'revalidating' | 'rebuilding' | 'done'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [areaFilter, setAreaFilter] = useState<string>('all');
 
@@ -350,23 +350,24 @@ export default function BriefingScreen() {
       return;
     }
 
-    // Paint the last good copy immediately, then revalidate behind it.
+    // Paint whatever we already have, INCLUDING during an explicit rebuild.
+    // Rebuild used to clear the list first, so tapping it blanked the screen
+    // for the ~20s the server takes — which reads as "it stopped", not "it is
+    // working". The old briefing stays up until the new one lands.
     let painted = false;
-    if (!force) {
-      const fromMem = memSnapshot?.key === key ? memSnapshot.snap : null;
-      if (fromMem) { setSnapshot(fromMem); painted = true; }
-      else {
-        try {
-          const raw = localStorage.getItem(key);
-          if (raw) {
-            const parsed: Snapshot = JSON.parse(raw);
-            if (parsed.items?.length) { setSnapshot(parsed); painted = true; }
-          }
-        } catch { /* ignore a bad cache entry */ }
-      }
+    const fromMem = memSnapshot?.key === key ? memSnapshot.snap : null;
+    if (fromMem) { setSnapshot(fromMem); painted = true; }
+    else {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const parsed: Snapshot = JSON.parse(raw);
+          if (parsed.items?.length) { setSnapshot(parsed); painted = true; }
+        }
+      } catch { /* ignore a bad cache entry */ }
     }
 
-    setPhase(painted ? 'revalidating' : 'loading');
+    setPhase(force ? 'rebuilding' : painted ? 'revalidating' : 'loading');
     if (!painted) setSnapshot(null);
 
     try {
@@ -405,6 +406,9 @@ export default function BriefingScreen() {
   const stop = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    // Keep whatever is on screen; if a rebuild wiped it, fall back to the copy
+    // held in memory so Stop can never leave the screen empty.
+    setSnapshot(prev => prev ?? memSnapshot?.snap ?? null);
     setPhase('done');
   }, []);
 
@@ -442,7 +446,7 @@ export default function BriefingScreen() {
     () => (snapshot?.items ?? []).filter(i => areaFilter === 'all' || i.area === areaFilter),
     [snapshot, areaFilter],
   );
-  const busy = phase === 'loading' || phase === 'revalidating';
+  const busy = phase === 'loading' || phase === 'revalidating' || phase === 'rebuilding';
   const total = snapshot?.items.length ?? 0;
   const failedCount = snapshot?.items.filter(i => i.summaryFailed).length ?? 0;
 
@@ -546,7 +550,9 @@ export default function BriefingScreen() {
             borderRadius: 14, padding: '12px 14px', marginBottom: 14,
           }}>
             <div style={{ color: '#fff', fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
-              {phase === 'revalidating' ? 'Checking for a newer briefing…' : 'Building today\u2019s briefing…'}
+              {phase === 'rebuilding' ? 'Rebuilding — this takes about 20s…'
+                : phase === 'revalidating' ? 'Checking for a newer briefing…'
+                : 'Building today\u2019s briefing…'}
             </div>
             <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
               <div style={{
@@ -555,9 +561,11 @@ export default function BriefingScreen() {
               }} />
             </div>
             <div style={{ color: '#5A5A5E', fontSize: 9.5, marginTop: 8, lineHeight: 1.45 }}>
-              {phase === 'revalidating'
-                ? 'Showing the last copy while a fresher one is fetched.'
-                : `Ranking ${TARGET_COUNT} stories and writing every summary up front, so each card is complete before you scroll. Built once and shared — reopening is instant.`}
+              {phase === 'rebuilding'
+                ? 'The current briefing stays on screen until the new one is ready. Tap Stop to keep this one.'
+                : phase === 'revalidating'
+                  ? 'Showing the last copy while a fresher one is fetched.'
+                  : `Ranking ${TARGET_COUNT} stories and writing every summary up front, so each card is complete before you scroll. Built once and shared — reopening is instant.`}
             </div>
           </div>
         )}
