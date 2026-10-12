@@ -72,6 +72,12 @@ interface Snapshot {
   items: RankedItem[];
   poolSize: number;
   cached?: boolean;
+  // The server now answers with the ranked list straight away and writes the
+  // summaries behind it, so a response can be usable but not yet finished.
+  complete?: boolean;
+  filled?: number;
+  total?: number;
+  filling?: boolean;
 }
 
 function todayKey(d = new Date()) {
@@ -344,7 +350,8 @@ export default function BriefingScreen() {
 
     // Returning from an article: if the in-memory copy is recent, show it and
     // make NO request at all. This is the common path and it should be free.
-    if (!force && memSnapshot?.key === key && Date.now() - memSnapshot.snap.builtAt < MEM_FRESH_MS) {
+    if (!force && memSnapshot?.key === key && memSnapshot.snap.complete !== false
+        && Date.now() - memSnapshot.snap.builtAt < MEM_FRESH_MS) {
       setSnapshot(memSnapshot.snap);
       setPhase('done');
       return;
@@ -390,6 +397,15 @@ export default function BriefingScreen() {
     return () => abortRef.current?.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Summaries arrive after the ranking. Look again while the server says it is
+  // still filling, so cards complete themselves without the reader doing
+  // anything. A warm read is ~0.2s, and this stops as soon as it is done.
+  useEffect(() => {
+    if (!snapshot || snapshot.complete !== false) return;
+    const t = setTimeout(() => { load(windowHours, false); }, 15000);
+    return () => clearTimeout(t);
+  }, [snapshot, windowHours, load]);
 
   const pickWindow = useCallback((h: WindowHours) => {
     if (h === windowHours) return;
@@ -588,8 +604,9 @@ export default function BriefingScreen() {
             display: 'flex', alignItems: 'center', gap: 12,
           }}>
             <div style={{ flex: 1, color: '#FFC56E', fontSize: 11.5, lineHeight: 1.5 }}>
-              {failedCount} of {total} summaries didn’t come back — those cards show the
-              source text instead. The server already retried them twice.
+              {snapshot?.complete === false
+                ? `${failedCount} of ${total} summaries are still being written — they appear as they land. Those cards show the source text meanwhile.`
+                : `${failedCount} of ${total} summaries didn’t come back — those cards show the source text instead.`}
             </div>
             <button
               onClick={regenerate}
