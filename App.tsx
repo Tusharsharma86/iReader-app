@@ -22,7 +22,8 @@ import SourcesScreen from './screens/SourcesScreen';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import { SourceProvider } from './contexts/SourceContext';
 import { SavedProvider } from './contexts/SavedContext';
-import { FeedStackParamList, RootTabParamList, SettingsStackParamList, ExploreStackParamList } from './types/navigation';
+import { FeedStackParamList, RootTabParamList, SettingsStackParamList, ExploreStackParamList, BriefingStackParamList } from './types/navigation';
+import BriefingScreen from './screens/BriefingScreen';
 import FavSourcesScreen from './screens/FavSourcesScreen';
 import UsageScreen from './screens/UsageScreen';
 import AIUsageScreen from './screens/AIUsageScreen';
@@ -130,6 +131,7 @@ function handleWidgetUrl(url: string | null) {
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const FeedStack = createNativeStackNavigator<FeedStackParamList>();
+const BriefingStack = createNativeStackNavigator<BriefingStackParamList>();
 const DigestStack = createNativeStackNavigator<FeedStackParamList>();
 const ExploreStack = createNativeStackNavigator<ExploreStackParamList>();
 const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
@@ -137,6 +139,7 @@ const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
 const TAB_ITEMS: { route: keyof RootTabParamList; label: string; icon: IoniconsName; iconActive: IoniconsName }[] = [
+  { route: 'Briefing', label: 'Briefing', icon: 'today-outline',      iconActive: 'today'      },
   { route: 'Feed',     label: 'Feed',     icon: 'newspaper-outline',  iconActive: 'newspaper'  },
   { route: 'Digest',   label: 'Digest',   icon: 'flash-outline',      iconActive: 'flash'      },
   { route: 'AIFeed',   label: 'AI Feed',  icon: 'sparkles-outline',   iconActive: 'sparkles'   },
@@ -147,7 +150,7 @@ const TAB_ITEMS: { route: keyof RootTabParamList; label: string; icon: IoniconsN
 // Customize → hiddenTabs stores lowercase keys (matches web's convention);
 // 'explore' isn't hideable, same as web (no entry for it in web's TAB_OPTIONS).
 const TAB_ROUTE_TO_KEY: Partial<Record<keyof RootTabParamList, string>> = {
-  Feed: 'feed', Digest: 'digest', AIFeed: 'aifeed', Saved: 'saved', Settings: 'settings',
+  Briefing: 'briefing', Feed: 'feed', Digest: 'digest', AIFeed: 'aifeed', Saved: 'saved', Settings: 'settings',
 };
 
 function ParticleTabBar({ state, navigation }: BottomTabBarProps) {
@@ -183,7 +186,7 @@ function ParticleTabBar({ state, navigation }: BottomTabBarProps) {
         }).map((item) => {
           // Look up this item's position in the underlying route list by NAME,
           // not array index — TAB_ITEMS may be a filtered subset (hiddenTabs)
-          // while state.routes always has all 6 registered screens, so a
+          // while state.routes always has every registered screen, so a
           // positional index would misalign focus/navigation once any tab
           // is hidden.
           const routeIndex = state.routes.findIndex(r => r.name === item.route);
@@ -293,6 +296,15 @@ function FeedNavigator() {
       <FeedStack.Screen name="StoryTimeline" component={StoryTimelineScreen} />
       <FeedStack.Screen name="Article" component={ArticleScreen} />
     </FeedStack.Navigator>
+  );
+}
+
+function BriefingNavigator() {
+  return (
+    <BriefingStack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+      <BriefingStack.Screen name="BriefingHome" component={BriefingScreen} />
+      <BriefingStack.Screen name="Article" component={ArticleScreen} />
+    </BriefingStack.Navigator>
   );
 }
 
@@ -524,6 +536,7 @@ export default function App() {
           tabBar={(props) => <ParticleTabBar {...props} />}
           screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: '#080808' } }}
         >
+          <Tab.Screen name="Briefing" component={BriefingNavigator} />
           <Tab.Screen name="Feed"     component={FeedNavigator} />
           <Tab.Screen name="Digest"   component={DigestNavigator} />
           <Tab.Screen name="AIFeed"   component={AIFeedScreen} />

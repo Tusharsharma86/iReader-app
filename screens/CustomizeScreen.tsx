@@ -151,6 +151,7 @@ const LINK_OPEN: SegmentedOption<LinkOpen>[] = [
   { label: 'In app', value: 'in-app' }, { label: 'External', value: 'external' },
 ];
 const TAB_OPTIONS: { key: string; label: string }[] = [
+  { key: 'briefing', label: 'Briefing' },
   { key: 'feed', label: 'Feed' },
   { key: 'digest', label: 'Digest' },
   { key: 'aifeed', label: 'AI Feed' },
@@ -277,7 +278,7 @@ export default function CustomizeScreen() {
         <Text style={styles.sectionHeader}>NAVIGATION</Text>
         <View style={styles.card}>
           <RowChips label="Tabs" sub="Untick to hide from the bottom bar. Feed and Settings always stay."
-            items={TAB_OPTIONS} hidden={s.hiddenTabs} onToggle={s.toggleHiddenTab} lockedKeys={['feed', 'settings']} />
+            items={TAB_OPTIONS} hidden={s.hiddenTabs} onToggle={s.toggleHiddenTab} lockedKeys={['briefing', 'feed', 'settings']} />
           <RowChips border label="Topic pills" sub="Untick to hide a topic from the feed."
             items={TOPIC_PILLS} hidden={s.hiddenTopics} onToggle={s.toggleHiddenTopic} />
         </View>

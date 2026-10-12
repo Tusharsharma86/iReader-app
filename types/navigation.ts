@@ -18,6 +18,7 @@ export type FeedStackParamList = {
 };
 
 export type RootTabParamList = {
+  Briefing: undefined;
   Feed: undefined;
   Digest: undefined;
   AIFeed: undefined;
@@ -61,3 +62,11 @@ export type SettingsStackParamList = {
 
 // Legacy alias used by ArticleScreen
 export type RootStackParamList = FeedStackParamList;
+
+// Briefing pushes Article on top of itself, so it needs its own stack rather
+// than borrowing Feed's — otherwise tapping a card would leave you inside the
+// Feed tab when you navigate back.
+export type BriefingStackParamList = {
+  BriefingHome: undefined;
+  Article: FeedStackParamList['Article'];
+};
