@@ -4,87 +4,64 @@ import { useRouter } from '../contexts/RouterContext';
 import { useTabBar } from '../contexts/TabBarContext';
 import { getArticleColor } from '../utils/colors';
 import { trackArticleOpen } from '../utils/personalization';
-import { isBlockedHeadline, sourceQualityWeight } from '../utils/contentFilters';
 import { FALLBACK_IMG } from '../utils/fallback';
 
-const FEED_API = 'https://ireader.onrender.com/api/news/feed';
-const AI_SUMMARY_API = 'https://ireader.onrender.com/api/news/ai-summary';
-const CACHE_PREFIX = '@briefing_v1_';
+const BRIEFING_API = 'https://ireader.onrender.com/api/news/briefing';
+const CACHE_PREFIX = '@briefing_v2_';
 const SCROLL_KEY = '@ireader_scroll_briefing';
 
-/** Thirty stories, spread across these six areas. */
+/** Display metadata only — ranking, filtering and summarising all happen
+ *  server-side now. This screen used to do all three itself, which meant six
+ *  feed fetches plus thirty /ai-summary calls PER DEVICE: opening the app on a
+ *  phone and a laptop spent the whole AI budget twice for identical output and
+ *  took 60-120s each time. One GET now returns a briefing built once and
+ *  shared by everyone (~0.2s warm). */
 const AREAS = [
-  { key: 'breaking', label: 'Breaking', topic: 'breaking',        accent: '#FF453A' },
-  { key: 'india',    label: 'India',    topic: 'india-politics',  accent: '#FF9F0A' },
-  { key: 'world',    label: 'World',    topic: 'geopolitics',     accent: '#64D2FF' },
-  { key: 'markets',  label: 'Markets',  topic: 'markets',         accent: '#30D158' },
-  { key: 'tech',     label: 'Tech',     topic: 'technology',      accent: '#BF5AF2' },
-  { key: 'business', label: 'Business', topic: 'business',        accent: '#5E5CE6' },
+  { key: 'breaking', label: 'Breaking', accent: '#FF453A' },
+  { key: 'india',    label: 'India',    accent: '#FF9F0A' },
+  { key: 'world',    label: 'World',    accent: '#64D2FF' },
+  { key: 'markets',  label: 'Markets',  accent: '#30D158' },
+  { key: 'tech',     label: 'Tech',     accent: '#BF5AF2' },
+  { key: 'business', label: 'Business', accent: '#5E5CE6' },
 ] as const;
 
 const AREA_BY_KEY = Object.fromEntries(AREAS.map(a => [a.key, a])) as Record<string, typeof AREAS[number]>;
 
-// Who gets to claim a story that appears in more than one feed. "Breaking" is
-// a cross-cutting flag, not a subject area: its feed re-runs whatever India,
-// World, Markets, Tech and Business are already carrying. Claiming in display
-// order let it take 23 of 30 cards and collapse the spread, so the specific
-// subjects claim first and Breaking keeps only what nothing else carried. The
-// breaking *flag* still counts, through the editorial-signal factor below.
-const CLAIM_ORDER = ['india', 'world', 'markets', 'tech', 'business', 'breaking'];
-
 const WINDOW_OPTIONS = [6, 12, 24, 48, 72] as const;
 type WindowHours = typeof WINDOW_OPTIONS[number];
 const DEFAULT_WINDOW: WindowHours = 24;
-
 const TARGET_COUNT = 30;
-// Six areas, at most seven each: the cap is what makes the list a briefing
-// "across subject areas" rather than thirty variations on whatever topic
-// happens to be busiest today. 6 x 7 = 42, so there is always enough slack
-// to reach thirty even when two areas come back thin.
-const PER_AREA_CAP = 7;
 
-// Summary length. The server clamps maxWords to at least 80 and then applies
-// its own ratio guard (<=45% of the source text, floor 60 words), so asking
-// for 90 lands inside the 50-100 word band the briefing wants.
-const SUMMARY_MAX_WORDS = 90;
-// The server sheds load above 4 concurrent generations (503 + Retry-After), but
-// its own ceiling is not the binding one: Groq's free tier is ~200k tokens and
-// a limited RPM per day, and a summary costs ~1.5k tokens. Three workers at
-// ~2.4s each is ~75 requests a minute, which rate-limited 18 of 30 summaries
-// on the first full run. Two workers plus a short gap between calls keeps the
-// whole briefing inside the budget.
-const SUMMARY_CONCURRENCY = 2;
-const SUMMARY_GAP_MS = 400;
-const SUMMARY_RETRIES = 4;
-// A 502 here means every provider failed for THIS request — usually a Groq
-// rate-gate pause, which clears in about a minute. Worth waiting out rather
-// than leaving a blank card.
-const RETRY_BACKOFF_MS = [2000, 5000, 9000, 15000];
+// Scoring weights, shown in the header so the ranking is legible. These mirror
+// the server's constants; they are display copy, not the scoring itself.
+const W_CORROBORATION = 45, W_SOURCE = 22, W_FRESHNESS = 18, W_SIGNAL = 15;
 
-interface ApiItem {
-  type?: string;
-  articles?: Story[];
-}
-
-/** One scoring input, kept separately so the card can explain the rank. */
+/** One scoring input, as the server computed it. */
 interface Factor {
   key: 'corroboration' | 'source' | 'freshness' | 'signal';
   label: string;
   detail: string;
-  points: number;   // contribution to the 0-100 score
+  points: number;
   max: number;
 }
 
+/** Exactly the shape GET /api/news/briefing returns. */
 interface RankedItem {
   id: string;
   rank: number;
-  story: Story;
   area: string;
   score: number;
   factors: Factor[];
   why: string;
   outlets: number;
   hoursOld: number;
+  headline: string;
+  summary: string;
+  imageUrl: string | null;
+  publishedAt: string;
+  sourceName: string;
+  url: string;
+  sources?: Array<{ name: string; url: string; imageUrl?: string; publishedAt: string }>;
   aiSummary: string;
   summaryFailed: boolean;
 }
@@ -94,9 +71,8 @@ interface Snapshot {
   windowHours: WindowHours;
   items: RankedItem[];
   poolSize: number;
+  cached?: boolean;
 }
-
-// ---------------------------------------------------------------- utilities
 
 function todayKey(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -113,17 +89,6 @@ function greeting() {
   return 'Good evening';
 }
 
-function identityOf(s: Story): string {
-  return s.id || s.sources?.[0]?.url || s.headline;
-}
-
-function ageHours(publishedAt?: string): number {
-  if (!publishedAt) return Number.POSITIVE_INFINITY;
-  const t = Date.parse(publishedAt);
-  if (!Number.isFinite(t)) return Number.POSITIVE_INFINITY;
-  return Math.max(0, (Date.now() - t) / 3_600_000);
-}
-
 function agoLabel(hours: number): string {
   if (!Number.isFinite(hours)) return 'undated';
   if (hours < 1) return `${Math.max(1, Math.round(hours * 60))}m ago`;
@@ -131,258 +96,33 @@ function agoLabel(hours: number): string {
   return `${Math.round(hours / 24)}d ago`;
 }
 
-function tierLabel(weight: number): string {
-  if (weight >= 1) return 'wire/major outlet';
-  if (weight >= 0.7) return 'established outlet';
-  return 'smaller outlet';
-}
-
-// ---------------------------------------------------------------- the ranking
-//
-// Everything on screen under "why this rank" comes out of this function, so
-// the explanation can never drift from the score that actually ordered the
-// list. Weights sum to 100.
-//
-// Corroboration leads: how many distinct outlets independently ran a story is
-// the strongest available proxy for "this actually mattered", and it is the
-// signal a reader cannot see for themselves from a single card.
-
-const W_CORROBORATION = 45;
-const W_SOURCE = 22;
-const W_FRESHNESS = 18;
-const W_SIGNAL = 15;
-
-function scoreStory(story: Story, outlets: number, windowHours: WindowHours) {
-  const hours = ageHours(story.publishedAt);
-
-  // log scale, saturating around ten outlets — the 1->3 jump should matter far
-  // more than 8->10.
-  const corrobNorm = Math.min(1, Math.log(outlets + 1) / Math.log(11));
-  const qualityWeight = sourceQualityWeight(story.sources?.[0]?.name);
-  // Half-life is half the chosen window, so "fresh" means fresh *relative to
-  // what you asked for* — in a 72h briefing a 12h-old story is still new.
-  const freshNorm = Number.isFinite(hours)
-    ? Math.exp(-hours * Math.LN2 / Math.max(1, windowHours / 2))
-    : 0;
-  const signalNorm = story.isBreaking ? 1 : story.isDeveloping ? 0.6 : story.isTrending ? 0.4 : 0;
-
-  const factors: Factor[] = [
-    {
-      key: 'corroboration',
-      label: 'Corroboration',
-      detail: outlets === 1 ? 'single outlet so far' : `${outlets} outlets running it`,
-      points: corrobNorm * W_CORROBORATION,
-      max: W_CORROBORATION,
-    },
-    {
-      key: 'source',
-      label: 'Source weight',
-      detail: `${story.sources?.[0]?.name ?? 'unknown source'} — ${tierLabel(qualityWeight)}`,
-      points: qualityWeight * W_SOURCE,
-      max: W_SOURCE,
-    },
-    {
-      key: 'freshness',
-      label: 'Freshness',
-      detail: `${agoLabel(hours)}, in a ${windowHours}h window`,
-      points: freshNorm * W_FRESHNESS,
-      max: W_FRESHNESS,
-    },
-    {
-      key: 'signal',
-      label: 'Editorial signal',
-      detail: story.isBreaking ? 'flagged breaking'
-        : story.isDeveloping ? 'flagged developing'
-        : story.isTrending ? 'trending'
-        : 'no special flag',
-      points: signalNorm * W_SIGNAL,
-      max: W_SIGNAL,
-    },
-  ];
-
-  const score = factors.reduce((sum, f) => sum + f.points, 0);
-  return { score, factors, outlets, hoursOld: hours };
-}
-
-/** A sentence built from whichever factors actually carried this story, so the
- *  explanation can never disagree with the score that produced the order. */
-function whySentence(factors: Factor[], rank: number, story: Story, outlets: number, hours: number): string {
-  const ordered = factors.slice().sort((a, b) => b.points - a.points);
-  const strong = (f: Factor): string => {
-    switch (f.key) {
-      case 'corroboration':
-        return outlets === 1
-          ? 'just one outlet has it so far'
-          : `${outlets} outlets are running it independently`;
-      case 'source':
-        return `${story.sources?.[0]?.name ?? 'the source'} is a ${tierLabel(sourceQualityWeight(story.sources?.[0]?.name))}`;
-      case 'freshness':
-        return `it broke ${agoLabel(hours)}`;
-      case 'signal':
-        return story.isBreaking ? 'it is flagged breaking'
-          : story.isDeveloping ? 'it is still developing'
-          : story.isTrending ? 'it is trending'
-          : 'it carries no urgency flag';
-    }
+/** The card and the Article route both want a Story; the endpoint sends flat
+ *  fields. Rebuild one rather than rewriting the navigation contract. */
+function toStory(item: RankedItem): Story {
+  return {
+    id: item.id,
+    headline: item.headline,
+    summary: item.summary,
+    publishedAt: item.publishedAt,
+    imageUrl: item.imageUrl ?? '',
+    sources: item.sources?.length
+      ? item.sources
+      : item.url
+        ? [{ name: item.sourceName, url: item.url, publishedAt: item.publishedAt }]
+        : [],
   };
-  const weak = (f: Factor): string => {
-    switch (f.key) {
-      case 'corroboration': return 'no second outlet has picked it up yet';
-      case 'source': return `${story.sources?.[0]?.name ?? 'the source'} is a ${tierLabel(sourceQualityWeight(story.sources?.[0]?.name))}`;
-      case 'freshness': return `it is already ${agoLabel(hours)}`;
-      case 'signal': return 'it carries no urgency flag';
-    }
-  };
-
-  const lead = ordered[0];
-  const second = ordered[1];
-  const weakest = ordered[ordered.length - 1];
-  // Only call out a limiter when one really is dragging the score down, and
-  // never repeat the factor we just credited.
-  const limiter = weakest.points < weakest.max * 0.2 && weakest.key !== lead.key && weakest.key !== second.key
-    ? ` Not higher because ${weak(weakest)}.`
-    : '';
-  return `${strong(lead)}, and ${strong(second)}.${limiter}`;
 }
 
-// ---------------------------------------------------------------- data access
-
-interface Candidate { story: Story; outlets: number }
-
-async function fetchArea(topic: string): Promise<Candidate[]> {
-  try {
-    const res = await fetch(`${FEED_API}?topic=${topic}`);
-    if (!res.ok) return [];
-    const raw = await res.json();
-    const items: ApiItem[] = Array.isArray(raw) ? raw : Array.isArray(raw?.feed) ? raw.feed : [];
-    return items.flatMap<Candidate>(it => {
-      const stories = it.type === 'cluster' ? (it.articles ?? []) : [it as unknown as Story];
-      if (stories.length === 0) return [];
-      // A cluster IS the corroboration: one event, several outlets. Collapse it
-      // to its best-sourced member for display, but count distinct outlet names
-      // across the whole cluster — reading sources.length off the single
-      // representative reported 1 for almost everything, which flattened the
-      // top weight to a constant and left the order effectively arbitrary.
-      const rep = stories.slice().sort((a, b) => (b.sources?.length ?? 0) - (a.sources?.length ?? 0))[0];
-      if (!rep) return [];
-      const names = new Set<string>();
-      for (const st of stories) for (const src of st.sources ?? []) if (src.name) names.add(src.name);
-      return [{ story: rep, outlets: Math.max(1, names.size) }];
-    });
-  } catch {
-    return [];
+async function fetchBriefing(windowHours: WindowHours, force: boolean, signal: AbortSignal): Promise<Snapshot> {
+  const res = await fetch(`${BRIEFING_API}?window=${windowHours}${force ? '&refresh=1' : ''}`, { signal });
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try { detail = ((await res.json()) as { error?: string }).error ?? detail; } catch { /* keep status */ }
+    throw new Error(detail);
   }
-}
-
-function sourceTextFor(story: Story): string[] {
-  const parts: string[] = [`${story.headline}. ${story.summary ?? ''}`.trim()];
-  if (story.summaries?.keyHighlights) parts.push(story.summaries.keyHighlights);
-  if (story.aiSummary) parts.push(story.aiSummary);
-  return parts.filter(Boolean);
-}
-
-const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
-
-/** 50-100 word summary. Retries the server's deliberate 503 load-shedding. */
-async function fetchSummary(story: Story, signal: AbortSignal): Promise<string> {
-  const url = story.sources?.[0]?.url || story.id || story.headline;
-  for (let attempt = 0; attempt <= SUMMARY_RETRIES; attempt++) {
-    if (signal.aborted) return '';
-    try {
-      const res = await fetch(AI_SUMMARY_API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url,
-          paragraphs: sourceTextFor(story),
-          type: 'summary',
-          maxWords: SUMMARY_MAX_WORDS,
-          keyPoints: 3,
-          publishedAt: story.publishedAt,
-        }),
-        signal,
-      });
-      if (res.status >= 500 || res.status === 429) {
-        const retryAfter = Number(res.headers.get('Retry-After'));
-        const wait = retryAfter ? retryAfter * 1000 : RETRY_BACKOFF_MS[Math.min(attempt, RETRY_BACKOFF_MS.length - 1)];
-        await sleep(wait);
-        continue;
-      }
-      if (!res.ok) return '';
-      const data: { summary?: string; bullets?: string[] } = await res.json();
-      const text = (data.summary ?? '').trim();
-      if (text) return text;
-      if (data.bullets?.length) return data.bullets.slice(0, 2).join(' ');
-      return '';
-    } catch {
-      if (signal.aborted) return '';
-      await sleep(RETRY_BACKOFF_MS[Math.min(attempt, RETRY_BACKOFF_MS.length - 1)]);
-    }
-  }
-  return '';
-}
-
-/** Fetch, filter, score, spread across areas, number 1..30. */
-async function buildRanking(windowHours: WindowHours): Promise<{ items: RankedItem[]; poolSize: number }> {
-  const perArea = await Promise.all(AREAS.map(async a => ({ area: a.key, stories: await fetchArea(a.topic) })));
-
-  // The same event can cluster independently under two areas (an Apple
-  // earnings story under both Tech and Business). CLAIM_ORDER decides the
-  // winner, so a story keeps its subject area rather than its urgency flag.
-  const seen = new Set<string>();
-  const pool: Array<{ story: Story; area: string; outlets: number }> = [];
-  const byClaim = perArea.slice().sort(
-    (a, b) => CLAIM_ORDER.indexOf(a.area) - CLAIM_ORDER.indexOf(b.area));
-  for (const { area, stories } of byClaim) {
-    for (const { story, outlets } of stories) {
-      if (isBlockedHeadline(story.headline, story.sources?.[0]?.name)) continue;
-      const hours = ageHours(story.publishedAt);
-      if (!Number.isFinite(hours) || hours > windowHours) continue;
-      const id = identityOf(story);
-      if (seen.has(id)) continue;
-      seen.add(id);
-      pool.push({ story, area, outlets });
-    }
-  }
-
-  const scored = pool
-    .map(({ story, area, outlets }) => ({ story, area, ...scoreStory(story, outlets, windowHours) }))
-    .sort((a, b) => b.score - a.score);
-
-  // Pass one honours the per-area cap; pass two tops the list up from whatever
-  // is left if the caps kept us short.
-  const chosen: typeof scored = [];
-  const areaCount: Record<string, number> = {};
-  for (const cand of scored) {
-    if (chosen.length >= TARGET_COUNT) break;
-    const n = areaCount[cand.area] ?? 0;
-    if (n >= PER_AREA_CAP) continue;
-    areaCount[cand.area] = n + 1;
-    chosen.push(cand);
-  }
-  if (chosen.length < TARGET_COUNT) {
-    for (const cand of scored) {
-      if (chosen.length >= TARGET_COUNT) break;
-      if (chosen.includes(cand)) continue;
-      chosen.push(cand);
-    }
-  }
-
-  const items: RankedItem[] = chosen.map((c, i) => ({
-    id: identityOf(c.story),
-    rank: i + 1,
-    story: c.story,
-    area: c.area,
-    score: c.score,
-    factors: c.factors,
-    why: whySentence(c.factors, i + 1, c.story, c.outlets, c.hoursOld),
-    outlets: c.outlets,
-    hoursOld: c.hoursOld,
-    aiSummary: '',
-    summaryFailed: false,
-  }));
-
-  return { items, poolSize: pool.length };
+  const data = (await res.json()) as Snapshot;
+  if (!Array.isArray(data.items) || data.items.length === 0) throw new Error('Briefing came back empty');
+  return data;
 }
 
 // ---------------------------------------------------------------- components
@@ -412,13 +152,13 @@ function FactorBars({ factors }: { factors: Factor[] }) {
 
 function BriefingCard({
   item, onOpen,
-}: { item: RankedItem; onOpen: (s: Story) => void }) {
+}: { item: RankedItem; onOpen: (item: RankedItem) => void }) {
   const [showFactors, setShowFactors] = useState(false);
   const [imgError, setImgError] = useState(false);
   const def = AREA_BY_KEY[item.area];
   const accent = def?.accent ?? '#4A90D9';
-  const source = item.story.sources?.[0]?.name ?? '';
-  const image = !imgError && item.story.imageUrl ? item.story.imageUrl : FALLBACK_IMG;
+  const source = item.sourceName;
+  const image = !imgError && item.imageUrl ? item.imageUrl : FALLBACK_IMG;
 
   return (
     <div style={{
@@ -430,7 +170,7 @@ function BriefingCard({
     }}>
       {/* Hero — the whole block opens the article, same as a Feed card */}
       <div
-        onClick={() => onOpen(item.story)}
+        onClick={() => onOpen(item)}
         role="link"
         style={{ cursor: 'pointer', WebkitTapHighlightColor: 'transparent' }}
       >
@@ -489,7 +229,7 @@ function BriefingCard({
 
         <div style={{ padding: '14px 16px 0' }}>
           <div style={{ color: '#fff', fontSize: 18, fontWeight: 800, lineHeight: 1.26, letterSpacing: -0.35 }}>
-            {item.story.headline}
+            {item.headline}
           </div>
         </div>
       </div>
@@ -532,8 +272,8 @@ function BriefingCard({
           </div>
         ) : item.summaryFailed ? (
           <div style={{ color: '#6E6E73', fontSize: 13, lineHeight: 1.6, fontStyle: 'italic' }}>
-            {item.story.summary
-              ? `${item.story.summary.slice(0, 260)} (source text — AI summary unavailable)`
+            {item.summary
+              ? `${item.summary.slice(0, 260)} (source text — AI summary unavailable)`
               : 'AI summary unavailable.'}
           </div>
         ) : (
@@ -564,8 +304,7 @@ export default function BriefingScreen() {
     return (WINDOW_OPTIONS as readonly number[]).includes(saved) ? (saved as WindowHours) : DEFAULT_WINDOW;
   });
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
-  const [phase, setPhase] = useState<'idle' | 'ranking' | 'summarising' | 'done'>('idle');
-  const [written, setWritten] = useState(0);
+  const [phase, setPhase] = useState<'idle' | 'loading' | 'revalidating' | 'done'>('idle');
   const [error, setError] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -583,83 +322,46 @@ export default function BriefingScreen() {
     return () => window.removeEventListener('briefing-scroll-top', toTop);
   }, []);
 
-  /** Fill in summaries for the given items, a couple at a time, writing each
-   *  one through to state as it lands so the list fills in rather than blocking. */
-  const generateSummaries = useCallback(async (all: RankedItem[], todo: RankedItem[], signal: AbortSignal) => {
-    setPhase('summarising');
-    const alreadyDone = all.length - todo.length;
-    setWritten(alreadyDone);
-    let done = alreadyDone;
-    let cursor = 0;
-
-    const worker = async () => {
-      for (;;) {
-        if (signal.aborted) return;
-        const index = cursor++;
-        if (index >= todo.length) return;
-        const item = todo[index];
-        const text = await fetchSummary(item.story, signal);
-        if (signal.aborted) return;
-        item.aiSummary = text;
-        item.summaryFailed = !text;
-        done++;
-        setWritten(done);
-        setSnapshot(prev => (prev ? { ...prev, items: [...prev.items] } : prev));
-        await sleep(SUMMARY_GAP_MS);
-      }
-    };
-
-    await Promise.all(Array.from({ length: SUMMARY_CONCURRENCY }, worker));
-    if (signal.aborted) return;
-    setPhase('done');
-  }, []);
-
-  const build = useCallback(async (hours: WindowHours, force: boolean) => {
+  /** One request. The server ranks, filters, batches the summaries and caches
+   *  the result for every device, so there is nothing left to orchestrate
+   *  here — which is the point: this screen used to make 36 calls. */
+  const load = useCallback(async (hours: WindowHours, force: boolean) => {
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setError(null);
 
+    // Paint the last good copy immediately, then revalidate behind it.
+    let painted = false;
     if (!force) {
       try {
         const raw = localStorage.getItem(cacheKeyFor(hours));
         if (raw) {
           const parsed: Snapshot = JSON.parse(raw);
-          if (parsed.items?.length) {
-            setSnapshot(parsed);
-            setWritten(parsed.items.filter(i => i.aiSummary || i.summaryFailed).length);
-            setPhase('done');
-            return;
-          }
+          if (parsed.items?.length) { setSnapshot(parsed); painted = true; }
         }
-      } catch { /* fall through to a fresh build */ }
+      } catch { /* ignore a bad cache entry */ }
     }
 
-    setPhase('ranking');
-    setSnapshot(null);
+    setPhase(painted ? 'revalidating' : 'loading');
+    if (!painted) setSnapshot(null);
+
     try {
-      const { items, poolSize } = await buildRanking(hours);
+      const snap = await fetchBriefing(hours, force, ctrl.signal);
       if (ctrl.signal.aborted) return;
-      if (items.length === 0) {
-        setError(`No stories published in the last ${hours}h cleared the filters. Try a longer window.`);
-        setPhase('done');
-        return;
-      }
-      const snap: Snapshot = { builtAt: Date.now(), windowHours: hours, items, poolSize };
       setSnapshot(snap);
-      await generateSummaries(items, items, ctrl.signal);
-      if (ctrl.signal.aborted) return;
-      try { localStorage.setItem(cacheKeyFor(hours), JSON.stringify({ ...snap, items })); } catch { /* quota */ }
+      try { localStorage.setItem(cacheKeyFor(hours), JSON.stringify(snap)); } catch { /* quota */ }
+      setPhase('done');
     } catch (e) {
-      if (!ctrl.signal.aborted) {
-        setError(`Could not build the briefing: ${e instanceof Error ? e.message : String(e)}`);
-        setPhase('done');
-      }
+      if (ctrl.signal.aborted) return;
+      // A stale copy on screen beats an error page.
+      if (!painted) setError(e instanceof Error ? e.message : String(e));
+      setPhase('done');
     }
-  }, [generateSummaries]);
+  }, []);
 
   useEffect(() => {
-    build(windowHours, false);
+    load(windowHours, false);
     return () => abortRef.current?.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -668,46 +370,22 @@ export default function BriefingScreen() {
     if (h === windowHours) return;
     setWindowHours(h);
     localStorage.setItem('@briefing_window', String(h));
-    build(h, false);
-  }, [windowHours, build]);
+    load(h, false);
+  }, [windowHours, load]);
 
-  /** Top up only the blanks. A full rebuild re-spends the AI budget on the
-   *  summaries that already worked; this does not. */
-  const retryFailed = useCallback(async () => {
-    const snap = snapshot;
-    if (!snap) return;
-    const todo = snap.items.filter(i => i.summaryFailed);
-    if (todo.length === 0) return;
-    for (const i of todo) i.summaryFailed = false;
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-    await generateSummaries(snap.items, todo, ctrl.signal);
-    if (ctrl.signal.aborted) return;
-    try { localStorage.setItem(cacheKeyFor(snap.windowHours), JSON.stringify(snap)); } catch { /* quota */ }
-  }, [snapshot, generateSummaries]);
+  const regenerate = useCallback(() => {
+    try { localStorage.removeItem(cacheKeyFor(windowHours)); } catch { /* ignore */ }
+    load(windowHours, true);
+  }, [windowHours, load]);
 
-  /** Abort the run in flight and keep whatever already landed. A generation
-   *  takes a couple of minutes and spends real AI budget, so being unable to
-   *  call it off is worse than a half-filled list. */
   const stop = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
     setPhase('done');
-    setSnapshot(prev => {
-      if (!prev) return prev;
-      for (const i of prev.items) if (!i.aiSummary) i.summaryFailed = true;
-      try { localStorage.setItem(cacheKeyFor(prev.windowHours), JSON.stringify(prev)); } catch { /* quota */ }
-      return { ...prev, items: [...prev.items] };
-    });
   }, []);
 
-  const regenerate = useCallback(() => {
-    try { localStorage.removeItem(cacheKeyFor(windowHours)); } catch { /* ignore */ }
-    build(windowHours, true);
-  }, [windowHours, build]);
-
-  const openArticle = useCallback((s: Story) => {
+  const openArticle = useCallback((item: RankedItem) => {
+    const s = toStory(item);
     trackArticleOpen(s);
     localStorage.setItem(SCROLL_KEY, String(scrollRef.current?.scrollTop ?? 0));
     navigate({
@@ -723,7 +401,6 @@ export default function BriefingScreen() {
         dominantColor: getArticleColor(s.id || s.headline),
         sources: JSON.stringify(s.sources ?? []),
         allStories: '[]',
-        sourceBias: s.sourceBias,
       },
     });
   }, [navigate]);
@@ -734,7 +411,7 @@ export default function BriefingScreen() {
     return counts;
   }, [snapshot]);
 
-  const busy = phase === 'ranking' || phase === 'summarising';
+  const busy = phase === 'loading' || phase === 'revalidating';
   const total = snapshot?.items.length ?? 0;
   const failedCount = snapshot?.items.filter(i => i.summaryFailed).length ?? 0;
 
@@ -754,6 +431,7 @@ export default function BriefingScreen() {
       <style>{`
         @keyframes briefShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
         @keyframes briefSpin { to { transform: rotate(360deg); } }
+        @keyframes briefSlide { 0% { margin-left: 0; } 50% { margin-left: 65%; } 100% { margin-left: 0; } }
       `}</style>
 
       <div style={{ padding: 'calc(14px + env(safe-area-inset-top, 0px)) 16px 96px' }}>
@@ -827,30 +505,28 @@ export default function BriefingScreen() {
           </div>
         </div>
 
-        {/* Progress / status */}
+        {/* Status. There is no per-summary counter to show any more: the whole
+            briefing arrives in one response. A cold build takes ~45s because
+            the server is batching thirty summaries, but that happens once per
+            window for everyone, not once per device. */}
         {busy && (
           <div style={{
             background: '#101010', border: '1px solid rgba(255,255,255,0.06)',
             borderRadius: 14, padding: '12px 14px', marginBottom: 14,
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-              <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>
-                {phase === 'ranking' ? 'Ranking stories…' : 'Writing AI summaries…'}
-              </span>
-              <span style={{ color: '#6E6E73', fontSize: 10, fontVariantNumeric: 'tabular-nums' }}>
-                {phase === 'summarising' ? `${written} / ${total}` : ''}
-              </span>
+            <div style={{ color: '#fff', fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
+              {phase === 'revalidating' ? 'Checking for a newer briefing…' : 'Building today\u2019s briefing…'}
             </div>
             <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
               <div style={{
-                width: phase === 'ranking' ? '12%' : `${total ? Math.round((written / total) * 100) : 0}%`,
-                height: '100%', borderRadius: 2, background: '#4A90D9',
-                transition: 'width 0.3s ease',
+                width: '35%', height: '100%', borderRadius: 2, background: '#4A90D9',
+                animation: 'briefSlide 1.3s ease-in-out infinite',
               }} />
             </div>
             <div style={{ color: '#5A5A5E', fontSize: 9.5, marginTop: 8, lineHeight: 1.45 }}>
-              All {total || TARGET_COUNT} summaries are written up front, so every card is
-              complete before you scroll. Two at a time, to stay inside the AI rate limit.
+              {phase === 'revalidating'
+                ? 'Showing the last copy while a fresher one is fetched.'
+                : `Ranking ${TARGET_COUNT} stories and writing every summary up front, so each card is complete before you scroll. Built once and shared — reopening is instant.`}
             </div>
           </div>
         )}
@@ -865,7 +541,7 @@ export default function BriefingScreen() {
           </div>
         )}
 
-        {/* Summaries that never came back */}
+        {/* Summaries the server could not fill even after its retry rounds. */}
         {snapshot && !busy && failedCount > 0 && (
           <div style={{
             background: 'rgba(255,159,10,0.07)', border: '1px solid rgba(255,159,10,0.25)',
@@ -873,11 +549,11 @@ export default function BriefingScreen() {
             display: 'flex', alignItems: 'center', gap: 12,
           }}>
             <div style={{ flex: 1, color: '#FFC56E', fontSize: 11.5, lineHeight: 1.5 }}>
-              {failedCount} of {total} summaries didn’t come back — the AI provider rate-limited
-              them. Retrying only re-requests those {failedCount}.
+              {failedCount} of {total} summaries didn’t come back — those cards show the
+              source text instead. The server already retried them twice.
             </div>
             <button
-              onClick={retryFailed}
+              onClick={regenerate}
               style={{
                 flexShrink: 0, background: 'rgba(255,159,10,0.16)',
                 border: '1px solid rgba(255,159,10,0.4)', color: '#FFC56E',
@@ -885,7 +561,7 @@ export default function BriefingScreen() {
                 cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
               }}
             >
-              Retry {failedCount}
+              Rebuild
             </button>
           </div>
         )}
