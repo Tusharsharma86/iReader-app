@@ -225,6 +225,12 @@ export default function BriefingScreen() {
   const [areaFilter, setAreaFilter] = useState<string>('all');
   // Keyed by area, so switching filters shows that area's trend rather than
   // re-requesting one you already generated.
+  // Deliberately separate from areaFilter. Driving the trend off the card
+  // filter meant the only way to read the Tech trend was to filter the list to
+  // Tech, which is both undiscoverable and limiting — you may well want the
+  // Tech read while still looking at all thirty cards.
+  const [trendArea, setTrendArea] = useState<string>('all');
+  const [trendPickerOpen, setTrendPickerOpen] = useState(false);
   const [trends, setTrends] = useState<Record<string, string>>({});
   const [trendBusy, setTrendBusy] = useState<string | null>(null);
   const [trendError, setTrendError] = useState<string | null>(null);
@@ -458,47 +464,77 @@ export default function BriefingScreen() {
           </ScrollView>
         </View>
 
-        {/* 3 — trend for whatever is selected */}
+        {/* 3 — trend, with its own scope picker */}
         {snapshot ? (
           <View style={styles.trendBox}>
             <View style={styles.trendHead}>
               <Ionicons name="pulse-outline" size={13} color="#BF5AF2" />
-              <Text style={styles.trendLabel}>
-                {areaFilter === 'all'
-                  ? 'TREND ACROSS ALL AREAS'
-                  : `TREND · ${(AREA_BY_KEY[areaFilter]?.label ?? areaFilter).toUpperCase()}`}
-              </Text>
-              {trends[areaFilter] && trendBusy !== areaFilter ? (
-                <TouchableOpacity onPress={() => generateTrend(areaFilter, true)} hitSlop={8}>
-                  <Ionicons name="refresh" size={13} color="#8A8A8E" />
-                </TouchableOpacity>
-              ) : null}
+              <Text style={styles.trendLabel}>TREND</Text>
+              <TouchableOpacity
+                onPress={() => setTrendPickerOpen(v => !v)}
+                style={styles.trendScopeBtn}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.trendScopeText}>
+                  {trendArea === 'all' ? 'All areas' : (AREA_BY_KEY[trendArea]?.label ?? trendArea)}
+                </Text>
+                <Ionicons name={trendPickerOpen ? 'chevron-up' : 'chevron-down'} size={11} color="#BF5AF2" />
+              </TouchableOpacity>
             </View>
 
-            {trendBusy === areaFilter ? (
+            {trendPickerOpen ? (
+              <View style={styles.trendPicker}>
+                {[{ key: 'all', label: 'All areas' },
+                  ...AREAS.map(a => ({ key: a.key as string, label: a.label as string }))]
+                  .map(opt => {
+                    const n = opt.key === 'all' ? total : (areaCounts[opt.key] ?? 0);
+                    const selected = trendArea === opt.key;
+                    // Below two stories there is no through-line to find, and
+                    // the server says so rather than inventing one — so do not
+                    // offer it here either.
+                    const tooFew = n < 2;
+                    return (
+                      <TouchableOpacity
+                        key={opt.key}
+                        disabled={tooFew}
+                        onPress={() => { setTrendArea(opt.key); setTrendPickerOpen(false); }}
+                        style={[styles.trendOpt, selected && styles.trendOptOn, tooFew && { opacity: 0.35 }]}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[styles.trendOptText, selected && { color: '#BF5AF2' }]}>
+                          {opt.label} {n}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+              </View>
+            ) : null}
+
+            {trendBusy === trendArea ? (
               <View style={styles.trendRow}>
                 <ActivityIndicator size="small" color="#BF5AF2" />
                 <Text style={styles.trendPending}>Reading the through-line…</Text>
               </View>
-            ) : trends[areaFilter] ? (
-              <Text style={styles.trendText}>{trends[areaFilter]}</Text>
+            ) : trends[trendArea] ? (
+              <>
+                <Text style={styles.trendText}>{trends[trendArea]}</Text>
+                <TouchableOpacity onPress={() => generateTrend(trendArea, true)} style={styles.trendBtn} activeOpacity={0.8}>
+                  <Text style={styles.trendBtnText}>Regenerate</Text>
+                </TouchableOpacity>
+              </>
             ) : (
               <>
                 <Text style={styles.trendPending}>
-                  {areaFilter === 'all'
+                  {trendArea === 'all'
                     ? 'What connects today’s stories, including threads that cross subject areas.'
-                    : `What connects today’s ${(AREA_BY_KEY[areaFilter]?.label ?? areaFilter)} stories.`}
+                    : `What connects today’s ${AREA_BY_KEY[trendArea]?.label ?? trendArea} stories.`}
                 </Text>
-                <TouchableOpacity
-                  onPress={() => generateTrend(areaFilter)}
-                  style={styles.trendBtn}
-                  activeOpacity={0.8}
-                >
+                <TouchableOpacity onPress={() => generateTrend(trendArea)} style={styles.trendBtn} activeOpacity={0.8}>
                   <Text style={styles.trendBtnText}>Generate trend</Text>
                 </TouchableOpacity>
               </>
             )}
-            {trendError && trendBusy !== areaFilter && !trends[areaFilter] ? (
+            {trendError && trendBusy !== trendArea && !trends[trendArea] ? (
               <Text style={styles.trendErr}>{trendError}</Text>
             ) : null}
           </View>
@@ -603,6 +639,19 @@ const styles = StyleSheet.create({
   },
   trendHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 7 },
   trendLabel: { flex: 1, color: '#BF5AF2', fontSize: 9.5, fontWeight: '800', letterSpacing: 0.7 },
+  trendScopeBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(191,90,242,0.14)', borderWidth: 1, borderColor: 'rgba(191,90,242,0.35)',
+    borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4,
+  },
+  trendScopeText: { color: '#BF5AF2', fontSize: 11, fontWeight: '700' },
+  trendPicker: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 9 },
+  trendOpt: {
+    borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', backgroundColor: '#0E0E0E',
+  },
+  trendOptOn: { borderColor: 'rgba(191,90,242,0.55)', backgroundColor: 'rgba(191,90,242,0.18)' },
+  trendOptText: { color: '#8A8A8E', fontSize: 11, fontWeight: '700' },
   trendRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   trendText: { color: '#D8D8DD', fontSize: 13, lineHeight: 21 },
   trendPending: { color: '#8A8A8E', fontSize: 11.5, lineHeight: 17 },
