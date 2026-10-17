@@ -473,7 +473,7 @@ function SearchStoryCard({ item, onOpen }: { item: FeedItem; onOpen: (item: Feed
 // tab switch shows the cached view instantly; only a genuinely stale (5+
 // min old) cache triggers a fresh fetch + skeleton.
 interface ExploreCache {
-  trendingStories: FeedItem[]; catchUpStories: FeedItem[]; deepDives: FeedItem[];
+  deepDives: FeedItem[];
   companies: EntityCard[]; people: EntityCard[]; places: EntityCard[];
   emergingTopics: EntityCard[]; sources: SourceCard[]; allItems: FeedItem[];
   timestamp: number;
@@ -489,8 +489,6 @@ export default function ExploreScreen() {
   // so Explore's story lists read identically dense/spaced.
   const cardGap = cardDensity === 'compact' ? 14 : cardDensity === 'spacious' ? 44 : 28;
 
-  const [trendingStories, setTrendingStories] = useState<FeedItem[]>(() => exploreCache?.trendingStories ?? []);
-  const [catchUpStories, setCatchUpStories] = useState<FeedItem[]>(() => exploreCache?.catchUpStories ?? []);
   const [deepDives, setDeepDives] = useState<FeedItem[]>(() => exploreCache?.deepDives ?? []);
   const [companies, setCompanies] = useState<EntityCard[]>(() => exploreCache?.companies ?? []);
   const [people, setPeople] = useState<EntityCard[]>(() => exploreCache?.people ?? []);
@@ -563,32 +561,16 @@ export default function ExploreScreen() {
       // invisible; fixing the label made the leak visible).
       const isEventItem = (it: FeedItem) => it.type === 'article' || (it.type === 'cluster' && !it.collection);
 
-      // ① Trending — score by sources × freshness, dedup; skip Hindi headlines
       const noHindi = (it: FeedItem) => !isHindi(itemLabel(it));
-      const trending = dedup(
-        allItems.filter(isEventItem).filter(noHindi).sort((a, b) => scoreItem(b) - scoreItem(a)),
-        20
-      );
 
-      // ② Deep Dives — 3+ sources
+      // Deep Dives — 3+ sources
       const ddItems = dedup(
         allItems.filter(isEventItem).filter(noHindi).filter(it => (it.sourceCount ?? it.articles?.length ?? 1) >= 3)
           .sort((a, b) => scoreItem(b) - scoreItem(a)),
         12
       );
 
-      // ②b "Don't Miss" — the server's own "Catch Up · Big Stories This Week"
-      // rail (buildMixedFeed in news.ts): stories from hot themes that aged
-      // past the fresh-rail cutoff but are still under 7 days old. Flatten
-      // every topic's Catch Up rail into one deduped, newest-first list.
-      const catchUp = dedup(
-        allItems
-          .filter(it => it.type === 'cluster' && it.collection && /catch up/i.test(it.topicTitle ?? ''))
-          .flatMap(it => (it.articles ?? []).map(a => ({ ...a, type: 'article' as const }))),
-        10,
-      ).sort((a, b) => new Date(b.publishedAt ?? 0).getTime() - new Date(a.publishedAt ?? 0).getTime());
-
-      // ③ Entity classification
+      // Entity classification
       const allHeadlines = allItems.flatMap(entityHeadlinesFor).filter(Boolean);
       const entityCounts = extractEntityCounts(allHeadlines);
 
@@ -661,8 +643,6 @@ export default function ExploreScreen() {
       const cappedCompanies = compList.slice(0, 24);
       const cappedPeople = personList.slice(0, 24);
       const cappedPlaces = placeList.slice(0, 20);
-      setTrendingStories(trending);
-      setCatchUpStories(catchUp);
       setDeepDives(ddItems);
       setCompanies(cappedCompanies);
       setPeople(cappedPeople);
@@ -671,7 +651,7 @@ export default function ExploreScreen() {
       setSources(srcList);
       setLoading(false);
       exploreCache = {
-        trendingStories: trending, catchUpStories: catchUp, deepDives: ddItems,
+        deepDives: ddItems,
         companies: cappedCompanies, people: cappedPeople, places: cappedPlaces,
         emergingTopics: emerging, sources: srcList, allItems,
         timestamp: Date.now(),
@@ -899,23 +879,6 @@ export default function ExploreScreen() {
                 ordering, so this was the same content carrying less
                 information. Explore keeps what is genuinely its own —
                 discovery by entity, topic and source. */}
-
-            {/* 2. Don't Miss — the server's "Catch Up · Big Stories This Week"
-                rail: big stories from hot themes that are 3-7 days old and
-                would otherwise never resurface once they scroll off Trending. */}
-            {(loading || catchUpStories.length > 0) && (
-              <div style={{ marginBottom: 28 }}>
-                <SectionLabel text="Don't Miss · Last 7 Days" />
-                {loading ? <VerticalCardSkeleton cardDensity={cardDensity} /> : (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: cardGap }}>
-                    {catchUpStories.map((item, i) => {
-                      const story = toStory(item);
-                      return <StoryCard key={story.id || i} story={story} />;
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* 3. AI Deep Dives */}
             {(loading || deepDives.length > 0) && (

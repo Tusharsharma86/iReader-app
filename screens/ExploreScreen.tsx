@@ -425,23 +425,6 @@ const CARD_GAP: Record<string, number> = { compact: 14, comfortable: 28, spaciou
 // "Don't Miss" — the server's own "Catch Up · Big Stories This Week" rail:
 // stories from hot themes that aged past the fresh-rail cutoff but are
 // still under 7 days old. Flattened into individual cards, newest first.
-const DontMissSection = memo(function DontMissSection({ loading, stories, cardDensity }: {
-  loading: boolean; stories: FeedItem[]; cardDensity: string;
-}) {
-  const h = CARD_SKELETON_HEIGHT[cardDensity] ?? 360;
-  const gap = CARD_GAP[cardDensity] ?? 28;
-  return (
-    <View style={s.section}>
-      <SectionLabel text="Don't Miss · Last 7 Days" />
-      {loading ? (
-        <SkeletonBox height={h} style={{ marginBottom: gap, alignSelf: 'center', width: CONTENT_W }} />
-      ) : stories.map((item, i) => {
-        const story = toStory(item);
-        return <View key={story.id || i} style={{ marginBottom: gap, alignItems: 'center' }}><StoryCard story={story} /></View>;
-      })}
-    </View>
-  );
-});
 
 const DeepDivesSection = memo(function DeepDivesSection({ loading, stories, cardDensity }: {
   loading: boolean; stories: FeedItem[]; cardDensity: string;
@@ -660,7 +643,6 @@ function SearchHeader({ searchText, onChangeText, onSubmit, onClear }: {
 type Nav = NativeStackNavigationProp<ExploreStackParamList>;
 
 type Section =
-  | { key: 'dontMiss' }
   | { key: 'deepDives' }
   | { key: 'companies' }
   | { key: 'people' }
@@ -674,7 +656,6 @@ export default function ExploreScreen() {
   const navigation = useNavigation<Nav>();
   const { cardDensity } = useSettings();
 
-  const [catchUpStories, setCatchUpStories] = useState<FeedItem[]>([]);
   const [deepDives, setDeepDives] = useState<FeedItem[]>([]);
   const [companies, setCompanies] = useState<EntityCard[]>([]);
   const [people, setPeople] = useState<EntityCard[]>([]);
@@ -722,17 +703,6 @@ export default function ExploreScreen() {
           .sort((a, b) => scoreItem(b) - scoreItem(a)),
         12
       );
-
-      // "Don't Miss" — the server's own "Catch Up · Big Stories This Week"
-      // rail (buildMixedFeed in news.ts): stories from hot themes that aged
-      // past the fresh-rail cutoff but are still under 7 days old. Flatten
-      // every topic's Catch Up rail into one deduped, newest-first list.
-      const catchUp = dedup(
-        allItems
-          .filter(it => it.type === 'cluster' && it.collection && /catch up/i.test(it.topicTitle ?? ''))
-          .flatMap(it => (it.articles ?? []).map(a => ({ ...a, type: 'article' as const }))),
-        10,
-      ).sort((a, b) => new Date(b.publishedAt ?? 0).getTime() - new Date(a.publishedAt ?? 0).getTime());
 
       const allHeadlines = allItems.flatMap(entityHeadlinesFor).filter(Boolean);
       const entityCounts = extractEntityCounts(allHeadlines);
@@ -799,7 +769,6 @@ export default function ExploreScreen() {
         .slice(0, 18)
         .map(([name, { domain, count }]) => ({ name, domain, count }));
 
-      setCatchUpStories(catchUp);
       setDeepDives(ddItems);
       setCompanies(compList.slice(0, 24));
       setPeople(personList.slice(0, 24));
@@ -897,7 +866,6 @@ export default function ExploreScreen() {
     // same content with less information attached. Explore keeps what is
     // genuinely its own — discovery by entity, topic and source.
     const out: Section[] = [];
-    if (loading || catchUpStories.length > 0) out.push({ key: 'dontMiss' });
     if (loading || deepDives.length > 0) out.push({ key: 'deepDives' });
     if (loading || companies.length > 0) out.push({ key: 'companies' });
     if (loading || people.length > 0) out.push({ key: 'people' });
@@ -906,11 +874,10 @@ export default function ExploreScreen() {
     if (loading || sources.length > 0) out.push({ key: 'sources' });
     if (loading || emergingTopics.length > 0) out.push({ key: 'emerging' });
     return out;
-  }, [searchQuery, loading, catchUpStories.length, deepDives.length, companies.length, people.length, places.length, sources.length, emergingTopics.length]);
+  }, [searchQuery, loading, deepDives.length, companies.length, people.length, places.length, sources.length, emergingTopics.length]);
 
   const renderSection = useCallback(({ item }: { item: Section }) => {
     switch (item.key) {
-      case 'dontMiss':      return <DontMissSection loading={loading} stories={catchUpStories} cardDensity={cardDensity} />;
       case 'deepDives':     return <DeepDivesSection loading={loading} stories={deepDives} cardDensity={cardDensity} />;
       case 'companies':     return <CompaniesSection loading={loading} companies={companies} onTap={triggerSearch} />;
       case 'people':        return <PeopleSection loading={loading} people={people} onTap={triggerSearch} />;
@@ -921,7 +888,7 @@ export default function ExploreScreen() {
       case 'searchResults': return <SearchResultsSection searchQuery={searchQuery} searchResults={searchResults} hasSearchResults={hasSearchResults} openArticle={openArticle} triggerSearch={triggerSearch} />;
       default:              return null;
     }
-  }, [loading, catchUpStories, deepDives, companies, people, places, sources, emergingTopics,
+  }, [loading, deepDives, companies, people, places, sources, emergingTopics,
       cardDensity, openArticle, openTopic, triggerSearch, searchQuery, searchResults, hasSearchResults]);
 
   return (

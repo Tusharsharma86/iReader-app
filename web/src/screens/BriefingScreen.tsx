@@ -129,8 +129,13 @@ let memSnapshot: { key: string; snap: Snapshot } | null = null;
 // The server rebuilds at most every 6h, so re-asking within minutes is waste.
 const MEM_FRESH_MS = 10 * 60 * 1000;
 
-async function fetchBriefing(windowHours: WindowHours, force: boolean, signal: AbortSignal): Promise<Snapshot> {
-  const res = await fetch(`${BRIEFING_API}?window=${windowHours}${force ? '&refresh=1' : ''}`, { signal });
+async function fetchBriefing(
+  windowHours: WindowHours, force: boolean, signal: AbortSignal, summaries = true,
+): Promise<Snapshot> {
+  const res = await fetch(
+    `${BRIEFING_API}?window=${windowHours}${force ? '&refresh=1' : ''}${summaries ? '' : '&summaries=0'}`,
+    { signal },
+  );
   if (!res.ok) {
     let detail = `HTTP ${res.status}`;
     try { detail = ((await res.json()) as { error?: string }).error ?? detail; } catch { /* keep status */ }
@@ -167,8 +172,8 @@ function FactorBars({ factors }: { factors: Factor[] }) {
 }
 
 function BriefingCard({
-  item, onOpen,
-}: { item: RankedItem; onOpen: (item: RankedItem) => void }) {
+  item, onOpen, showSummary,
+}: { item: RankedItem; onOpen: (item: RankedItem) => void; showSummary: boolean }) {
   const [showFactors, setShowFactors] = useState(false);
   const [imgError, setImgError] = useState(false);
   const def = AREA_BY_KEY[item.area];
@@ -271,37 +276,26 @@ function BriefingCard({
         </div>
       </div>
 
-      {/* AI summary */}
+      {/* Summary. With AI summaries off the card shows the source's own text
+          and says so — labelling it "AI SUMMARY · not written yet" would be
+          describing work nobody asked to be done. */}
       <div style={{ padding: '14px 16px 16px' }}>
         <div style={{
           color: '#8A8A8E', fontSize: 9.5, fontWeight: 800, letterSpacing: 0.8,
           marginBottom: 7, display: 'flex', alignItems: 'center', gap: 6,
         }}>
-          <span>AI SUMMARY</span>
-          {!item.aiSummary && !item.summaryFailed && (
+          <span>{showSummary ? 'AI SUMMARY' : 'FROM THE SOURCE'}</span>
+          {showSummary && !item.aiSummary && (
             <span style={{ color: '#4A90D9', fontSize: 9.5, fontWeight: 600, letterSpacing: 0 }}>writing…</span>
           )}
         </div>
-        {item.aiSummary ? (
+        {showSummary && item.aiSummary ? (
           <div style={{ color: '#C7C7CC', fontSize: 13.5, lineHeight: 1.62, whiteSpace: 'pre-wrap' }}>
             {item.aiSummary}
           </div>
-        ) : item.summaryFailed ? (
-          <div style={{ color: '#6E6E73', fontSize: 13, lineHeight: 1.6, fontStyle: 'italic' }}>
-            {item.summary
-              ? `${item.summary.slice(0, 260)} (source text — AI summary unavailable)`
-              : 'AI summary unavailable.'}
-          </div>
         ) : (
-          <div style={{ display: 'grid', gap: 7 }}>
-            {[96, 100, 88, 62].map((w, i) => (
-              <div key={i} style={{
-                height: 11, width: `${w}%`, borderRadius: 5,
-                background: 'linear-gradient(90deg, #171717, #202020, #171717)',
-                backgroundSize: '200% 100%',
-                animation: 'briefShimmer 1.4s ease-in-out infinite',
-              }} />
-            ))}
+          <div style={{ color: '#9A9AA0', fontSize: 13, lineHeight: 1.6 }}>
+            {item.summary ? item.summary.slice(0, 280) : 'No summary available.'}
           </div>
         )}
       </div>
@@ -329,6 +323,13 @@ export default function BriefingScreen() {
   // filter meant the only way to read the Tech trend was to filter the list to
   // Tech — undiscoverable, and limiting: you may want the Tech read while
   // still looking at all thirty cards.
+  // Off means the server skips generation entirely (summaries=0), not that we
+  // hide text it already paid to write — otherwise the toggle would save
+  // nothing, which is the point of having it.
+  const [summariesOn, setSummariesOn] = useState<boolean>(() => {
+    try { return localStorage.getItem('@briefing_summaries') !== '0'; } catch { return true; }
+  });
+  const [infoOpen, setInfoOpen] = useState(false);
   const [trendArea, setTrendArea] = useState<string>('all');
   const [trends, setTrends] = useState<Record<string, string>>({});
   const [trendBusy, setTrendBusy] = useState<string | null>(null);
@@ -336,6 +337,8 @@ export default function BriefingScreen() {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const summariesOnRef = useRef(summariesOn);
+  useEffect(() => { summariesOnRef.current = summariesOn; }, [summariesOn]);
 
   // Scroll memory — this screen unmounts when you tap into an article.
   useEffect(() => {
@@ -389,7 +392,7 @@ export default function BriefingScreen() {
     if (!painted) setSnapshot(null);
 
     try {
-      const snap = await fetchBriefing(hours, force, ctrl.signal);
+      const snap = await fetchBriefing(hours, force, ctrl.signal, summariesOnRef.current);
       if (ctrl.signal.aborted) return;
       setSnapshot(snap);
       memSnapshot = { key, snap };
@@ -424,6 +427,15 @@ export default function BriefingScreen() {
     localStorage.setItem('@briefing_window', String(h));
     load(h, false);
   }, [windowHours, load]);
+
+  const toggleSummaries = useCallback(() => {
+    const next = !summariesOn;
+    setSummariesOn(next);
+    try { localStorage.setItem('@briefing_summaries', next ? '1' : '0'); } catch { /* ignore */ }
+    summariesOnRef.current = next;
+    // Turning them on has to re-ask, or the server never starts writing.
+    if (next) load(windowHours, false);
+  }, [summariesOn, windowHours, load]);
 
   const regenerate = useCallback(() => {
     try { localStorage.removeItem(cacheKeyFor(windowHours)); } catch { /* ignore */ }
@@ -496,7 +508,7 @@ export default function BriefingScreen() {
   );
   const busy = phase === 'loading' || phase === 'revalidating' || phase === 'rebuilding';
   const total = snapshot?.items.length ?? 0;
-  const failedCount = snapshot?.items.filter(i => i.summaryFailed).length ?? 0;
+  const pending = snapshot?.items.filter(i => !i.aiSummary).length ?? 0;
 
   return (
     <div
@@ -518,49 +530,39 @@ export default function BriefingScreen() {
       `}</style>
 
       <div style={{ padding: 'calc(14px + env(safe-area-inset-top, 0px)) 16px 96px' }}>
-        {/* Header */}
-        <div style={{ padding: '6px 0 14px' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ color: '#fff', fontSize: 26, fontWeight: 800, letterSpacing: -0.6 }}>
-                Briefing for the day
-              </div>
-              <div style={{ color: '#8A8A8E', fontSize: 12, marginTop: 3 }}>
-                {greeting()} — {total || TARGET_COUNT} stories, ranked, across {AREAS.length} areas.
-              </div>
+        {/* Header. Everything above the cards used to be five stacked
+            bordered boxes — window block, trend, status, pending, meta — which
+            is what made the page feel scattered. It is now one header, one
+            control row, the sticky filter, the trend card, and a single status
+            line. No functionality was dropped: the ranking explanation moved
+            behind the ⓘ, and per-card factor bars already carried it anyway. */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '4px 0 12px' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ color: '#fff', fontSize: 26, fontWeight: 800, letterSpacing: -0.6 }}>
+              Briefing for the day
             </div>
-            <button
-              onClick={busy ? stop : regenerate}
-              style={{
-                flexShrink: 0,
-                display: 'flex', alignItems: 'center', gap: 6,
-                background: busy ? 'rgba(255,69,58,0.12)' : 'rgba(74,144,217,0.14)',
-                border: `1px solid ${busy ? 'rgba(255,69,58,0.4)' : 'rgba(74,144,217,0.35)'}`,
-                color: busy ? '#FF8F86' : '#4A90D9',
-                borderRadius: 999, padding: '8px 13px',
-                fontSize: 11, fontWeight: 700, letterSpacing: 0.2,
-                cursor: 'pointer',
-                WebkitTapHighlightColor: 'transparent',
-              }}
-            >
-              <span style={{
-                display: 'inline-block', width: 11, height: 11,
-                border: '2px solid currentColor', borderTopColor: busy ? 'transparent' : 'currentColor',
-                borderRadius: busy ? '50%' : 3,
-                animation: busy ? 'briefSpin 0.8s linear infinite' : 'none',
-                opacity: 0.9,
-              }} />
-              {busy ? 'Stop' : 'Regenerate'}
-            </button>
+            <div style={{ color: '#8A8A8E', fontSize: 12, marginTop: 3 }}>
+              {greeting()} — {total || TARGET_COUNT} stories across {AREAS.length} areas
+            </div>
           </div>
+          <button
+            onClick={busy ? stop : regenerate}
+            title={busy ? 'Stop' : 'Rebuild the briefing'}
+            style={{
+              flexShrink: 0, width: 34, height: 34, borderRadius: 17, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: busy ? 'rgba(255,69,58,0.12)' : 'rgba(74,144,217,0.14)',
+              border: `1px solid ${busy ? 'rgba(255,69,58,0.4)' : 'rgba(74,144,217,0.35)'}`,
+              color: busy ? '#FF8F86' : '#4A90D9', fontSize: 14,
+            }}
+          >{busy ? '■' : '↻'}</button>
         </div>
 
-        {/* News window */}
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ color: '#6E6E73', fontSize: 8.5, fontWeight: 800, letterSpacing: 0.7, marginBottom: 7 }}>
-            NEWS WINDOW
-          </div>
-          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+        {/* One control row: window on the left, summaries switch on the right */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap',
+        }}>
+          <div style={{ display: 'flex', background: '#0E0E0E', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 999, padding: 2 }}>
             {WINDOW_OPTIONS.map(h => {
               const active = h === windowHours;
               return (
@@ -568,35 +570,94 @@ export default function BriefingScreen() {
                   key={h}
                   onClick={() => pickWindow(h)}
                   style={{
-                    padding: '7px 14px', borderRadius: 999,
-                    border: `1px solid ${active ? 'rgba(74,144,217,0.5)' : 'rgba(255,255,255,0.08)'}`,
-                    background: active ? 'rgba(74,144,217,0.16)' : '#0E0E0E',
-                    color: active ? '#4A90D9' : '#7A7A7E',
-                    fontSize: 11.5, fontWeight: 700, letterSpacing: 0.2,
-                    cursor: 'pointer',
-                    WebkitTapHighlightColor: 'transparent',
+                    padding: '5px 11px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                    background: active ? 'rgba(74,144,217,0.22)' : 'transparent',
+                    color: active ? '#4A90D9' : '#6E6E73',
+                    fontSize: 11, fontWeight: 700,
                   }}
-                >
-                  {h}h
-                </button>
+                >{h}h</button>
               );
             })}
           </div>
-          <div style={{ color: '#5A5A5E', fontSize: 9.5, marginTop: 7, lineHeight: 1.45 }}>
-            Only stories published inside this window are considered, and freshness is
-            scored relative to it. Changing the window rebuilds the briefing.
-          </div>
+
+          <button
+            onClick={toggleSummaries}
+            title={summariesOn
+              ? 'AI summaries on — the server writes a summary for every card'
+              : 'AI summaries off — ranking only, no tokens spent'}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer',
+              background: summariesOn ? 'rgba(48,209,88,0.12)' : '#0E0E0E',
+              border: `1px solid ${summariesOn ? 'rgba(48,209,88,0.35)' : 'rgba(255,255,255,0.09)'}`,
+              borderRadius: 999, padding: '5px 11px 5px 7px',
+              color: summariesOn ? '#30D158' : '#6E6E73', fontSize: 11, fontWeight: 700,
+            }}
+          >
+            <span style={{
+              width: 26, height: 15, borderRadius: 999, flexShrink: 0, position: 'relative',
+              background: summariesOn ? 'rgba(48,209,88,0.35)' : 'rgba(255,255,255,0.12)',
+              transition: 'background 0.18s',
+            }}>
+              <span style={{
+                position: 'absolute', top: 2, left: summariesOn ? 13 : 2,
+                width: 11, height: 11, borderRadius: 999,
+                background: summariesOn ? '#30D158' : '#8A8A8E', transition: 'left 0.18s',
+              }} />
+            </span>
+            AI summaries
+          </button>
         </div>
 
-        {/* Trend, with its own scope selector */}
+        {/* Sticky category filter */}
+        {snapshot && (
+          <div style={{
+            position: 'sticky', top: 0, zIndex: 5,
+            margin: '0 -16px 12px', padding: '8px 16px',
+            background: 'rgba(8,8,8,0.82)',
+            backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)',
+            borderBottom: '1px solid rgba(255,255,255,0.05)',
+          }}>
+            <div style={{ display: 'flex', gap: 7, overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: 2 }}>
+              {([{ key: 'all', label: 'All', accent: '#4A90D9' }, ...AREAS] as Array<{ key: string; label: string; accent: string }>)
+                .filter(a => a.key === 'all' || areaCounts[a.key])
+                .map(a => {
+                  const active = areaFilter === a.key;
+                  const count = a.key === 'all' ? total : (areaCounts[a.key] ?? 0);
+                  return (
+                    <button
+                      key={a.key}
+                      onClick={() => { setAreaFilter(a.key); scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                      style={{
+                        flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '7px 13px', borderRadius: 999,
+                        border: `1px solid ${active ? a.accent : 'rgba(255,255,255,0.09)'}`,
+                        background: active ? `${a.accent}26` : '#0E0E0E',
+                        color: active ? a.accent : '#8A8A8E',
+                        fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+                      }}
+                    >
+                      {a.label}
+                      <span style={{
+                        fontSize: 9.5, fontWeight: 800,
+                        color: active ? a.accent : '#5A5A5E',
+                        background: active ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.05)',
+                        borderRadius: 999, padding: '1px 6px',
+                      }}>{count}</span>
+                    </button>
+                  );
+                })}
+            </div>
+          </div>
+        )}
+
+        {/* Trend */}
         {snapshot && (
           <div style={{
             background: 'rgba(191,90,242,0.07)', border: '1px solid rgba(191,90,242,0.22)',
-            borderRadius: 14, padding: '12px 14px', marginBottom: 14,
+            borderRadius: 14, padding: '12px 14px', marginBottom: 12,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <span style={{ color: '#BF5AF2', fontSize: 9.5, fontWeight: 800, letterSpacing: 0.7 }}>TREND</span>
-              {/* A real <select>, so phones show the OS picker. */}
               <select
                 value={trendArea}
                 onChange={e => setTrendArea(e.target.value)}
@@ -611,8 +672,6 @@ export default function BriefingScreen() {
                 <option value="all" style={{ background: '#121212' }}>All areas · {total}</option>
                 {AREAS.map(a => {
                   const n = areaCounts[a.key] ?? 0;
-                  // Below two stories there is no through-line to find; the
-                  // server refuses rather than inventing one, so do not offer it.
                   return (
                     <option key={a.key} value={a.key} disabled={n < 2} style={{ background: '#121212' }}>
                       {a.label} · {n}
@@ -632,7 +691,7 @@ export default function BriefingScreen() {
                   style={{
                     marginTop: 10, background: 'rgba(191,90,242,0.16)',
                     border: '1px solid rgba(191,90,242,0.4)', color: '#BF5AF2',
-                    borderRadius: 999, padding: '7px 13px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                    borderRadius: 999, padding: '6px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
                   }}
                 >Regenerate</button>
               </>
@@ -648,7 +707,7 @@ export default function BriefingScreen() {
                   style={{
                     marginTop: 10, background: 'rgba(191,90,242,0.16)',
                     border: '1px solid rgba(191,90,242,0.4)', color: '#BF5AF2',
-                    borderRadius: 999, padding: '7px 13px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                    borderRadius: 999, padding: '6px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
                   }}
                 >Generate trend</button>
               </>
@@ -659,33 +718,43 @@ export default function BriefingScreen() {
           </div>
         )}
 
-        {/* Status. There is no per-summary counter to show any more: the whole
-            briefing arrives in one response. A cold build takes ~45s because
-            the server is batching thirty summaries, but that happens once per
-            window for everyone, not once per device. */}
-        {busy && (
-          <div style={{
-            background: '#101010', border: '1px solid rgba(255,255,255,0.06)',
-            borderRadius: 14, padding: '12px 14px', marginBottom: 14,
-          }}>
-            <div style={{ color: '#fff', fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
-              {phase === 'rebuilding' ? 'Rebuilding — this takes about 20s…'
-                : phase === 'revalidating' ? 'Checking for a newer briefing…'
-                : 'Building today\u2019s briefing…'}
-            </div>
-            <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
-              <div style={{
-                width: '35%', height: '100%', borderRadius: 2, background: '#4A90D9',
-                animation: 'briefSlide 1.3s ease-in-out infinite',
-              }} />
-            </div>
-            <div style={{ color: '#5A5A5E', fontSize: 9.5, marginTop: 8, lineHeight: 1.45 }}>
-              {phase === 'rebuilding'
-                ? 'The current briefing stays on screen until the new one is ready. Tap Stop to keep this one.'
-                : phase === 'revalidating'
-                  ? 'Showing the last copy while a fresher one is fetched.'
-                  : `Ranking ${TARGET_COUNT} stories and writing every summary up front, so each card is complete before you scroll. Built once and shared — reopening is instant.`}
-            </div>
+        {/* One status line replaces the status, pending and meta boxes */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+          color: '#5A5A5E', fontSize: 10, marginBottom: 14, lineHeight: 1.5,
+        }}>
+          {busy && (
+            <span style={{ color: '#4A90D9', fontWeight: 700 }}>
+              {phase === 'rebuilding' ? 'Rebuilding…' : phase === 'revalidating' ? 'Checking…' : 'Building…'}
+            </span>
+          )}
+          {snapshot && (
+            <>
+              <span>Built {new Date(snapshot.builtAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+              <span>·</span>
+              <span>{snapshot.poolSize} candidates</span>
+              {summariesOn && total > 0 && (
+                <>
+                  <span>·</span>
+                  <span style={{ color: pending > 0 ? '#FFC56E' : '#5A5A5E' }}>
+                    {total - pending}/{total} summaries{snapshot.complete === false ? ' — still writing' : ''}
+                  </span>
+                </>
+              )}
+              {!summariesOn && (<><span>·</span><span>summaries off</span></>)}
+            </>
+          )}
+          <button
+            onClick={() => setInfoOpen(v => !v)}
+            style={{ background: 'none', border: 'none', color: '#4A90D9', fontSize: 10, cursor: 'pointer', padding: 0 }}
+          >{infoOpen ? 'hide ranking' : 'how ranking works'}</button>
+        </div>
+
+        {infoOpen && (
+          <div style={{ color: '#6E6E73', fontSize: 10.5, lineHeight: 1.55, marginBottom: 14 }}>
+            Each story scores out of 100: corroboration {W_CORROBORATION} (how many outlets ran it),
+            source weight {W_SOURCE}, freshness {W_FRESHNESS}, editorial signal {W_SIGNAL}.
+            Tap any “why” row on a card for its breakdown.
           </div>
         )}
 
@@ -694,108 +763,12 @@ export default function BriefingScreen() {
             background: 'rgba(255,69,58,0.08)', border: '1px solid rgba(255,69,58,0.25)',
             borderRadius: 14, padding: '12px 14px', marginBottom: 14,
             color: '#FF9F96', fontSize: 11.5, lineHeight: 1.5,
-          }}>
-            {error}
-          </div>
-        )}
-
-        {/* Summaries the server could not fill even after its retry rounds. */}
-        {snapshot && !busy && failedCount > 0 && (
-          <div style={{
-            background: 'rgba(255,159,10,0.07)', border: '1px solid rgba(255,159,10,0.25)',
-            borderRadius: 14, padding: '12px 14px', marginBottom: 14,
-            display: 'flex', alignItems: 'center', gap: 12,
-          }}>
-            <div style={{ flex: 1, color: '#FFC56E', fontSize: 11.5, lineHeight: 1.5 }}>
-              {snapshot?.complete === false
-                ? `${failedCount} of ${total} summaries are still being written — they appear as they land. Those cards show the source text meanwhile.`
-                : `${failedCount} of ${total} summaries didn’t come back — those cards show the source text instead.`}
-            </div>
-            <button
-              onClick={regenerate}
-              style={{
-                flexShrink: 0, background: 'rgba(255,159,10,0.16)',
-                border: '1px solid rgba(255,159,10,0.4)', color: '#FFC56E',
-                borderRadius: 999, padding: '7px 13px', fontSize: 11, fontWeight: 700,
-                cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
-              }}
-            >
-              Rebuild
-            </button>
-          </div>
-        )}
-
-        {/* Categories. These were static count chips; making them filters costs
-            nothing because all thirty items are already in memory, and it turns
-            a label into navigation. Sticky so you can switch while scrolling. */}
-        {snapshot && (
-          <div style={{
-            position: 'sticky', top: 0, zIndex: 5,
-            margin: '0 -16px 12px', padding: '8px 16px',
-            background: 'rgba(8,8,8,0.82)',
-            backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)',
-            borderBottom: '1px solid rgba(255,255,255,0.05)',
-          }}>
-            <div style={{
-              display: 'flex', gap: 7, overflowX: 'auto', scrollbarWidth: 'none',
-              WebkitOverflowScrolling: 'touch', paddingBottom: 2,
-            }}>
-              {([{ key: 'all', label: 'All', accent: '#4A90D9' }, ...AREAS] as Array<{ key: string; label: string; accent: string }>)
-                .filter(a => a.key === 'all' || areaCounts[a.key])
-                .map(a => {
-                  const active = areaFilter === a.key;
-                  const count = a.key === 'all' ? total : (areaCounts[a.key] ?? 0);
-                  return (
-                    <button
-                      key={a.key}
-                      onClick={() => {
-                        setAreaFilter(a.key);
-                        scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-                      }}
-                      style={{
-                        flexShrink: 0,
-                        display: 'flex', alignItems: 'center', gap: 6,
-                        padding: '7px 13px', borderRadius: 999,
-                        border: `1px solid ${active ? a.accent : 'rgba(255,255,255,0.09)'}`,
-                        background: active ? `${a.accent}26` : '#0E0E0E',
-                        color: active ? a.accent : '#8A8A8E',
-                        fontSize: 11.5, fontWeight: 700, letterSpacing: 0.2,
-                        cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
-                        transition: 'background 0.18s, border-color 0.18s, color 0.18s',
-                      }}
-                    >
-                      {a.label}
-                      <span style={{
-                        fontSize: 9.5, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
-                        color: active ? a.accent : '#5A5A5E',
-                        background: active ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.05)',
-                        borderRadius: 999, padding: '1px 6px',
-                      }}>{count}</span>
-                    </button>
-                  );
-                })}
-            </div>
-          </div>
-        )}
-
-        {/* Built-at + how the ranking was scored */}
-        {snapshot && !busy && (
-          <div style={{
-            background: '#0D0D0D', border: '1px solid rgba(255,255,255,0.05)',
-            borderRadius: 14, padding: '11px 13px', marginBottom: 14,
-          }}>
-            <div style={{ color: '#5A5A5E', fontSize: 9.5, lineHeight: 1.45 }}>
-              Built {new Date(snapshot.builtAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} from{' '}
-              {snapshot.poolSize} candidate stories · ranked on corroboration {W_CORROBORATION},
-              source weight {W_SOURCE}, freshness {W_FRESHNESS}, editorial signal {W_SIGNAL}.
-              Tap any “why” row to see the breakdown.
-            </div>
-          </div>
+          }}>{error}</div>
         )}
 
         {/* The list */}
         {visibleItems.map(item => (
-          <BriefingCard key={`${item.id}-${item.rank}`} item={item} onOpen={openArticle} />
+          <BriefingCard key={`${item.id}-${item.rank}`} item={item} onOpen={openArticle} showSummary={summariesOn} />
         ))}
 
         {snapshot && visibleItems.length === 0 && (

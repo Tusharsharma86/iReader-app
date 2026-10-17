@@ -48,6 +48,7 @@ type WindowHours = (typeof WINDOW_OPTIONS)[number];
 const DEFAULT_WINDOW: WindowHours = 24;
 const TARGET_COUNT = 30;
 const WINDOW_KEY = '@briefing_window';
+const SUMMARIES_KEY = '@briefing_summaries';
 
 // Shown in the header so the ranking is legible. Mirrors the server's
 // constants; this is display copy, not the scoring itself.
@@ -119,8 +120,13 @@ function agoLabel(hours: number): string {
   return `${Math.round(hours / 24)}d ago`;
 }
 
-async function fetchBriefing(h: WindowHours, force: boolean, signal: AbortSignal): Promise<Snapshot> {
-  const res = await fetch(`${BRIEFING_API}?window=${h}${force ? '&refresh=1' : ''}`, { signal });
+async function fetchBriefing(
+  h: WindowHours, force: boolean, signal: AbortSignal, summaries = true,
+): Promise<Snapshot> {
+  const res = await fetch(
+    `${BRIEFING_API}?window=${h}${force ? '&refresh=1' : ''}${summaries ? '' : '&summaries=0'}`,
+    { signal },
+  );
   if (!res.ok) {
     let detail = `HTTP ${res.status}`;
     try { detail = ((await res.json()) as { error?: string }).error ?? detail; } catch { /* keep status */ }
@@ -151,7 +157,7 @@ function FactorBars({ factors }: { factors: Factor[] }) {
 
 // ───────────────────────────────────────────────────────────────── the card
 
-function BriefingCard({ item, onOpen }: { item: RankedItem; onOpen: (i: RankedItem) => void }) {
+function BriefingCard({ item, onOpen, showSummary }: { item: RankedItem; onOpen: (i: RankedItem) => void; showSummary: boolean }) {
   const [showFactors, setShowFactors] = useState(false);
   const accent = AREA_BY_KEY[item.area]?.accent ?? '#4A90D9';
   const label = AREA_BY_KEY[item.area]?.label ?? item.area;
@@ -194,17 +200,19 @@ function BriefingCard({ item, onOpen }: { item: RankedItem; onOpen: (i: RankedIt
         {showFactors ? <FactorBars factors={item.factors} /> : null}
       </TouchableOpacity>
 
+      {/* With AI summaries off the card shows the source's own text and says
+          so — labelling it "AI SUMMARY · not written yet" would describe work
+          nobody asked to be done. */}
       <View style={styles.summaryBox}>
         <Text style={styles.summaryLabel}>
-          AI SUMMARY{!item.aiSummary && !item.summaryFailed ? '  ·  writing…' : ''}
+          {showSummary ? 'AI SUMMARY' : 'FROM THE SOURCE'}
+          {showSummary && !item.aiSummary ? '  ·  writing…' : ''}
         </Text>
-        {item.aiSummary ? (
+        {showSummary && item.aiSummary ? (
           <Text style={styles.summaryText}>{item.aiSummary}</Text>
         ) : (
           <Text style={styles.summaryFallback}>
-            {item.summary
-              ? `${item.summary.slice(0, 260)} (source text — AI summary not written yet)`
-              : 'Summary not available yet.'}
+            {item.summary ? item.summary.slice(0, 280) : 'No summary available.'}
           </Text>
         )}
       </View>
@@ -229,12 +237,18 @@ export default function BriefingScreen() {
   // filter meant the only way to read the Tech trend was to filter the list to
   // Tech, which is both undiscoverable and limiting — you may well want the
   // Tech read while still looking at all thirty cards.
+  // Off means the server skips generation (summaries=0), not that we hide
+  // text it already paid to write — otherwise the toggle saves nothing.
+  const [summariesOn, setSummariesOn] = useState(true);
+  const [infoOpen, setInfoOpen] = useState(false);
   const [trendArea, setTrendArea] = useState<string>('all');
   const [trendPickerOpen, setTrendPickerOpen] = useState(false);
   const [trends, setTrends] = useState<Record<string, string>>({});
   const [trendBusy, setTrendBusy] = useState<string | null>(null);
   const [trendError, setTrendError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const summariesOnRef = useRef(summariesOn);
+  useEffect(() => { summariesOnRef.current = summariesOn; }, [summariesOn]);
 
   const load = useCallback(async (hours: WindowHours, force: boolean) => {
     abortRef.current?.abort();
@@ -270,7 +284,7 @@ export default function BriefingScreen() {
     if (!painted) setSnapshot(null);
 
     try {
-      const snap = await fetchBriefing(hours, force, ctrl.signal);
+      const snap = await fetchBriefing(hours, force, ctrl.signal, summariesOnRef.current);
       if (ctrl.signal.aborted) return;
       setSnapshot(snap);
       memSnapshot = { key, snap };
@@ -285,6 +299,8 @@ export default function BriefingScreen() {
 
   useEffect(() => {
     (async () => {
+      const savedSummaries = await AsyncStorage.getItem(SUMMARIES_KEY);
+      if (savedSummaries === '0') { setSummariesOn(false); summariesOnRef.current = false; }
       const saved = Number(await AsyncStorage.getItem(WINDOW_KEY));
       const h = (WINDOW_OPTIONS as readonly number[]).includes(saved) ? (saved as WindowHours) : DEFAULT_WINDOW;
       setWindowHours(h);
@@ -308,6 +324,15 @@ export default function BriefingScreen() {
     AsyncStorage.setItem(WINDOW_KEY, String(h)).catch(() => {});
     load(h, false);
   }, [windowHours, load]);
+
+  const toggleSummaries = useCallback(() => {
+    const next = !summariesOn;
+    setSummariesOn(next);
+    summariesOnRef.current = next;
+    AsyncStorage.setItem(SUMMARIES_KEY, next ? '1' : '0').catch(() => {});
+    // Turning them on has to re-ask, or the server never starts writing.
+    if (next) load(windowHours, false);
+  }, [summariesOn, windowHours, load]);
 
   const regenerate = useCallback(() => {
     AsyncStorage.removeItem(cacheKeyFor(windowHours)).catch(() => {});
@@ -376,6 +401,7 @@ export default function BriefingScreen() {
     [snapshot, areaFilter],
   );
   const busy = phase === 'loading' || phase === 'revalidating' || phase === 'rebuilding';
+  const pendingCount = snapshot?.items.filter(i => !i.aiSummary).length ?? 0;
   const total = snapshot?.items.length ?? 0;
   const pending = snapshot?.items.filter(i => !i.aiSummary).length ?? 0;
 
@@ -390,52 +416,60 @@ export default function BriefingScreen() {
           <RefreshControl refreshing={false} onRefresh={() => load(windowHours, false)} tintColor="#4A90D9" />
         }
       >
-        {/* 0 — header */}
+        {/* 0 — header. Everything above the cards used to be five stacked
+            boxes (window block, trend, status, pending, meta), which is what
+            made the screen feel scattered. Now: header, one control row, the
+            sticky filter, the trend card, one status line. Nothing was
+            dropped — the ranking explanation moved behind "how ranking
+            works", and the per-card factor bars already carried it. */}
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>Briefing for the day</Text>
             <Text style={styles.subtitle}>
-              {greeting()} — {total || TARGET_COUNT} stories, ranked, across {AREAS.length} areas.
+              {greeting()} — {total || TARGET_COUNT} stories across {AREAS.length} areas
             </Text>
           </View>
           <TouchableOpacity
             onPress={busy ? () => abortRef.current?.abort() : regenerate}
-            style={[styles.regenBtn, busy && styles.regenBtnBusy]}
+            style={[styles.iconBtn, busy && styles.iconBtnBusy]}
             activeOpacity={0.8}
           >
             {busy ? <ActivityIndicator size="small" color="#FF8F86" />
-                  : <Ionicons name="refresh" size={13} color="#4A90D9" />}
-            <Text style={[styles.regenText, busy && { color: '#FF8F86' }]}>
-              {busy ? 'Stop' : 'Regenerate'}
-            </Text>
+                  : <Ionicons name="refresh" size={15} color="#4A90D9" />}
           </TouchableOpacity>
         </View>
 
-        {/* 1 — news window */}
-        <View style={styles.windowBlock}>
-          <Text style={styles.sectionLabel}>NEWS WINDOW</Text>
-          <View style={styles.windowRow}>
+        {/* 1 — one control row: window, then the summaries switch */}
+        <View style={styles.controlRow}>
+          <View style={styles.segment}>
             {WINDOW_OPTIONS.map(h => {
               const active = h === windowHours;
               return (
                 <TouchableOpacity
                   key={h}
                   onPress={() => pickWindow(h)}
-                  style={[styles.windowChip, active && styles.windowChipActive]}
+                  style={[styles.segItem, active && styles.segItemOn]}
                   activeOpacity={0.8}
                 >
-                  <Text style={[styles.windowChipText, active && styles.windowChipTextActive]}>{h}h</Text>
+                  <Text style={[styles.segText, active && styles.segTextOn]}>{h}h</Text>
                 </TouchableOpacity>
               );
             })}
           </View>
-          <Text style={styles.hint}>
-            Only stories published inside this window are considered, and freshness is scored
-            relative to it. Changing the window rebuilds the briefing.
-          </Text>
+
+          <TouchableOpacity
+            onPress={toggleSummaries}
+            style={[styles.sumToggle, summariesOn && styles.sumToggleOn]}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.switchTrack, summariesOn && styles.switchTrackOn]}>
+              <View style={[styles.switchKnob, summariesOn && styles.switchKnobOn]} />
+            </View>
+            <Text style={[styles.sumToggleText, summariesOn && { color: '#30D158' }]}>AI summaries</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* 2 — category tabs (sticky) */}
+        {/* 2 — category filter (sticky) */}
         <View style={styles.categoryBar}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 7 }}>
             {[{ key: 'all', label: 'All', accent: '#4A90D9' }, ...AREAS]
@@ -490,8 +524,7 @@ export default function BriefingScreen() {
                     const n = opt.key === 'all' ? total : (areaCounts[opt.key] ?? 0);
                     const selected = trendArea === opt.key;
                     // Below two stories there is no through-line to find, and
-                    // the server says so rather than inventing one — so do not
-                    // offer it here either.
+                    // the server refuses rather than inventing one.
                     const tooFew = n < 2;
                     return (
                       <TouchableOpacity
@@ -540,48 +573,41 @@ export default function BriefingScreen() {
           </View>
         ) : null}
 
-        {/* 4 — status */}
-        {busy ? (
-          <View style={styles.statusBox}>
-            <Text style={styles.statusTitle}>
-              {phase === 'rebuilding' ? 'Rebuilding — this takes about 20s…'
-                : phase === 'revalidating' ? 'Checking for a newer briefing…'
-                : 'Building today’s briefing…'}
+        {/* 4 — one status line replaces the status, pending and meta boxes */}
+        <View style={styles.statusLine}>
+          {busy ? (
+            <Text style={styles.statusBusy}>
+              {phase === 'rebuilding' ? 'Rebuilding…' : phase === 'revalidating' ? 'Checking…' : 'Building…'}
             </Text>
-            <Text style={styles.hint}>
-              {phase === 'rebuilding'
-                ? 'The current briefing stays on screen until the new one is ready.'
-                : `Ranking ${TARGET_COUNT} stories. Summaries are written on the server and appear as they land.`}
+          ) : null}
+          {snapshot ? (
+            <Text style={styles.statusText}>
+              Built {new Date(snapshot.builtAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+              {'  ·  '}{snapshot.poolSize} candidates
+              {summariesOn && total > 0
+                ? `  ·  ${total - pendingCount}/${total} summaries${snapshot.complete === false ? ' — still writing' : ''}`
+                : !summariesOn ? '  ·  summaries off' : ''}
             </Text>
-          </View>
+          ) : null}
+          <TouchableOpacity onPress={() => setInfoOpen(v => !v)} hitSlop={6}>
+            <Text style={styles.statusLink}>{infoOpen ? 'hide ranking' : 'how ranking works'}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {infoOpen ? (
+          <Text style={styles.infoText}>
+            Each story scores out of 100: corroboration {W_CORROBORATION} (how many outlets ran it),
+            source weight {W_SOURCE}, freshness {W_FRESHNESS}, editorial signal {W_SIGNAL}.
+            Tap any “why” row on a card for its breakdown.
+          </Text>
         ) : null}
 
         {error ? (
           <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View>
         ) : null}
 
-        {snapshot && !busy && pending > 0 ? (
-          <View style={styles.pendingBox}>
-            <Text style={styles.pendingText}>
-              {snapshot.complete === false
-                ? `${pending} of ${total} summaries are still being written — they appear as they land.`
-                : `${pending} of ${total} summaries didn’t come back — those cards show the source text.`}
-            </Text>
-          </View>
-        ) : null}
-
-        {snapshot && !busy ? (
-          <View style={styles.metaBox}>
-            <Text style={styles.metaText}>
-              Built {new Date(snapshot.builtAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} from{' '}
-              {snapshot.poolSize} candidate stories · ranked on corroboration {W_CORROBORATION}, source weight{' '}
-              {W_SOURCE}, freshness {W_FRESHNESS}, editorial signal {W_SIGNAL}. Tap any “why” row for the breakdown.
-            </Text>
-          </View>
-        ) : null}
-
         {visibleItems.map(item => (
-          <BriefingCard key={`${item.id}-${item.rank}`} item={item} onOpen={openArticle} />
+          <BriefingCard key={`${item.id}-${item.rank}`} item={item} onOpen={openArticle} showSummary={summariesOn} />
         ))}
 
         {snapshot && visibleItems.length === 0 ? (
@@ -601,25 +627,49 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingTop: 6, paddingBottom: 14 },
   title: { color: '#fff', fontSize: 26, fontWeight: '800', letterSpacing: -0.6 },
   subtitle: { color: '#8A8A8E', fontSize: 12, marginTop: 3 },
-  regenBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
+  iconBtn: {
+    flexShrink: 0, width: 34, height: 34, borderRadius: 17,
+    alignItems: 'center', justifyContent: 'center',
     backgroundColor: 'rgba(74,144,217,0.14)', borderWidth: 1, borderColor: 'rgba(74,144,217,0.35)',
-    borderRadius: 999, paddingHorizontal: 13, paddingVertical: 8,
   },
-  regenBtnBusy: { backgroundColor: 'rgba(255,69,58,0.12)', borderColor: 'rgba(255,69,58,0.4)' },
-  regenText: { color: '#4A90D9', fontSize: 11, fontWeight: '700' },
+  iconBtnBusy: { backgroundColor: 'rgba(255,69,58,0.12)', borderColor: 'rgba(255,69,58,0.4)' },
 
-  windowBlock: { marginBottom: 12 },
-  sectionLabel: { color: '#6E6E73', fontSize: 9, fontWeight: '800', letterSpacing: 0.7, marginBottom: 7 },
-  windowRow: { flexDirection: 'row', gap: 7, flexWrap: 'wrap' },
-  windowChip: {
-    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', backgroundColor: '#0E0E0E',
+  controlRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 },
+  segment: {
+    flexDirection: 'row', backgroundColor: '#0E0E0E', borderRadius: 999, padding: 2,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)',
   },
-  windowChipActive: { borderColor: 'rgba(74,144,217,0.5)', backgroundColor: 'rgba(74,144,217,0.16)' },
-  windowChipText: { color: '#7A7A7E', fontSize: 11.5, fontWeight: '700' },
-  windowChipTextActive: { color: '#4A90D9' },
-  hint: { color: '#5A5A5E', fontSize: 9.5, lineHeight: 14, marginTop: 7 },
+  segItem: { paddingHorizontal: 11, paddingVertical: 5, borderRadius: 999 },
+  segItemOn: { backgroundColor: 'rgba(74,144,217,0.22)' },
+  segText: { color: '#6E6E73', fontSize: 11, fontWeight: '700' },
+  segTextOn: { color: '#4A90D9' },
+
+  sumToggle: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    backgroundColor: '#0E0E0E', borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    borderRadius: 999, paddingLeft: 7, paddingRight: 11, paddingVertical: 5,
+  },
+  sumToggleOn: { backgroundColor: 'rgba(48,209,88,0.12)', borderColor: 'rgba(48,209,88,0.35)' },
+  sumToggleText: { color: '#6E6E73', fontSize: 11, fontWeight: '700' },
+  switchTrack: {
+    width: 26, height: 15, borderRadius: 999, justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  switchTrackOn: { backgroundColor: 'rgba(48,209,88,0.35)' },
+  switchKnob: {
+    width: 11, height: 11, borderRadius: 999, marginLeft: 2, backgroundColor: '#8A8A8E',
+  },
+  switchKnobOn: { marginLeft: 13, backgroundColor: '#30D158' },
+
+  statusLine: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14,
+  },
+  statusBusy: { color: '#4A90D9', fontSize: 10, fontWeight: '700' },
+  statusText: { color: '#5A5A5E', fontSize: 10, lineHeight: 15 },
+  statusLink: { color: '#4A90D9', fontSize: 10 },
+  infoText: { color: '#6E6E73', fontSize: 10.5, lineHeight: 16, marginBottom: 14 },
+
+
 
   categoryBar: {
     backgroundColor: '#080808', paddingVertical: 8, marginHorizontal: -16, paddingHorizontal: 16,
@@ -663,26 +713,11 @@ const styles = StyleSheet.create({
   },
   trendBtnText: { color: '#BF5AF2', fontSize: 11, fontWeight: '700' },
 
-  statusBox: {
-    backgroundColor: '#101010', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 14, padding: 13, marginBottom: 14,
-  },
-  statusTitle: { color: '#fff', fontSize: 12, fontWeight: '700' },
   errorBox: {
     backgroundColor: 'rgba(255,69,58,0.08)', borderWidth: 1, borderColor: 'rgba(255,69,58,0.25)',
     borderRadius: 14, padding: 13, marginBottom: 14,
   },
   errorText: { color: '#FF9F96', fontSize: 11.5, lineHeight: 17 },
-  pendingBox: {
-    backgroundColor: 'rgba(255,159,10,0.07)', borderWidth: 1, borderColor: 'rgba(255,159,10,0.25)',
-    borderRadius: 14, padding: 13, marginBottom: 14,
-  },
-  pendingText: { color: '#FFC56E', fontSize: 11.5, lineHeight: 17 },
-  metaBox: {
-    backgroundColor: '#0D0D0D', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 14, padding: 12, marginBottom: 14,
-  },
-  metaText: { color: '#5A5A5E', fontSize: 9.5, lineHeight: 14 },
 
   card: {
     backgroundColor: '#101010', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
