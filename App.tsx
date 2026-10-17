@@ -2,11 +2,12 @@ import { createBottomTabNavigator, BottomTabBarProps } from '@react-navigation/b
 import { NavigationContainer, DarkTheme, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Animated, Pressable, Text, View, StyleSheet, Linking } from 'react-native';
+import { Animated, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { tabBarTranslateY } from './utils/tabBarAnim';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import ArticleScreen from './screens/ArticleScreen';
@@ -177,8 +178,19 @@ function ParticleTabBar({ state, navigation }: BottomTabBarProps) {
       ]}
       pointerEvents="box-none"
     >
-      <View style={tabStyles.pill}>
-        {/* Subtle inner border + glassy tint for depth */}
+      <BlurView
+        style={tabStyles.pill}
+        intensity={58}
+        tint="dark"
+        // Android needs this to do a REAL backdrop blur; without it expo-blur
+        // degrades to a flat translucent overlay. Safe here because the app
+        // ships as a dev-client/release build, not Expo Go — which is what the
+        // old comment about a bundled-module mismatch was guarding against.
+        experimentalBlurMethod={Platform.OS === 'android' ? 'dimezisBlurView' : undefined}
+      >
+        {/* Tint + hairline edge over the blur, so the glass reads on both a
+            bright image and a black feed background. */}
+        <View style={tabStyles.pillTint} pointerEvents="none" />
         <View style={tabStyles.pillBorder} pointerEvents="none" />
         {TAB_ITEMS.filter(item => {
           const key = TAB_ROUTE_TO_KEY[item.route];
@@ -209,7 +221,7 @@ function ParticleTabBar({ state, navigation }: BottomTabBarProps) {
             />
           );
         })}
-      </View>
+      </BlurView>
     </Animated.View>
   );
 }
@@ -231,7 +243,7 @@ function TabItem({ focused, item, onPress }: {
       <Animated.View style={[tabStyles.iconWrap, focused && tabStyles.iconWrapActive, { transform: [{ scale }] }]}>
         <Ionicons
           name={focused ? item.iconActive : item.icon}
-          size={focused ? 22 : 20}
+          size={focused ? 19 : 17}
           color={focused ? '#FFFFFF' : 'rgba(255,255,255,0.55)'}
         />
       </Animated.View>
@@ -242,47 +254,57 @@ function TabItem({ focused, item, onPress }: {
 const tabStyles = StyleSheet.create({
   floatWrap: {
     position: 'absolute',
-    left: 20,
-    right: 20,
+    // Tighter than before: the bar carries seven tabs since Briefing was
+    // added, and at the old 20pt inset the row did not fit a 320pt phone.
+    left: 16,
+    right: 16,
     alignItems: 'center',
   },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 5,
     borderRadius: 999,
+    // Required: without it the blur paints outside the rounded corners.
     overflow: 'hidden',
-    // Dark translucent pill — gives the glassy floating feel without needing
-    // a native blur view (which mismatches the Expo Go bundled module version).
-    backgroundColor: 'rgba(15,15,15,0.92)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 12,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 10,
+  },
+  pillTint: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 999,
+    // Was an opaque rgba(15,15,15,0.92) slab, which is why it never looked
+    // like glass. Light enough now that the feed shows through the blur.
+    backgroundColor: 'rgba(12,12,14,0.38)',
   },
   pillBorder: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.08)',
+    // Brighter edge: a glass surface needs a visible rim to read as one.
+    borderColor: 'rgba(255,255,255,0.16)',
   },
   tabItem: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
     alignItems: 'center',
     justifyContent: 'center',
+    // Seven tabs on a narrow phone: let them give rather than overflow.
+    flexShrink: 1,
   },
   iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   iconWrapActive: {
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.16)',
   },
 });
 
