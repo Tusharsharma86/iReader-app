@@ -7,6 +7,7 @@ import { trackArticleOpen } from '../utils/personalization';
 import { FALLBACK_IMG } from '../utils/fallback';
 
 const BRIEFING_API = 'https://ireader.onrender.com/api/news/briefing';
+const TREND_API = 'https://ireader.onrender.com/api/news/briefing/trend';
 const CACHE_PREFIX = '@briefing_v2_';
 const SCROLL_KEY = '@ireader_scroll_briefing';
 
@@ -322,6 +323,11 @@ export default function BriefingScreen() {
   const [phase, setPhase] = useState<'idle' | 'loading' | 'revalidating' | 'rebuilding' | 'done'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [areaFilter, setAreaFilter] = useState<string>('all');
+  // Keyed by area, so switching filters shows that area's trend instead of
+  // re-requesting one you already generated.
+  const [trends, setTrends] = useState<Record<string, string>>({});
+  const [trendBusy, setTrendBusy] = useState<string | null>(null);
+  const [trendError, setTrendError] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -427,6 +433,27 @@ export default function BriefingScreen() {
     setSnapshot(prev => prev ?? memSnapshot?.snap ?? null);
     setPhase('done');
   }, []);
+
+  /** On demand only: a trend is an AI call, and generating one per category up
+   *  front would spend the budget the summaries need. */
+  const generateTrend = useCallback(async (area: string, force = false) => {
+    setTrendBusy(area);
+    setTrendError(null);
+    try {
+      const res = await fetch(`${TREND_API}?window=${windowHours}&area=${area}${force ? '&refresh=1' : ''}`);
+      const data = (await res.json()) as { text?: string; error?: string };
+      if (!res.ok || !data.text) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setTrends(prev => ({ ...prev, [area]: data.text! }));
+    } catch (e) {
+      setTrendError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setTrendBusy(null);
+    }
+  }, [windowHours]);
+
+  // A trend describes a specific window; carrying it across a change would
+  // caption the new briefing with the old one's reading.
+  useEffect(() => { setTrends({}); setTrendError(null); }, [windowHours]);
 
   const openArticle = useCallback((item: RankedItem) => {
     const s = toStory(item);
@@ -555,6 +582,53 @@ export default function BriefingScreen() {
             scored relative to it. Changing the window rebuilds the briefing.
           </div>
         </div>
+
+        {/* Trend for whatever category is selected */}
+        {snapshot && (
+          <div style={{
+            background: 'rgba(191,90,242,0.07)', border: '1px solid rgba(191,90,242,0.22)',
+            borderRadius: 14, padding: '12px 14px', marginBottom: 14,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 7 }}>
+              <span style={{ color: '#BF5AF2', fontSize: 9.5, fontWeight: 800, letterSpacing: 0.7, flex: 1 }}>
+                {areaFilter === 'all'
+                  ? 'TREND ACROSS ALL AREAS'
+                  : `TREND · ${(AREA_BY_KEY[areaFilter]?.label ?? areaFilter).toUpperCase()}`}
+              </span>
+              {trends[areaFilter] && trendBusy !== areaFilter && (
+                <button
+                  onClick={() => generateTrend(areaFilter, true)}
+                  style={{ background: 'none', border: 'none', color: '#8A8A8E', fontSize: 10, cursor: 'pointer' }}
+                >↻</button>
+              )}
+            </div>
+
+            {trendBusy === areaFilter ? (
+              <div style={{ color: '#8A8A8E', fontSize: 11.5 }}>Reading the through-line…</div>
+            ) : trends[areaFilter] ? (
+              <div style={{ color: '#D8D8DD', fontSize: 13, lineHeight: 1.62 }}>{trends[areaFilter]}</div>
+            ) : (
+              <>
+                <div style={{ color: '#8A8A8E', fontSize: 11.5, lineHeight: 1.5 }}>
+                  {areaFilter === 'all'
+                    ? 'What connects today’s stories, including threads that cross subject areas.'
+                    : `What connects today’s ${AREA_BY_KEY[areaFilter]?.label ?? areaFilter} stories.`}
+                </div>
+                <button
+                  onClick={() => generateTrend(areaFilter)}
+                  style={{
+                    marginTop: 10, background: 'rgba(191,90,242,0.16)',
+                    border: '1px solid rgba(191,90,242,0.4)', color: '#BF5AF2',
+                    borderRadius: 999, padding: '7px 13px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                  }}
+                >Generate trend</button>
+              </>
+            )}
+            {trendError && trendBusy !== areaFilter && !trends[areaFilter] && (
+              <div style={{ color: '#FF9F96', fontSize: 10.5, marginTop: 7, lineHeight: 1.45 }}>{trendError}</div>
+            )}
+          </div>
+        )}
 
         {/* Status. There is no per-summary counter to show any more: the whole
             briefing arrives in one response. A cold build takes ~45s because

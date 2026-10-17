@@ -71,7 +71,7 @@ function entityHeadlinesFor(it: FeedItem): string[] {
 // Theme/company rails (incl. "Catch Up") are multi-story collections grouped
 // under a synthetic topicTitle, not a single trending event — they belong
 // only in the Don't Miss section. Without this filter they'd leak into
-// Trending/Deep Dives too.
+// Deep Dives too.
 function isEventItem(it: FeedItem): boolean {
   return it.type === 'article' || (it.type === 'cluster' && !it.collection);
 }
@@ -415,29 +415,12 @@ const CARD_SKELETON_HEIGHT: Record<string, number> = { compact: 280, comfortable
 // Matches web's cardGap formula (web/src/screens/ExploreScreen.tsx:474).
 const CARD_GAP: Record<string, number> = { compact: 14, comfortable: 28, spacious: 44 };
 
-// Trending Stories, Don't Miss, and AI Deep Dives all render the actual
+// Don't Miss and AI Deep Dives render the actual
 // main-feed StoryCard component (via toStory()) instead of the bespoke
 // VerticalStoryCard — same image/gradient treatment, meta row, bias dot,
 // bookmark, read-dimming, and every Customize toggle StoryCard already
 // reads, for free. StoryCard handles its own navigation internally, so no
 // onPress plumbing is needed here.
-const TrendingSection = memo(function TrendingSection({ loading, stories, cardDensity }: {
-  loading: boolean; stories: FeedItem[]; cardDensity: string;
-}) {
-  const h = CARD_SKELETON_HEIGHT[cardDensity] ?? 360;
-  const gap = CARD_GAP[cardDensity] ?? 28;
-  return (
-    <View style={s.section}>
-      <SectionLabel text="Trending Stories" />
-      {loading ? (
-        <><SkeletonBox height={h} style={{ marginBottom: gap, alignSelf: 'center', width: CONTENT_W }} /><SkeletonBox height={h} style={{ marginBottom: gap, alignSelf: 'center', width: CONTENT_W }} /></>
-      ) : stories.slice(0, 8).map((item, i) => {
-        const story = toStory(item);
-        return <View key={story.id || i} style={{ marginBottom: gap, alignItems: 'center' }}><StoryCard story={story} allStories={item.articles} /></View>;
-      })}
-    </View>
-  );
-});
 
 // "Don't Miss" — the server's own "Catch Up · Big Stories This Week" rail:
 // stories from hot themes that aged past the fresh-rail cutoff but are
@@ -677,7 +660,6 @@ function SearchHeader({ searchText, onChangeText, onSubmit, onClear }: {
 type Nav = NativeStackNavigationProp<ExploreStackParamList>;
 
 type Section =
-  | { key: 'trending' }
   | { key: 'dontMiss' }
   | { key: 'deepDives' }
   | { key: 'companies' }
@@ -692,7 +674,6 @@ export default function ExploreScreen() {
   const navigation = useNavigation<Nav>();
   const { cardDensity } = useSettings();
 
-  const [trendingStories, setTrendingStories] = useState<FeedItem[]>([]);
   const [catchUpStories, setCatchUpStories] = useState<FeedItem[]>([]);
   const [deepDives, setDeepDives] = useState<FeedItem[]>([]);
   const [companies, setCompanies] = useState<EntityCard[]>([]);
@@ -734,12 +715,8 @@ export default function ExploreScreen() {
 
       const noHindi = (it: FeedItem) => !isHindi(itemLabel(it));
 
-      // Theme/company rails (incl. Catch Up) never belong in Trending/Deep
-      // Dives — isEventItem excludes them so only single-event items compete.
-      const trending = dedup(
-        allItems.filter(isEventItem).filter(noHindi).sort((a, b) => scoreItem(b) - scoreItem(a)),
-        20
-      );
+      // Theme/company rails (incl. Catch Up) never belong in Deep Dives —
+      // isEventItem excludes them so only single-event items compete.
       const ddItems = dedup(
         allItems.filter(isEventItem).filter(noHindi).filter(it => (it.sourceCount ?? it.articles?.length ?? 1) >= 3)
           .sort((a, b) => scoreItem(b) - scoreItem(a)),
@@ -822,7 +799,6 @@ export default function ExploreScreen() {
         .slice(0, 18)
         .map(([name, { domain, count }]) => ({ name, domain, count }));
 
-      setTrendingStories(trending);
       setCatchUpStories(catchUp);
       setDeepDives(ddItems);
       setCompanies(compList.slice(0, 24));
@@ -916,7 +892,11 @@ export default function ExploreScreen() {
 
   const sections = useMemo<Section[]>(() => {
     if (searchQuery !== '') return [{ key: 'searchResults' }];
-    const out: Section[] = [{ key: 'trending' }];
+    // Trending Stories removed: the Briefing tab now ranks the day's top
+    // stories across every area and explains the ordering, so this was the
+    // same content with less information attached. Explore keeps what is
+    // genuinely its own — discovery by entity, topic and source.
+    const out: Section[] = [];
     if (loading || catchUpStories.length > 0) out.push({ key: 'dontMiss' });
     if (loading || deepDives.length > 0) out.push({ key: 'deepDives' });
     if (loading || companies.length > 0) out.push({ key: 'companies' });
@@ -930,7 +910,6 @@ export default function ExploreScreen() {
 
   const renderSection = useCallback(({ item }: { item: Section }) => {
     switch (item.key) {
-      case 'trending':      return <TrendingSection loading={loading} stories={trendingStories} cardDensity={cardDensity} />;
       case 'dontMiss':      return <DontMissSection loading={loading} stories={catchUpStories} cardDensity={cardDensity} />;
       case 'deepDives':     return <DeepDivesSection loading={loading} stories={deepDives} cardDensity={cardDensity} />;
       case 'companies':     return <CompaniesSection loading={loading} companies={companies} onTap={triggerSearch} />;
@@ -942,7 +921,7 @@ export default function ExploreScreen() {
       case 'searchResults': return <SearchResultsSection searchQuery={searchQuery} searchResults={searchResults} hasSearchResults={hasSearchResults} openArticle={openArticle} triggerSearch={triggerSearch} />;
       default:              return null;
     }
-  }, [loading, trendingStories, catchUpStories, deepDives, companies, people, places, sources, emergingTopics,
+  }, [loading, catchUpStories, deepDives, companies, people, places, sources, emergingTopics,
       cardDensity, openArticle, openTopic, triggerSearch, searchQuery, searchResults, hasSearchResults]);
 
   return (

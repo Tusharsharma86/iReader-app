@@ -539,6 +539,10 @@ export default function FeedScreen() {
       }, 500);
     }
   });
+  const activeCategoryMeta = useMemo(
+    () => CATEGORIES.find(c => c.topic === activeTopic) ?? CATEGORIES[0],
+    [activeTopic],
+  );
   const activeTopicRef = useRef(activeTopic);
   const prevScrollYRef = useRef(0);
   const tabBarVisibleRef = useRef(true);
@@ -1135,6 +1139,13 @@ export default function FeedScreen() {
             <Text style={styles.date}>{formattedDate()}</Text>
           </View>
         </View>
+        {/* Name the feed you are actually looking at. Explore says "Explore"
+            and Briefing says "Briefing for the day"; Feed said nothing, so the
+            only clue to which topic was active was which pill looked selected.
+            Tinted with that category's colour so it tracks the tab row. */}
+        <Text style={[styles.feedTitle, { color: activeCategoryMeta.color }]}>
+          {activeCategoryMeta.label}
+        </Text>
       </View>
 
       {/* Category tabs + filter button */}
@@ -1738,7 +1749,10 @@ const styles = StyleSheet.create({
     marginVertical: -12, marginHorizontal: -8,
     backgroundColor: 'transparent',
   },
-  greeting: { color: '#FFFFFF', fontSize: 26, fontWeight: '800', letterSpacing: -0.5, lineHeight: 32 },
+  greeting: { color: '#FFFFFF', fontSize: 19, fontWeight: '700', letterSpacing: -0.3, lineHeight: 24 },
+  // Primary line now, so the greeting drops to 19 above — two 26pt headings
+  // stacked would just fight each other.
+  feedTitle: { fontSize: 28, fontWeight: '800', letterSpacing: -0.7, marginTop: 12 },
   date: { color: '#555555', fontSize: 13, fontWeight: '500', marginTop: 2 },
 
   // Keyword hashtags

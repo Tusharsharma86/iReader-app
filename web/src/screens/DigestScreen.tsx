@@ -374,12 +374,9 @@ export default function DigestScreen() {
             background: '#141414', borderRadius: 14,
             padding: '14px 10px', marginBottom: 20,
           }}>
-            <Stat value={snapshot.estimatedReadMin} label="MIN READ" />
-            <Divider />
-            <Stat value={snapshot.totalStories} label="STORIES" />
-            <Divider />
-            <Stat value={snapshot.totalSources} label="SOURCES" />
-            <Divider />
+            {/* MIN READ / STORIES / SOURCES removed: they measured the
+                digest rather than telling you anything about the news, and
+                "41 sources" is not a fact a reader can act on. */}
             <button
               onClick={() => load(true)}
               style={{
@@ -472,25 +469,6 @@ export default function DigestScreen() {
           );
         })()}
 
-        {/* Numbers */}
-        {snapshot && snapshot.numbers.length > 0 && (
-          <>
-            <SectionLabel text="NUMBERS OF THE DAY" />
-            <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
-              {snapshot.numbers.map((n, i) => (
-                <div key={i} style={{
-                  flex: 1, padding: 12, borderRadius: 12,
-                  background: '#141414', border: '1px solid #222',
-                }}>
-                  <div style={{ color: '#fff', fontSize: 17, fontWeight: 800, letterSpacing: -0.3 }}>{n.value}</div>
-                  <div style={{ color: '#666', fontSize: 9, fontWeight: 700, letterSpacing: 1.2, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {n.label || '—'}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
 
         {/* Category sections */}
         {snapshot?.sections.map(section => {

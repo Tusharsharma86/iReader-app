@@ -30,6 +30,14 @@ const CATEGORIES = [
   { topic: 'business' as CategoryTopic,       label: 'Business', icon: 'business' },
 ] as const;
 
+// Accents for the feed title, matching the native app's category colours so
+// both clients name the same feed the same way.
+const CATEGORY_COLOR: Record<string, string> = {
+  'myspace': '#FF6B9D', 'breaking': '#FF5555', 'technology': '#4A90D9',
+  'india-politics': '#FF9500', 'geopolitics': '#4ECDC4', 'markets': '#22C55E',
+  'business': '#A29BFE',
+};
+
 type CategoryIconName = typeof CATEGORIES[number]['icon'];
 
 function CategoryIcon({ name, active }: { name: CategoryIconName; active: boolean }) {
@@ -849,11 +857,23 @@ export default function FeedScreen({ isVisible = true }: { isVisible?: boolean }
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px', paddingTop: 'calc(16px + env(safe-area-inset-top, 0px))' }}>
         <img src="/icons/header-logo.png" alt="iReader" style={{ width: 82, height: 82, objectFit: 'contain', background: 'transparent', margin: '-12px -8px -12px -8px' }} />
         <div>
-          <div style={{ color: '#fff', fontSize: 26, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.2 }}>{greeting()}</div>
+          <div style={{ color: '#fff', fontSize: 19, fontWeight: 700, letterSpacing: -0.3, lineHeight: 1.25 }}>{greeting()}</div>
           <div style={{ color: '#444', fontSize: 12, fontWeight: 500, marginTop: 3 }}>
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </div>
         </div>
+      </div>
+
+      {/* Name the feed you are actually looking at. Explore says "Explore" and
+          Briefing says "Briefing for the day"; Feed said nothing, so the only
+          clue to the active topic was which pill looked selected. The greeting
+          steps down to 19 above — two 26px headings stacked just fight. */}
+      <div style={{
+        padding: '0 20px 2px',
+        color: CATEGORY_COLOR[activeTopic] ?? '#fff',
+        fontSize: 28, fontWeight: 800, letterSpacing: -0.7,
+      }}>
+        {CATEGORIES.find(c => c.topic === activeTopic)?.label ?? 'Feed'}
       </div>
 
       {/* Pull-to-refresh / refreshing indicator — inline, no text, no overlap */}

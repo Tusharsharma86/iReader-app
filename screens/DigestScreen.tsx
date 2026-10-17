@@ -459,10 +459,7 @@ export default function DigestScreen() {
         parts.push(`${i + 1}. ${st.headline}.`);
       });
     }
-    if (snapshot.numbers.length) {
-      parts.push('Numbers of the day:');
-      snapshot.numbers.forEach(n => parts.push(`${n.label}: ${n.value}.`));
-    }
+
     return parts.join(' ');
   }, [snapshot]);
 
@@ -515,24 +512,12 @@ export default function DigestScreen() {
           </View>
         </View>
 
-        {/* Quick stats row */}
+        {/* Listen. The MIN READ / STORIES / SOURCES counters that used to sit
+            here are gone: they measured the digest rather than telling you
+            anything about the news, and "41 sources" is not a fact a reader
+            can act on. */}
         {snapshot && (
           <View style={styles.statsRow}>
-            <View style={styles.statCell}>
-              <Text style={styles.statValue}>{snapshot.estimatedReadMin}</Text>
-              <Text style={styles.statLabel}>MIN READ</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statCell}>
-              <Text style={styles.statValue}>{snapshot.totalStories}</Text>
-              <Text style={styles.statLabel}>STORIES</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statCell}>
-              <Text style={styles.statValue}>{snapshot.totalSources}</Text>
-              <Text style={styles.statLabel}>SOURCES</Text>
-            </View>
-            <View style={styles.statDivider} />
             <Pressable onPress={toggleSpeak} style={styles.audioBtn} hitSlop={6}>
               <Ionicons
                 name={speaking ? 'pause-circle' : 'play-circle'}
@@ -613,21 +598,6 @@ export default function DigestScreen() {
             </Pressable>
           );
         })()}
-
-        {/* ── Numbers of the day ────────────────────────────────────────── */}
-        {snapshot && snapshot.numbers.length > 0 && (
-          <>
-            <Text style={styles.sectionLabel}>NUMBERS OF THE DAY</Text>
-            <View style={styles.numbersRow}>
-              {snapshot.numbers.map((n, i) => (
-                <View key={i} style={styles.numberCell}>
-                  <Text style={styles.numberValue}>{n.value}</Text>
-                  <Text style={styles.numberLabel} numberOfLines={2}>{n.label || '—'}</Text>
-                </View>
-              ))}
-            </View>
-          </>
-        )}
 
         {/* ── Category sections ─────────────────────────────────────────── */}
         {snapshot?.sections.map(section => {

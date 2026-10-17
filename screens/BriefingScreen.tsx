@@ -22,6 +22,7 @@ import { getArticleColor } from '../utils/colors';
 import { useTabBarAutoHide } from '../utils/tabBarAnim';
 
 const BRIEFING_API = 'https://ireader.onrender.com/api/news/briefing';
+const TREND_API = 'https://ireader.onrender.com/api/news/briefing/trend';
 const CACHE_PREFIX = '@briefing_v2_';
 
 /** Display metadata only. Ranking, filtering, batching and summarising all
@@ -222,6 +223,11 @@ export default function BriefingScreen() {
   const [phase, setPhase] = useState<'idle' | 'loading' | 'revalidating' | 'rebuilding' | 'done'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [areaFilter, setAreaFilter] = useState<string>('all');
+  // Keyed by area, so switching filters shows that area's trend rather than
+  // re-requesting one you already generated.
+  const [trends, setTrends] = useState<Record<string, string>>({});
+  const [trendBusy, setTrendBusy] = useState<string | null>(null);
+  const [trendError, setTrendError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const load = useCallback(async (hours: WindowHours, force: boolean) => {
@@ -301,6 +307,27 @@ export default function BriefingScreen() {
     AsyncStorage.removeItem(cacheKeyFor(windowHours)).catch(() => {});
     load(windowHours, true);
   }, [windowHours, load]);
+
+  /** On demand only: a trend is an AI call, and generating one per category
+   *  up front would spend the budget the summaries need. */
+  const generateTrend = useCallback(async (area: string, force = false) => {
+    setTrendBusy(area);
+    setTrendError(null);
+    try {
+      const res = await fetch(`${TREND_API}?window=${windowHours}&area=${area}${force ? '&refresh=1' : ''}`);
+      const data = (await res.json()) as { text?: string; error?: string };
+      if (!res.ok || !data.text) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setTrends(prev => ({ ...prev, [area]: data.text! }));
+    } catch (e) {
+      setTrendError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setTrendBusy(null);
+    }
+  }, [windowHours]);
+
+  // A trend describes a specific window; keeping them across a change would
+  // caption the new briefing with the old one's reading.
+  useEffect(() => { setTrends({}); setTrendError(null); }, [windowHours]);
 
   const openArticle = useCallback((item: RankedItem) => {
     const sources = item.sources?.length
@@ -431,7 +458,53 @@ export default function BriefingScreen() {
           </ScrollView>
         </View>
 
-        {/* 3 — status */}
+        {/* 3 — trend for whatever is selected */}
+        {snapshot ? (
+          <View style={styles.trendBox}>
+            <View style={styles.trendHead}>
+              <Ionicons name="pulse-outline" size={13} color="#BF5AF2" />
+              <Text style={styles.trendLabel}>
+                {areaFilter === 'all'
+                  ? 'TREND ACROSS ALL AREAS'
+                  : `TREND · ${(AREA_BY_KEY[areaFilter]?.label ?? areaFilter).toUpperCase()}`}
+              </Text>
+              {trends[areaFilter] && trendBusy !== areaFilter ? (
+                <TouchableOpacity onPress={() => generateTrend(areaFilter, true)} hitSlop={8}>
+                  <Ionicons name="refresh" size={13} color="#8A8A8E" />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            {trendBusy === areaFilter ? (
+              <View style={styles.trendRow}>
+                <ActivityIndicator size="small" color="#BF5AF2" />
+                <Text style={styles.trendPending}>Reading the through-line…</Text>
+              </View>
+            ) : trends[areaFilter] ? (
+              <Text style={styles.trendText}>{trends[areaFilter]}</Text>
+            ) : (
+              <>
+                <Text style={styles.trendPending}>
+                  {areaFilter === 'all'
+                    ? 'What connects today’s stories, including threads that cross subject areas.'
+                    : `What connects today’s ${(AREA_BY_KEY[areaFilter]?.label ?? areaFilter)} stories.`}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => generateTrend(areaFilter)}
+                  style={styles.trendBtn}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.trendBtnText}>Generate trend</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            {trendError && trendBusy !== areaFilter && !trends[areaFilter] ? (
+              <Text style={styles.trendErr}>{trendError}</Text>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* 4 — status */}
         {busy ? (
           <View style={styles.statusBox}>
             <Text style={styles.statusTitle}>
@@ -523,6 +596,23 @@ const styles = StyleSheet.create({
   catChipText: { fontSize: 11.5, fontWeight: '700' },
   catCount: { borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1 },
   catCountText: { fontSize: 9.5, fontWeight: '800' },
+
+  trendBox: {
+    backgroundColor: 'rgba(191,90,242,0.07)', borderWidth: 1, borderColor: 'rgba(191,90,242,0.22)',
+    borderRadius: 14, padding: 13, marginBottom: 14,
+  },
+  trendHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 7 },
+  trendLabel: { flex: 1, color: '#BF5AF2', fontSize: 9.5, fontWeight: '800', letterSpacing: 0.7 },
+  trendRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  trendText: { color: '#D8D8DD', fontSize: 13, lineHeight: 21 },
+  trendPending: { color: '#8A8A8E', fontSize: 11.5, lineHeight: 17 },
+  trendErr: { color: '#FF9F96', fontSize: 10.5, lineHeight: 15, marginTop: 7 },
+  trendBtn: {
+    alignSelf: 'flex-start', marginTop: 10, borderRadius: 999,
+    paddingHorizontal: 13, paddingVertical: 7,
+    backgroundColor: 'rgba(191,90,242,0.16)', borderWidth: 1, borderColor: 'rgba(191,90,242,0.4)',
+  },
+  trendBtnText: { color: '#BF5AF2', fontSize: 11, fontWeight: '700' },
 
   statusBox: {
     backgroundColor: '#101010', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',

@@ -894,22 +894,11 @@ export default function ExploreScreen() {
         {searchQuery === '' && (
           <>
 
-            {/* 1. Trending Stories — the exact StoryCard the main feed uses,
-                so image treatment, meta row, bias dot, bookmark, read-dimming
-                and every Customize toggle (showClusterSummary, showBiasDots,
-                showCardImages, cardDensity, timeFormat, autoMarkRead) match
-                identically. */}
-            <div style={{ marginBottom: 28 }}>
-              <SectionLabel text="Trending Stories" />
-              {loading ? <VerticalCardSkeleton cardDensity={cardDensity} /> : (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: cardGap }}>
-                  {trendingStories.slice(0, 8).map((item, i) => {
-                    const story = toStory(item);
-                    return <StoryCard key={story.id || i} story={story} allStories={item.articles} />;
-                  })}
-                </div>
-              )}
-            </div>
+            {/* Trending Stories removed: the Briefing tab now ranks the
+                day's top stories across every subject area and explains the
+                ordering, so this was the same content carrying less
+                information. Explore keeps what is genuinely its own —
+                discovery by entity, topic and source. */}
 
             {/* 2. Don't Miss — the server's "Catch Up · Big Stories This Week"
                 rail: big stories from hot themes that are 3-7 days old and
