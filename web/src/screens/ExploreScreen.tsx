@@ -473,7 +473,6 @@ function SearchStoryCard({ item, onOpen }: { item: FeedItem; onOpen: (item: Feed
 // tab switch shows the cached view instantly; only a genuinely stale (5+
 // min old) cache triggers a fresh fetch + skeleton.
 interface ExploreCache {
-  deepDives: FeedItem[];
   companies: EntityCard[]; people: EntityCard[]; places: EntityCard[];
   emergingTopics: EntityCard[]; sources: SourceCard[]; allItems: FeedItem[];
   timestamp: number;
@@ -489,7 +488,6 @@ export default function ExploreScreen() {
   // so Explore's story lists read identically dense/spaced.
   const cardGap = cardDensity === 'compact' ? 14 : cardDensity === 'spacious' ? 44 : 28;
 
-  const [deepDives, setDeepDives] = useState<FeedItem[]>(() => exploreCache?.deepDives ?? []);
   const [companies, setCompanies] = useState<EntityCard[]>(() => exploreCache?.companies ?? []);
   const [people, setPeople] = useState<EntityCard[]>(() => exploreCache?.people ?? []);
   const [places, setPlaces] = useState<EntityCard[]>(() => exploreCache?.places ?? []);
@@ -551,24 +549,6 @@ export default function ExploreScreen() {
 
       const allItems: FeedItem[] = results.flatMap(r => r.status === 'fulfilled' ? r.value.items : []);
       allItemsRef.current = allItems;
-
-      // Theme/company rails (incl. "Catch Up") are multi-story collections
-      // grouped under a synthetic topicTitle, not a single trending event —
-      // they belong only in the Don't Miss section below. Without this
-      // filter they leaked into Trending/Deep Dives too (previously masked
-      // by the clusterLabel bug, which mislabeled them as their first
-      // article's headline instead of the collection title, so the dupe was
-      // invisible; fixing the label made the leak visible).
-      const isEventItem = (it: FeedItem) => it.type === 'article' || (it.type === 'cluster' && !it.collection);
-
-      const noHindi = (it: FeedItem) => !isHindi(itemLabel(it));
-
-      // Deep Dives — 3+ sources
-      const ddItems = dedup(
-        allItems.filter(isEventItem).filter(noHindi).filter(it => (it.sourceCount ?? it.articles?.length ?? 1) >= 3)
-          .sort((a, b) => scoreItem(b) - scoreItem(a)),
-        12
-      );
 
       // Entity classification
       const allHeadlines = allItems.flatMap(entityHeadlinesFor).filter(Boolean);
@@ -643,7 +623,6 @@ export default function ExploreScreen() {
       const cappedCompanies = compList.slice(0, 24);
       const cappedPeople = personList.slice(0, 24);
       const cappedPlaces = placeList.slice(0, 20);
-      setDeepDives(ddItems);
       setCompanies(cappedCompanies);
       setPeople(cappedPeople);
       setPlaces(cappedPlaces);
@@ -651,7 +630,6 @@ export default function ExploreScreen() {
       setSources(srcList);
       setLoading(false);
       exploreCache = {
-        deepDives: ddItems,
         companies: cappedCompanies, people: cappedPeople, places: cappedPlaces,
         emergingTopics: emerging, sources: srcList, allItems,
         timestamp: Date.now(),
@@ -879,21 +857,6 @@ export default function ExploreScreen() {
                 ordering, so this was the same content carrying less
                 information. Explore keeps what is genuinely its own —
                 discovery by entity, topic and source. */}
-
-            {/* 3. AI Deep Dives */}
-            {(loading || deepDives.length > 0) && (
-              <div style={{ marginBottom: 28 }}>
-                <SectionLabel text="AI Deep Dives" />
-                {loading ? <VerticalCardSkeleton cardDensity={cardDensity} /> : (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: cardGap }}>
-                    {deepDives.slice(0, 5).map((item, i) => {
-                      const story = toStory(item);
-                      return <StoryCard key={story.id || i} story={story} allStories={item.articles} />;
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* 4. Companies */}
             {(loading || companies.length > 0) && (

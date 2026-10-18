@@ -71,10 +71,6 @@ function entityHeadlinesFor(it: FeedItem): string[] {
 // Theme/company rails (incl. "Catch Up") are multi-story collections grouped
 // under a synthetic topicTitle, not a single trending event — they belong
 // only in the Don't Miss section. Without this filter they'd leak into
-// Deep Dives too.
-function isEventItem(it: FeedItem): boolean {
-  return it.type === 'article' || (it.type === 'cluster' && !it.collection);
-}
 
 // Dedupe a merged source list by publisher name, filling in a fallback date
 // so it satisfies Story['sources'][number].publishedAt (non-optional).
@@ -426,23 +422,6 @@ const CARD_GAP: Record<string, number> = { compact: 14, comfortable: 28, spaciou
 // stories from hot themes that aged past the fresh-rail cutoff but are
 // still under 7 days old. Flattened into individual cards, newest first.
 
-const DeepDivesSection = memo(function DeepDivesSection({ loading, stories, cardDensity }: {
-  loading: boolean; stories: FeedItem[]; cardDensity: string;
-}) {
-  const h = CARD_SKELETON_HEIGHT[cardDensity] ?? 360;
-  const gap = CARD_GAP[cardDensity] ?? 28;
-  return (
-    <View style={s.section}>
-      <SectionLabel text="AI Deep Dives" />
-      {loading ? (
-        <><SkeletonBox height={h} style={{ marginBottom: gap, alignSelf: 'center', width: CONTENT_W }} /><SkeletonBox height={h} style={{ marginBottom: gap, alignSelf: 'center', width: CONTENT_W }} /></>
-      ) : stories.slice(0, 5).map((item, i) => {
-        const story = toStory(item);
-        return <View key={story.id || i} style={{ marginBottom: gap, alignItems: 'center' }}><StoryCard story={story} allStories={item.articles} /></View>;
-      })}
-    </View>
-  );
-});
 
 const CompaniesSection = memo(function CompaniesSection({ loading, companies, onTap }: {
   loading: boolean; companies: EntityCard[]; onTap: (name: string) => void;
@@ -643,7 +622,6 @@ function SearchHeader({ searchText, onChangeText, onSubmit, onClear }: {
 type Nav = NativeStackNavigationProp<ExploreStackParamList>;
 
 type Section =
-  | { key: 'deepDives' }
   | { key: 'companies' }
   | { key: 'people' }
   | { key: 'places' }
@@ -656,7 +634,6 @@ export default function ExploreScreen() {
   const navigation = useNavigation<Nav>();
   const { cardDensity } = useSettings();
 
-  const [deepDives, setDeepDives] = useState<FeedItem[]>([]);
   const [companies, setCompanies] = useState<EntityCard[]>([]);
   const [people, setPeople] = useState<EntityCard[]>([]);
   const [places, setPlaces] = useState<EntityCard[]>([]);
@@ -693,16 +670,6 @@ export default function ExploreScreen() {
 
       const allItems: FeedItem[] = results.flatMap(r => r.status === 'fulfilled' ? r.value.items : []);
       allItemsRef.current = allItems;
-
-      const noHindi = (it: FeedItem) => !isHindi(itemLabel(it));
-
-      // Theme/company rails (incl. Catch Up) never belong in Deep Dives —
-      // isEventItem excludes them so only single-event items compete.
-      const ddItems = dedup(
-        allItems.filter(isEventItem).filter(noHindi).filter(it => (it.sourceCount ?? it.articles?.length ?? 1) >= 3)
-          .sort((a, b) => scoreItem(b) - scoreItem(a)),
-        12
-      );
 
       const allHeadlines = allItems.flatMap(entityHeadlinesFor).filter(Boolean);
       const entityCounts = extractEntityCounts(allHeadlines);
@@ -769,7 +736,6 @@ export default function ExploreScreen() {
         .slice(0, 18)
         .map(([name, { domain, count }]) => ({ name, domain, count }));
 
-      setDeepDives(ddItems);
       setCompanies(compList.slice(0, 24));
       setPeople(personList.slice(0, 24));
       setPlaces(placeList.slice(0, 20));
@@ -866,7 +832,6 @@ export default function ExploreScreen() {
     // same content with less information attached. Explore keeps what is
     // genuinely its own — discovery by entity, topic and source.
     const out: Section[] = [];
-    if (loading || deepDives.length > 0) out.push({ key: 'deepDives' });
     if (loading || companies.length > 0) out.push({ key: 'companies' });
     if (loading || people.length > 0) out.push({ key: 'people' });
     if (loading || places.length > 0) out.push({ key: 'places' });
@@ -874,11 +839,10 @@ export default function ExploreScreen() {
     if (loading || sources.length > 0) out.push({ key: 'sources' });
     if (loading || emergingTopics.length > 0) out.push({ key: 'emerging' });
     return out;
-  }, [searchQuery, loading, deepDives.length, companies.length, people.length, places.length, sources.length, emergingTopics.length]);
+  }, [searchQuery, loading, companies.length, people.length, places.length, sources.length, emergingTopics.length]);
 
   const renderSection = useCallback(({ item }: { item: Section }) => {
     switch (item.key) {
-      case 'deepDives':     return <DeepDivesSection loading={loading} stories={deepDives} cardDensity={cardDensity} />;
       case 'companies':     return <CompaniesSection loading={loading} companies={companies} onTap={triggerSearch} />;
       case 'people':        return <PeopleSection loading={loading} people={people} onTap={triggerSearch} />;
       case 'places':        return <PlacesSection loading={loading} places={places} onTap={triggerSearch} />;
@@ -888,7 +852,7 @@ export default function ExploreScreen() {
       case 'searchResults': return <SearchResultsSection searchQuery={searchQuery} searchResults={searchResults} hasSearchResults={hasSearchResults} openArticle={openArticle} triggerSearch={triggerSearch} />;
       default:              return null;
     }
-  }, [loading, deepDives, companies, people, places, sources, emergingTopics,
+  }, [loading, companies, people, places, sources, emergingTopics,
       cardDensity, openArticle, openTopic, triggerSearch, searchQuery, searchResults, hasSearchResults]);
 
   return (
