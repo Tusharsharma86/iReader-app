@@ -241,7 +241,11 @@ export default function BriefingScreen() {
   // text it already paid to write — otherwise the toggle saves nothing.
   const [summariesOn, setSummariesOn] = useState(true);
   const [infoOpen, setInfoOpen] = useState(false);
-  const [trendArea, setTrendArea] = useState<string>('all');
+  // Category selection drives BOTH the card list and the trend. These were
+  // split apart so the trend could be scoped without filtering the cards, but
+  // in use that reads as broken: you pick Tech, the trend changes, and the
+  // thirty cards sit there unchanged looking like nothing happened. One
+  // selection, two visible controls for it (chips and the scope picker).
   const [trendPickerOpen, setTrendPickerOpen] = useState(false);
   const [trends, setTrends] = useState<Record<string, string>>({});
   const [trendBusy, setTrendBusy] = useState<string | null>(null);
@@ -510,7 +514,7 @@ export default function BriefingScreen() {
                 activeOpacity={0.8}
               >
                 <Text style={styles.trendScopeText}>
-                  {trendArea === 'all' ? 'All areas' : (AREA_BY_KEY[trendArea]?.label ?? trendArea)}
+                  {areaFilter === 'all' ? 'All areas' : (AREA_BY_KEY[areaFilter]?.label ?? areaFilter)}
                 </Text>
                 <Ionicons name={trendPickerOpen ? 'chevron-up' : 'chevron-down'} size={11} color="#BF5AF2" />
               </TouchableOpacity>
@@ -522,7 +526,7 @@ export default function BriefingScreen() {
                   ...AREAS.map(a => ({ key: a.key as string, label: a.label as string }))]
                   .map(opt => {
                     const n = opt.key === 'all' ? total : (areaCounts[opt.key] ?? 0);
-                    const selected = trendArea === opt.key;
+                    const selected = areaFilter === opt.key;
                     // Below two stories there is no through-line to find, and
                     // the server refuses rather than inventing one.
                     const tooFew = n < 2;
@@ -530,7 +534,7 @@ export default function BriefingScreen() {
                       <TouchableOpacity
                         key={opt.key}
                         disabled={tooFew}
-                        onPress={() => { setTrendArea(opt.key); setTrendPickerOpen(false); }}
+                        onPress={() => { setAreaFilter(opt.key); setTrendPickerOpen(false); }}
                         style={[styles.trendOpt, selected && styles.trendOptOn, tooFew && { opacity: 0.35 }]}
                         activeOpacity={0.8}
                       >
@@ -543,31 +547,31 @@ export default function BriefingScreen() {
               </View>
             ) : null}
 
-            {trendBusy === trendArea ? (
+            {trendBusy === areaFilter ? (
               <View style={styles.trendRow}>
                 <ActivityIndicator size="small" color="#BF5AF2" />
                 <Text style={styles.trendPending}>Reading the through-line…</Text>
               </View>
-            ) : trends[trendArea] ? (
+            ) : trends[areaFilter] ? (
               <>
-                <Text style={styles.trendText}>{trends[trendArea]}</Text>
-                <TouchableOpacity onPress={() => generateTrend(trendArea, true)} style={styles.trendBtn} activeOpacity={0.8}>
+                <Text style={styles.trendText}>{trends[areaFilter]}</Text>
+                <TouchableOpacity onPress={() => generateTrend(areaFilter, true)} style={styles.trendBtn} activeOpacity={0.8}>
                   <Text style={styles.trendBtnText}>Regenerate</Text>
                 </TouchableOpacity>
               </>
             ) : (
               <>
                 <Text style={styles.trendPending}>
-                  {trendArea === 'all'
+                  {areaFilter === 'all'
                     ? 'What connects today’s stories, including threads that cross subject areas.'
-                    : `What connects today’s ${AREA_BY_KEY[trendArea]?.label ?? trendArea} stories.`}
+                    : `What connects today’s ${AREA_BY_KEY[areaFilter]?.label ?? areaFilter} stories.`}
                 </Text>
-                <TouchableOpacity onPress={() => generateTrend(trendArea)} style={styles.trendBtn} activeOpacity={0.8}>
+                <TouchableOpacity onPress={() => generateTrend(areaFilter)} style={styles.trendBtn} activeOpacity={0.8}>
                   <Text style={styles.trendBtnText}>Generate trend</Text>
                 </TouchableOpacity>
               </>
             )}
-            {trendError && trendBusy !== trendArea && !trends[trendArea] ? (
+            {trendError && trendBusy !== areaFilter && !trends[areaFilter] ? (
               <Text style={styles.trendErr}>{trendError}</Text>
             ) : null}
           </View>

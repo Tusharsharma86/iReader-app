@@ -330,7 +330,11 @@ export default function BriefingScreen() {
     try { return localStorage.getItem('@briefing_summaries') !== '0'; } catch { return true; }
   });
   const [infoOpen, setInfoOpen] = useState(false);
-  const [trendArea, setTrendArea] = useState<string>('all');
+  // Category selection drives BOTH the card list and the trend. These were
+  // split apart so the trend could be scoped without filtering the cards, but
+  // in use that reads as broken: you pick Tech, the trend changes, and the
+  // thirty cards sit there unchanged looking like nothing happened. One
+  // selection, two visible controls for it (chips and dropdown).
   const [trends, setTrends] = useState<Record<string, string>>({});
   const [trendBusy, setTrendBusy] = useState<string | null>(null);
   const [trendError, setTrendError] = useState<string | null>(null);
@@ -659,8 +663,8 @@ export default function BriefingScreen() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <span style={{ color: '#BF5AF2', fontSize: 9.5, fontWeight: 800, letterSpacing: 0.7 }}>TREND</span>
               <select
-                value={trendArea}
-                onChange={e => setTrendArea(e.target.value)}
+                value={areaFilter}
+                onChange={e => { setAreaFilter(e.target.value); scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }}
                 style={{
                   marginLeft: 'auto',
                   background: 'rgba(191,90,242,0.14)', color: '#BF5AF2',
@@ -681,13 +685,13 @@ export default function BriefingScreen() {
               </select>
             </div>
 
-            {trendBusy === trendArea ? (
+            {trendBusy === areaFilter ? (
               <div style={{ color: '#8A8A8E', fontSize: 11.5 }}>Reading the through-line…</div>
-            ) : trends[trendArea] ? (
+            ) : trends[areaFilter] ? (
               <>
-                <div style={{ color: '#D8D8DD', fontSize: 13, lineHeight: 1.62 }}>{trends[trendArea]}</div>
+                <div style={{ color: '#D8D8DD', fontSize: 13, lineHeight: 1.62 }}>{trends[areaFilter]}</div>
                 <button
-                  onClick={() => generateTrend(trendArea, true)}
+                  onClick={() => generateTrend(areaFilter, true)}
                   style={{
                     marginTop: 10, background: 'rgba(191,90,242,0.16)',
                     border: '1px solid rgba(191,90,242,0.4)', color: '#BF5AF2',
@@ -698,12 +702,12 @@ export default function BriefingScreen() {
             ) : (
               <>
                 <div style={{ color: '#8A8A8E', fontSize: 11.5, lineHeight: 1.5 }}>
-                  {trendArea === 'all'
+                  {areaFilter === 'all'
                     ? 'What connects today’s stories, including threads that cross subject areas.'
-                    : `What connects today’s ${AREA_BY_KEY[trendArea]?.label ?? trendArea} stories.`}
+                    : `What connects today’s ${AREA_BY_KEY[areaFilter]?.label ?? areaFilter} stories.`}
                 </div>
                 <button
-                  onClick={() => generateTrend(trendArea)}
+                  onClick={() => generateTrend(areaFilter)}
                   style={{
                     marginTop: 10, background: 'rgba(191,90,242,0.16)',
                     border: '1px solid rgba(191,90,242,0.4)', color: '#BF5AF2',
@@ -712,7 +716,7 @@ export default function BriefingScreen() {
                 >Generate trend</button>
               </>
             )}
-            {trendError && trendBusy !== trendArea && !trends[trendArea] && (
+            {trendError && trendBusy !== areaFilter && !trends[areaFilter] && (
               <div style={{ color: '#FF9F96', fontSize: 10.5, marginTop: 7, lineHeight: 1.45 }}>{trendError}</div>
             )}
           </div>
