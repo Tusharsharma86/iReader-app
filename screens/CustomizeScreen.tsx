@@ -153,7 +153,6 @@ const LINK_OPEN: SegmentedOption<LinkOpen>[] = [
 const TAB_OPTIONS: { key: string; label: string }[] = [
   { key: 'briefing', label: 'Briefing' },
   { key: 'feed', label: 'Feed' },
-  { key: 'digest', label: 'Digest' },
   { key: 'aifeed', label: 'AI Feed' },
   { key: 'saved', label: 'Saved' },
   { key: 'settings', label: 'Settings' },

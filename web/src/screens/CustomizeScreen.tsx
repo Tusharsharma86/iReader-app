@@ -22,7 +22,6 @@ import type { CategoryTopic } from '../types';
 const TAB_OPTIONS = [
   { key: 'briefing', label: 'Briefing' },
   { key: 'feed',     label: 'Feed' },
-  { key: 'digest',   label: 'Digest' },
   { key: 'aifeed',   label: 'AI Feed' },
   { key: 'saved',    label: 'Saved' },
   { key: 'settings', label: 'Settings' },

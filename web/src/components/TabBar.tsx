@@ -4,13 +4,12 @@ import { useRouter } from '../contexts/RouterContext';
 import { useTabBar } from '../contexts/TabBarContext';
 import { useSettings } from '../contexts/SettingsContext';
 
-type IconName = 'briefing' | 'feed' | 'explore' | 'digest' | 'aifeed' | 'saved' | 'profile';
+type IconName = 'briefing' | 'feed' | 'explore' | 'aifeed' | 'saved' | 'profile';
 
 const TAB_ITEMS: Array<{ tab: TabName; screen: NavScreen; icon: IconName; label: string }> = [
   { tab: 'briefing', screen: { name: 'Briefing' }, icon: 'briefing', label: 'Briefing' },
   { tab: 'feed',     screen: { name: 'Feed' },     icon: 'feed',    label: 'Feed'    },
   { tab: 'explore',  screen: { name: 'Explore' },  icon: 'explore', label: 'Search'  },
-  { tab: 'digest',   screen: { name: 'Digest' },   icon: 'digest',  label: 'Digest'  },
   { tab: 'aifeed',   screen: { name: 'AIFeed' },   icon: 'aifeed',  label: 'AI Feed' },
   { tab: 'saved',    screen: { name: 'Saved' },    icon: 'saved',   label: 'Saved'   },
   { tab: 'settings', screen: { name: 'Settings' }, icon: 'profile', label: 'Profile' },
@@ -53,14 +52,6 @@ function TabIcon({ name, active }: { name: IconName; active: boolean }) {
         <rect x="64" y="80" width="384" height="352" rx="32" />
         <path d="M144 160h224M144 224h224M144 288h160" />
         {active && <rect x="64" y="80" width="384" height="352" rx="32" fill={color} fillOpacity="0.15" />}
-      </svg>
-    );
-  }
-  if (name === 'digest') {
-    // flash / lightning bolt
-    return (
-      <svg {...common} fill={active ? color : 'none'}>
-        <path d="M315.27 33L96 304h128l-31.51 173.23a2.81 2.81 0 005 2.17L416 208H288l31.61-173.25a2.81 2.81 0 00-4.34-2.92z" />
       </svg>
     );
   }

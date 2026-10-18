@@ -329,6 +329,7 @@ export default function BriefingScreen() {
     return (COUNT_OPTIONS as readonly number[]).includes(saved) ? saved : TARGET_COUNT;
   });
   const [infoOpen, setInfoOpen] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -486,6 +487,40 @@ export default function BriefingScreen() {
     });
   }, [navigate]);
 
+  // Ported from the Digest screen, which this replaces. Digest read the hero
+  // story plus bare section headlines; a ranked list with a summary per card
+  // is better listening material, so read rank, headline and summary. Native
+  // used expo-speech; the browser equivalent is speechSynthesis.
+  const speechText = useMemo(() => {
+    if (!snapshot?.items.length) return '';
+    const scope = areaFilter === 'all'
+      ? `across ${AREAS.length} areas`
+      : `in ${AREA_BY_KEY[areaFilter]?.label ?? areaFilter}`;
+    const parts = [`${greeting()}. Your briefing ${scope}, top ${snapshot.items.length}.`];
+    snapshot.items.forEach(it => {
+      parts.push(`Number ${it.rank}. ${it.headline}.`);
+      if (it.aiSummary) parts.push(it.aiSummary);
+    });
+    return parts.join(' ');
+  }, [snapshot, areaFilter]);
+
+  const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window;
+
+  const toggleSpeak = useCallback(() => {
+    if (!canSpeak || !speechText) return;
+    if (speaking) { window.speechSynthesis.cancel(); setSpeaking(false); return; }
+    const u = new SpeechSynthesisUtterance(speechText);
+    u.rate = 0.95;
+    u.onend = () => setSpeaking(false);
+    u.onerror = () => setSpeaking(false);
+    setSpeaking(true);
+    window.speechSynthesis.speak(u);
+  }, [canSpeak, speaking, speechText]);
+
+  // Leaving the screen must stop playback, or it reads on over whatever you
+  // navigate to — speechSynthesis is global to the page, not to this view.
+  useEffect(() => () => { if (canSpeak) window.speechSynthesis.cancel(); }, [canSpeak]);
+
   const areaCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const it of snapshot?.items ?? []) counts[it.area] = (counts[it.area] ?? 0) + 1;
@@ -527,7 +562,7 @@ export default function BriefingScreen() {
             is what made the page feel scattered. It is now one header, one
             control row, the sticky filter and a single status line. No functionality was dropped: the ranking explanation moved
             behind the ⓘ, and per-card factor bars already carried it anyway. */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '4px 0 12px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '4px 0 12px' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ color: '#fff', fontSize: 26, fontWeight: 800, letterSpacing: -0.6 }}>
               Briefing for the day
@@ -538,6 +573,21 @@ export default function BriefingScreen() {
                 : `top ${total} in ${AREA_BY_KEY[areaFilter]?.label ?? areaFilter}, ranked`}
             </div>
           </div>
+          {canSpeak && (
+            <button
+              onClick={toggleSpeak}
+              disabled={!speechText}
+              title={speaking ? 'Stop reading' : 'Read this briefing aloud'}
+              style={{
+                flexShrink: 0, width: 34, height: 34, borderRadius: 17,
+                cursor: speechText ? 'pointer' : 'default',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: speaking ? 'rgba(48,209,88,0.14)' : 'rgba(74,144,217,0.14)',
+                border: `1px solid ${speaking ? 'rgba(48,209,88,0.4)' : 'rgba(74,144,217,0.35)'}`,
+                color: speaking ? '#30D158' : (speechText ? '#4A90D9' : '#3A3A3E'), fontSize: 13,
+              }}
+            >{speaking ? '❚❚' : '▶'}</button>
+          )}
           <button
             onClick={busy ? stop : regenerate}
             title={busy ? 'Stop' : 'Rebuild the briefing'}

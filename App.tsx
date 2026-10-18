@@ -15,7 +15,6 @@ import TopicFeedScreen from './screens/TopicFeedScreen';
 import ExploreScreen from './screens/ExploreScreen';
 import SavedScreen from './screens/SavedScreen';
 import FeedScreen from './app/index';
-import DigestScreen from './screens/DigestScreen';
 import AIFeedScreen from './screens/AIFeedScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import TopicsScreen from './screens/TopicsScreen';
@@ -133,7 +132,6 @@ function handleWidgetUrl(url: string | null) {
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const FeedStack = createNativeStackNavigator<FeedStackParamList>();
 const BriefingStack = createNativeStackNavigator<BriefingStackParamList>();
-const DigestStack = createNativeStackNavigator<FeedStackParamList>();
 const ExploreStack = createNativeStackNavigator<ExploreStackParamList>();
 const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
 
@@ -146,7 +144,6 @@ const TAB_ITEMS: { route: keyof RootTabParamList; label: string; icon: IoniconsN
   { route: 'Briefing', label: 'Briefing', icon: 'today-outline',      iconActive: 'today'      },
   { route: 'Feed',     label: 'Feed',     icon: 'newspaper-outline',  iconActive: 'newspaper'  },
   { route: 'Explore',  label: 'Search',   icon: 'search-outline',     iconActive: 'search'     },
-  { route: 'Digest',   label: 'Digest',   icon: 'flash-outline',      iconActive: 'flash'      },
   { route: 'AIFeed',   label: 'AI Feed',  icon: 'sparkles-outline',   iconActive: 'sparkles'   },
   { route: 'Saved',    label: 'Saved',    icon: 'bookmark-outline',   iconActive: 'bookmark'   },
   { route: 'Settings', label: 'Settings', icon: 'settings-outline',   iconActive: 'settings'   },
@@ -154,7 +151,7 @@ const TAB_ITEMS: { route: keyof RootTabParamList; label: string; icon: IoniconsN
 // Customize → hiddenTabs stores lowercase keys (matches web's convention);
 // 'explore' isn't hideable, same as web (no entry for it in web's TAB_OPTIONS).
 const TAB_ROUTE_TO_KEY: Partial<Record<keyof RootTabParamList, string>> = {
-  Briefing: 'briefing', Feed: 'feed', Digest: 'digest', AIFeed: 'aifeed', Saved: 'saved', Settings: 'settings',
+  Briefing: 'briefing', Feed: 'feed', AIFeed: 'aifeed', Saved: 'saved', Settings: 'settings',
 };
 
 function ParticleTabBar({ state, navigation }: BottomTabBarProps) {
@@ -333,16 +330,6 @@ function BriefingNavigator() {
   );
 }
 
-function DigestNavigator() {
-  return (
-    <DigestStack.Navigator
-      screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#080808' } }}
-    >
-      <DigestStack.Screen name="FeedHome" component={DigestScreen} />
-      <DigestStack.Screen name="Article" component={ArticleScreen} />
-    </DigestStack.Navigator>
-  );
-}
 
 function ExploreNavigator() {
   return (
@@ -564,7 +551,6 @@ export default function App() {
           <Tab.Screen name="Briefing" component={BriefingNavigator} />
           <Tab.Screen name="Feed"     component={FeedNavigator} />
           <Tab.Screen name="Explore"  component={ExploreNavigator} />
-          <Tab.Screen name="Digest"   component={DigestNavigator} />
           <Tab.Screen name="AIFeed"   component={AIFeedScreen} />
           <Tab.Screen name="Saved"    component={SavedScreen} />
           <Tab.Screen name="Settings" component={SettingsNavigator} />

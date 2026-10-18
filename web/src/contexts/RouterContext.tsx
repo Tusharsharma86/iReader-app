@@ -27,7 +27,6 @@ export function RouterProvider({ children }: { children: React.ReactNode }) {
     briefing: [{ name: 'Briefing' }],
     feed: [{ name: 'Feed' }],
     explore: [{ name: 'Explore' }],
-    digest: [{ name: 'Digest' }],
     aifeed: [{ name: 'AIFeed' }],
     saved: [{ name: 'Saved' }],
     settings: [{ name: 'Settings' }],

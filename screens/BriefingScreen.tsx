@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Speech from 'expo-speech';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -244,6 +245,7 @@ export default function BriefingScreen() {
   const [summariesOn, setSummariesOn] = useState(true);
   const [count, setCount] = useState<number>(TARGET_COUNT);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const summariesOnRef = useRef(summariesOn);
   useEffect(() => { summariesOnRef.current = summariesOn; }, [summariesOn]);
@@ -385,6 +387,46 @@ export default function BriefingScreen() {
     });
   }, [navigation]);
 
+  // Ported from the Digest screen, which this replaces. It read the hero
+  // story plus bare section headlines; a ranked list with a summary per card
+  // is better material to listen to, so read rank, headline and summary.
+  const speechText = useMemo(() => {
+    if (!snapshot?.items.length) return '';
+    const scope = areaFilter === 'all'
+      ? `across ${AREAS.length} areas`
+      : `in ${AREA_BY_KEY[areaFilter]?.label ?? areaFilter}`;
+    const parts = [`${greeting()}. Your briefing ${scope}, top ${snapshot.items.length}.`];
+    snapshot.items.forEach((it) => {
+      parts.push(`Number ${it.rank}. ${it.headline}.`);
+      if (it.aiSummary) parts.push(it.aiSummary);
+    });
+    return parts.join(' ');
+  }, [snapshot, areaFilter]);
+
+  const toggleSpeak = useCallback(async () => {
+    if (speaking) {
+      await Speech.stop().catch(() => {});
+      setSpeaking(false);
+      return;
+    }
+    if (!speechText) return;
+    setSpeaking(true);
+    Speech.speak(speechText, {
+      rate: 0.95,
+      pitch: 1.0,
+      onDone: () => setSpeaking(false),
+      onStopped: () => setSpeaking(false),
+      onError: () => setSpeaking(false),
+    });
+  }, [speaking, speechText]);
+
+  // Leaving the tab must stop playback, or it keeps reading over whatever
+  // screen you moved to.
+  useFocusEffect(useCallback(() => () => {
+    Speech.stop().catch(() => {});
+    setSpeaking(false);
+  }, []));
+
   const areaCounts = useMemo(() => {
     const c: Record<string, number> = {};
     for (const it of snapshot?.items ?? []) c[it.area] = (c[it.area] ?? 0) + 1;
@@ -427,6 +469,18 @@ export default function BriefingScreen() {
                 : `top ${total} in ${AREA_BY_KEY[areaFilter]?.label ?? areaFilter}, ranked`}
             </Text>
           </View>
+          <TouchableOpacity
+            onPress={toggleSpeak}
+            style={[styles.iconBtn, speaking && styles.iconBtnSpeaking]}
+            activeOpacity={0.8}
+            disabled={!speechText}
+          >
+            <Ionicons
+              name={speaking ? 'pause' : 'volume-high-outline'}
+              size={15}
+              color={speaking ? '#30D158' : (speechText ? '#4A90D9' : '#3A3A3E')}
+            />
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={busy ? () => abortRef.current?.abort() : regenerate}
             style={[styles.iconBtn, busy && styles.iconBtnBusy]}
@@ -567,7 +621,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#080808' },
   scroll: { paddingHorizontal: 16, paddingTop: 6 },
 
-  header: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingTop: 6, paddingBottom: 14 },
+  header: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingTop: 6, paddingBottom: 14 },
   title: { color: '#fff', fontSize: 26, fontWeight: '800', letterSpacing: -0.6 },
   subtitle: { color: '#8A8A8E', fontSize: 12, marginTop: 3 },
   iconBtn: {
@@ -576,6 +630,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(74,144,217,0.14)', borderWidth: 1, borderColor: 'rgba(74,144,217,0.35)',
   },
   iconBtnBusy: { backgroundColor: 'rgba(255,69,58,0.12)', borderColor: 'rgba(255,69,58,0.4)' },
+  iconBtnSpeaking: { backgroundColor: 'rgba(48,209,88,0.14)', borderColor: 'rgba(48,209,88,0.4)' },
 
   controlRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 },
   segment: {

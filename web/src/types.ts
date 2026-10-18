@@ -68,7 +68,6 @@ export type NavScreen =
   | { name: 'Briefing' }
   | { name: 'Feed' }
   | { name: 'Explore' }
-  | { name: 'Digest' }
   | { name: 'AIFeed' }
   | { name: 'Article'; params: ArticleParams }
   | { name: 'TopicFeed'; params: { tag: string } }
@@ -86,4 +85,4 @@ export type NavScreen =
   | { name: 'NotifHistory' }
   | { name: 'Customize' };
 
-export type TabName = 'briefing' | 'feed' | 'explore' | 'digest' | 'aifeed' | 'saved' | 'settings';
+export type TabName = 'briefing' | 'feed' | 'explore' | 'aifeed' | 'saved' | 'settings';

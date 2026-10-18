@@ -15,7 +15,6 @@ const FeedScreen       = lazy(() => import('./screens/FeedScreen'));
 const ExploreScreen    = lazy(() => import('./screens/ExploreScreen'));
 const ArticleScreen    = lazy(() => import('./screens/ArticleScreen'));
 const AIFeedScreen     = lazy(() => import('./screens/AIFeedScreen'));
-const DigestScreen     = lazy(() => import('./screens/DigestScreen'));
 const SavedScreen      = lazy(() => import('./screens/SavedScreen'));
 const SettingsScreen   = lazy(() => import('./screens/SettingsScreen'));
 const SourcesScreen    = lazy(() => import('./screens/SourcesScreen'));
@@ -65,7 +64,6 @@ function ScreenRenderer() {
             {currentScreen.name === 'Article'    && <ArticleScreen params={currentScreen.params} />}
             {currentScreen.name === 'Explore'    && <ExploreScreen />}
             {currentScreen.name === 'AIFeed'     && <AIFeedScreen />}
-            {currentScreen.name === 'Digest'     && <DigestScreen />}
             {currentScreen.name === 'Saved'      && <SavedScreen />}
             {currentScreen.name === 'TopicFeed'  && <TopicFeedScreen tag={currentScreen.params.tag} />}
             {currentScreen.name === 'Settings'   && <SettingsScreen />}
