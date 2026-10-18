@@ -140,11 +140,14 @@ const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
 const TAB_ITEMS: { route: keyof RootTabParamList; label: string; icon: IoniconsName; iconActive: IoniconsName }[] = [
+  // Order is shared with the web client (web/src/components/TabBar.tsx) — the
+  // two had Explore, Digest and AI Feed in different positions, so muscle
+  // memory broke when moving between phone and browser. Keep them in step.
   { route: 'Briefing', label: 'Briefing', icon: 'today-outline',      iconActive: 'today'      },
   { route: 'Feed',     label: 'Feed',     icon: 'newspaper-outline',  iconActive: 'newspaper'  },
+  { route: 'Explore',  label: 'Search',   icon: 'search-outline',     iconActive: 'search'     },
   { route: 'Digest',   label: 'Digest',   icon: 'flash-outline',      iconActive: 'flash'      },
   { route: 'AIFeed',   label: 'AI Feed',  icon: 'sparkles-outline',   iconActive: 'sparkles'   },
-  { route: 'Explore',  label: 'Explore',  icon: 'compass-outline',    iconActive: 'compass'    },
   { route: 'Saved',    label: 'Saved',    icon: 'bookmark-outline',   iconActive: 'bookmark'   },
   { route: 'Settings', label: 'Settings', icon: 'settings-outline',   iconActive: 'settings'   },
 ];
@@ -560,9 +563,9 @@ export default function App() {
         >
           <Tab.Screen name="Briefing" component={BriefingNavigator} />
           <Tab.Screen name="Feed"     component={FeedNavigator} />
+          <Tab.Screen name="Explore"  component={ExploreNavigator} />
           <Tab.Screen name="Digest"   component={DigestNavigator} />
           <Tab.Screen name="AIFeed"   component={AIFeedScreen} />
-          <Tab.Screen name="Explore"  component={ExploreNavigator} />
           <Tab.Screen name="Saved"    component={SavedScreen} />
           <Tab.Screen name="Settings" component={SettingsNavigator} />
         </Tab.Navigator>

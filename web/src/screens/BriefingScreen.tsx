@@ -7,7 +7,6 @@ import { trackArticleOpen } from '../utils/personalization';
 import { FALLBACK_IMG } from '../utils/fallback';
 
 const BRIEFING_API = 'https://ireader.onrender.com/api/news/briefing';
-const TREND_API = 'https://ireader.onrender.com/api/news/briefing/trend';
 const CACHE_PREFIX = '@briefing_v2_';
 const SCROLL_KEY = '@ireader_scroll_briefing';
 
@@ -317,12 +316,6 @@ export default function BriefingScreen() {
   const [phase, setPhase] = useState<'idle' | 'loading' | 'revalidating' | 'rebuilding' | 'done'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [areaFilter, setAreaFilter] = useState<string>('all');
-  // Keyed by area, so switching filters shows that area's trend instead of
-  // re-requesting one you already generated.
-  // Deliberately separate from areaFilter. Driving the trend off the card
-  // filter meant the only way to read the Tech trend was to filter the list to
-  // Tech — undiscoverable, and limiting: you may want the Tech read while
-  // still looking at all thirty cards.
   // Off means the server skips generation entirely (summaries=0), not that we
   // hide text it already paid to write — otherwise the toggle would save
   // nothing, which is the point of having it.
@@ -330,14 +323,6 @@ export default function BriefingScreen() {
     try { return localStorage.getItem('@briefing_summaries') !== '0'; } catch { return true; }
   });
   const [infoOpen, setInfoOpen] = useState(false);
-  // Category selection drives BOTH the card list and the trend. These were
-  // split apart so the trend could be scoped without filtering the cards, but
-  // in use that reads as broken: you pick Tech, the trend changes, and the
-  // thirty cards sit there unchanged looking like nothing happened. One
-  // selection, two visible controls for it (chips and dropdown).
-  const [trends, setTrends] = useState<Record<string, string>>({});
-  const [trendBusy, setTrendBusy] = useState<string | null>(null);
-  const [trendError, setTrendError] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -455,27 +440,6 @@ export default function BriefingScreen() {
     setPhase('done');
   }, []);
 
-  /** On demand only: a trend is an AI call, and generating one per category up
-   *  front would spend the budget the summaries need. */
-  const generateTrend = useCallback(async (area: string, force = false) => {
-    setTrendBusy(area);
-    setTrendError(null);
-    try {
-      const res = await fetch(`${TREND_API}?window=${windowHours}&area=${area}${force ? '&refresh=1' : ''}`);
-      const data = (await res.json()) as { text?: string; error?: string };
-      if (!res.ok || !data.text) throw new Error(data.error ?? `HTTP ${res.status}`);
-      setTrends(prev => ({ ...prev, [area]: data.text! }));
-    } catch (e) {
-      setTrendError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setTrendBusy(null);
-    }
-  }, [windowHours]);
-
-  // A trend describes a specific window; carrying it across a change would
-  // caption the new briefing with the old one's reading.
-  useEffect(() => { setTrends({}); setTrendError(null); }, [windowHours]);
-
   /** A category is its own briefing — thirty stories ranked within it — not a
    *  filter over the mixed thirty, so changing it refetches. */
   const pickArea = useCallback((area: string) => {
@@ -545,8 +509,7 @@ export default function BriefingScreen() {
         {/* Header. Everything above the cards used to be five stacked
             bordered boxes — window block, trend, status, pending, meta — which
             is what made the page feel scattered. It is now one header, one
-            control row, the sticky filter, the trend card, and a single status
-            line. No functionality was dropped: the ranking explanation moved
+            control row, the sticky filter and a single status line. No functionality was dropped: the ranking explanation moved
             behind the ⓘ, and per-card factor bars already carried it anyway. */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '4px 0 12px' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -664,69 +627,6 @@ export default function BriefingScreen() {
                   );
                 })}
             </div>
-          </div>
-        )}
-
-        {/* Trend */}
-        {snapshot && (
-          <div style={{
-            background: 'rgba(191,90,242,0.07)', border: '1px solid rgba(191,90,242,0.22)',
-            borderRadius: 14, padding: '12px 14px', marginBottom: 12,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <span style={{ color: '#BF5AF2', fontSize: 9.5, fontWeight: 800, letterSpacing: 0.7 }}>TREND</span>
-              <select
-                value={areaFilter}
-                onChange={e => pickArea(e.target.value)}
-                style={{
-                  marginLeft: 'auto',
-                  background: 'rgba(191,90,242,0.14)', color: '#BF5AF2',
-                  border: '1px solid rgba(191,90,242,0.35)', borderRadius: 999,
-                  padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                  appearance: 'none', WebkitAppearance: 'none',
-                }}
-              >
-                <option value="all" style={{ background: '#121212' }}>All areas</option>
-                {AREAS.map(a => (
-                  <option key={a.key} value={a.key} style={{ background: '#121212' }}>{a.label}</option>
-                ))}
-              </select>
-            </div>
-
-            {trendBusy === areaFilter ? (
-              <div style={{ color: '#8A8A8E', fontSize: 11.5 }}>Reading the through-line…</div>
-            ) : trends[areaFilter] ? (
-              <>
-                <div style={{ color: '#D8D8DD', fontSize: 13, lineHeight: 1.62 }}>{trends[areaFilter]}</div>
-                <button
-                  onClick={() => generateTrend(areaFilter, true)}
-                  style={{
-                    marginTop: 10, background: 'rgba(191,90,242,0.16)',
-                    border: '1px solid rgba(191,90,242,0.4)', color: '#BF5AF2',
-                    borderRadius: 999, padding: '6px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                  }}
-                >Regenerate</button>
-              </>
-            ) : (
-              <>
-                <div style={{ color: '#8A8A8E', fontSize: 11.5, lineHeight: 1.5 }}>
-                  {areaFilter === 'all'
-                    ? 'What connects today’s stories, including threads that cross subject areas.'
-                    : `What connects today’s ${AREA_BY_KEY[areaFilter]?.label ?? areaFilter} stories.`}
-                </div>
-                <button
-                  onClick={() => generateTrend(areaFilter)}
-                  style={{
-                    marginTop: 10, background: 'rgba(191,90,242,0.16)',
-                    border: '1px solid rgba(191,90,242,0.4)', color: '#BF5AF2',
-                    borderRadius: 999, padding: '6px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                  }}
-                >Generate trend</button>
-              </>
-            )}
-            {trendError && trendBusy !== areaFilter && !trends[areaFilter] && (
-              <div style={{ color: '#FF9F96', fontSize: 10.5, marginTop: 7, lineHeight: 1.45 }}>{trendError}</div>
-            )}
           </div>
         )}
 
