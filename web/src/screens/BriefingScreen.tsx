@@ -85,8 +85,8 @@ function todayKey(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function cacheKeyFor(windowHours: WindowHours) {
-  return `${CACHE_PREFIX}${todayKey()}_${windowHours}h`;
+function cacheKeyFor(windowHours: WindowHours, area: string) {
+  return `${CACHE_PREFIX}${todayKey()}_${windowHours}h_${area}`;
 }
 
 function greeting() {
@@ -130,10 +130,10 @@ let memSnapshot: { key: string; snap: Snapshot } | null = null;
 const MEM_FRESH_MS = 10 * 60 * 1000;
 
 async function fetchBriefing(
-  windowHours: WindowHours, force: boolean, signal: AbortSignal, summaries = true,
+  windowHours: WindowHours, force: boolean, signal: AbortSignal, summaries = true, area = 'all',
 ): Promise<Snapshot> {
   const res = await fetch(
-    `${BRIEFING_API}?window=${windowHours}${force ? '&refresh=1' : ''}${summaries ? '' : '&summaries=0'}`,
+    `${BRIEFING_API}?window=${windowHours}&area=${area}${force ? '&refresh=1' : ''}${summaries ? '' : '&summaries=0'}`,
     { signal },
   );
   if (!res.ok) {
@@ -359,12 +359,12 @@ export default function BriefingScreen() {
   /** One request. The server ranks, filters, batches the summaries and caches
    *  the result for every device, so there is nothing left to orchestrate
    *  here — which is the point: this screen used to make 36 calls. */
-  const load = useCallback(async (hours: WindowHours, force: boolean) => {
+  const load = useCallback(async (hours: WindowHours, force: boolean, area = 'all') => {
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setError(null);
-    const key = cacheKeyFor(hours);
+    const key = cacheKeyFor(hours, area);
 
     // Returning from an article: if the in-memory copy is recent, show it and
     // make NO request at all. This is the common path and it should be free.
@@ -396,7 +396,7 @@ export default function BriefingScreen() {
     if (!painted) setSnapshot(null);
 
     try {
-      const snap = await fetchBriefing(hours, force, ctrl.signal, summariesOnRef.current);
+      const snap = await fetchBriefing(hours, force, ctrl.signal, summariesOnRef.current, area);
       if (ctrl.signal.aborted) return;
       setSnapshot(snap);
       memSnapshot = { key, snap };
@@ -411,7 +411,7 @@ export default function BriefingScreen() {
   }, []);
 
   useEffect(() => {
-    load(windowHours, false);
+    load(windowHours, false, areaFilter);
     return () => abortRef.current?.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -421,7 +421,7 @@ export default function BriefingScreen() {
   // anything. A warm read is ~0.2s, and this stops as soon as it is done.
   useEffect(() => {
     if (!snapshot || snapshot.complete !== false) return;
-    const t = setTimeout(() => { load(windowHours, false); }, 15000);
+    const t = setTimeout(() => { load(windowHours, false, areaFilter); }, 15000);
     return () => clearTimeout(t);
   }, [snapshot, windowHours, load]);
 
@@ -429,8 +429,8 @@ export default function BriefingScreen() {
     if (h === windowHours) return;
     setWindowHours(h);
     localStorage.setItem('@briefing_window', String(h));
-    load(h, false);
-  }, [windowHours, load]);
+    load(h, false, areaFilter);
+  }, [windowHours, areaFilter, load]);
 
   const toggleSummaries = useCallback(() => {
     const next = !summariesOn;
@@ -438,13 +438,13 @@ export default function BriefingScreen() {
     try { localStorage.setItem('@briefing_summaries', next ? '1' : '0'); } catch { /* ignore */ }
     summariesOnRef.current = next;
     // Turning them on has to re-ask, or the server never starts writing.
-    if (next) load(windowHours, false);
-  }, [summariesOn, windowHours, load]);
+    if (next) load(windowHours, false, areaFilter);
+  }, [summariesOn, windowHours, areaFilter, load]);
 
   const regenerate = useCallback(() => {
-    try { localStorage.removeItem(cacheKeyFor(windowHours)); } catch { /* ignore */ }
-    load(windowHours, true);
-  }, [windowHours, load]);
+    try { localStorage.removeItem(cacheKeyFor(windowHours, areaFilter)); } catch { /* ignore */ }
+    load(windowHours, true, areaFilter);
+  }, [windowHours, areaFilter, load]);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
@@ -476,6 +476,15 @@ export default function BriefingScreen() {
   // caption the new briefing with the old one's reading.
   useEffect(() => { setTrends({}); setTrendError(null); }, [windowHours]);
 
+  /** A category is its own briefing — thirty stories ranked within it — not a
+   *  filter over the mixed thirty, so changing it refetches. */
+  const pickArea = useCallback((area: string) => {
+    if (area === areaFilter) return;
+    setAreaFilter(area);
+    scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    load(windowHours, false, area);
+  }, [areaFilter, windowHours, load]);
+
   const openArticle = useCallback((item: RankedItem) => {
     const s = toStory(item);
     trackArticleOpen(s);
@@ -506,10 +515,9 @@ export default function BriefingScreen() {
   // Ranks stay global, so a filtered view can open at #7 — that is the point:
   // the number tells you where the story sits in the whole briefing, not in
   // the slice you happen to be looking at.
-  const visibleItems = useMemo(
-    () => (snapshot?.items ?? []).filter(i => areaFilter === 'all' || i.area === areaFilter),
-    [snapshot, areaFilter],
-  );
+  // No client-side filtering any more: the server already returned the
+  // briefing for this category.
+  const visibleItems = snapshot?.items ?? [];
   const busy = phase === 'loading' || phase === 'revalidating' || phase === 'rebuilding';
   const total = snapshot?.items.length ?? 0;
   const pending = snapshot?.items.filter(i => !i.aiSummary).length ?? 0;
@@ -546,7 +554,9 @@ export default function BriefingScreen() {
               Briefing for the day
             </div>
             <div style={{ color: '#8A8A8E', fontSize: 12, marginTop: 3 }}>
-              {greeting()} — {total || TARGET_COUNT} stories across {AREAS.length} areas
+              {greeting()} — {areaFilter === 'all'
+                ? `${total || TARGET_COUNT} stories across ${AREAS.length} areas`
+                : `${total} ${AREA_BY_KEY[areaFilter]?.label ?? areaFilter} stories, ranked`}
             </div>
           </div>
           <button
@@ -622,15 +632,17 @@ export default function BriefingScreen() {
             borderBottom: '1px solid rgba(255,255,255,0.05)',
           }}>
             <div style={{ display: 'flex', gap: 7, overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: 2 }}>
+              {/* Always every category: these now switch between briefings, so
+                  hiding one because the CURRENT briefing has none of it would
+                  make it unreachable. The count shown is this briefing's size. */}
               {([{ key: 'all', label: 'All', accent: '#4A90D9' }, ...AREAS] as Array<{ key: string; label: string; accent: string }>)
-                .filter(a => a.key === 'all' || areaCounts[a.key])
                 .map(a => {
                   const active = areaFilter === a.key;
-                  const count = a.key === 'all' ? total : (areaCounts[a.key] ?? 0);
+                  const count = active ? total : null;
                   return (
                     <button
                       key={a.key}
-                      onClick={() => { setAreaFilter(a.key); scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                      onClick={() => pickArea(a.key)}
                       style={{
                         flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6,
                         padding: '7px 13px', borderRadius: 999,
@@ -641,12 +653,13 @@ export default function BriefingScreen() {
                       }}
                     >
                       {a.label}
-                      <span style={{
-                        fontSize: 9.5, fontWeight: 800,
-                        color: active ? a.accent : '#5A5A5E',
-                        background: active ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.05)',
-                        borderRadius: 999, padding: '1px 6px',
-                      }}>{count}</span>
+                      {count !== null && (
+                        <span style={{
+                          fontSize: 9.5, fontWeight: 800,
+                          color: a.accent, background: 'rgba(0,0,0,0.28)',
+                          borderRadius: 999, padding: '1px 6px',
+                        }}>{count}</span>
+                      )}
                     </button>
                   );
                 })}
@@ -664,7 +677,7 @@ export default function BriefingScreen() {
               <span style={{ color: '#BF5AF2', fontSize: 9.5, fontWeight: 800, letterSpacing: 0.7 }}>TREND</span>
               <select
                 value={areaFilter}
-                onChange={e => { setAreaFilter(e.target.value); scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                onChange={e => pickArea(e.target.value)}
                 style={{
                   marginLeft: 'auto',
                   background: 'rgba(191,90,242,0.14)', color: '#BF5AF2',
@@ -673,15 +686,10 @@ export default function BriefingScreen() {
                   appearance: 'none', WebkitAppearance: 'none',
                 }}
               >
-                <option value="all" style={{ background: '#121212' }}>All areas · {total}</option>
-                {AREAS.map(a => {
-                  const n = areaCounts[a.key] ?? 0;
-                  return (
-                    <option key={a.key} value={a.key} disabled={n < 2} style={{ background: '#121212' }}>
-                      {a.label} · {n}
-                    </option>
-                  );
-                })}
+                <option value="all" style={{ background: '#121212' }}>All areas</option>
+                {AREAS.map(a => (
+                  <option key={a.key} value={a.key} style={{ background: '#121212' }}>{a.label}</option>
+                ))}
               </select>
             </div>
 

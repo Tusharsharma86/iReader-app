@@ -104,8 +104,8 @@ const MEM_FRESH_MS = 10 * 60 * 1000;
 function todayKey(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
-function cacheKeyFor(h: WindowHours) {
-  return `${CACHE_PREFIX}${todayKey()}_${h}h`;
+function cacheKeyFor(h: WindowHours, area: string) {
+  return `${CACHE_PREFIX}${todayKey()}_${h}h_${area}`;
 }
 function greeting() {
   const h = new Date().getHours();
@@ -121,10 +121,10 @@ function agoLabel(hours: number): string {
 }
 
 async function fetchBriefing(
-  h: WindowHours, force: boolean, signal: AbortSignal, summaries = true,
+  h: WindowHours, force: boolean, signal: AbortSignal, summaries = true, area = 'all',
 ): Promise<Snapshot> {
   const res = await fetch(
-    `${BRIEFING_API}?window=${h}${force ? '&refresh=1' : ''}${summaries ? '' : '&summaries=0'}`,
+    `${BRIEFING_API}?window=${h}&area=${area}${force ? '&refresh=1' : ''}${summaries ? '' : '&summaries=0'}`,
     { signal },
   );
   if (!res.ok) {
@@ -254,12 +254,12 @@ export default function BriefingScreen() {
   const summariesOnRef = useRef(summariesOn);
   useEffect(() => { summariesOnRef.current = summariesOn; }, [summariesOn]);
 
-  const load = useCallback(async (hours: WindowHours, force: boolean) => {
+  const load = useCallback(async (hours: WindowHours, force: boolean, area = 'all') => {
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setError(null);
-    const key = cacheKeyFor(hours);
+    const key = cacheKeyFor(hours, area);
 
     // Returning to the tab with a recent, finished copy costs no request.
     if (!force && memSnapshot?.key === key && memSnapshot.snap.complete !== false
@@ -288,7 +288,7 @@ export default function BriefingScreen() {
     if (!painted) setSnapshot(null);
 
     try {
-      const snap = await fetchBriefing(hours, force, ctrl.signal, summariesOnRef.current);
+      const snap = await fetchBriefing(hours, force, ctrl.signal, summariesOnRef.current, area);
       if (ctrl.signal.aborted) return;
       setSnapshot(snap);
       memSnapshot = { key, snap };
@@ -308,7 +308,7 @@ export default function BriefingScreen() {
       const saved = Number(await AsyncStorage.getItem(WINDOW_KEY));
       const h = (WINDOW_OPTIONS as readonly number[]).includes(saved) ? (saved as WindowHours) : DEFAULT_WINDOW;
       setWindowHours(h);
-      load(h, false);
+      load(h, false, 'all');
     })();
     return () => abortRef.current?.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -318,7 +318,7 @@ export default function BriefingScreen() {
   // is still filling. Stops as soon as it is done; a warm read is ~0.2s.
   useEffect(() => {
     if (!snapshot || snapshot.complete !== false) return;
-    const t = setTimeout(() => { load(windowHours, false); }, 15000);
+    const t = setTimeout(() => { load(windowHours, false, areaFilter); }, 15000);
     return () => clearTimeout(t);
   }, [snapshot, windowHours, load]);
 
@@ -326,8 +326,8 @@ export default function BriefingScreen() {
     if (h === windowHours) return;
     setWindowHours(h);
     AsyncStorage.setItem(WINDOW_KEY, String(h)).catch(() => {});
-    load(h, false);
-  }, [windowHours, load]);
+    load(h, false, areaFilter);
+  }, [windowHours, areaFilter, load]);
 
   const toggleSummaries = useCallback(() => {
     const next = !summariesOn;
@@ -335,13 +335,13 @@ export default function BriefingScreen() {
     summariesOnRef.current = next;
     AsyncStorage.setItem(SUMMARIES_KEY, next ? '1' : '0').catch(() => {});
     // Turning them on has to re-ask, or the server never starts writing.
-    if (next) load(windowHours, false);
-  }, [summariesOn, windowHours, load]);
+    if (next) load(windowHours, false, areaFilter);
+  }, [summariesOn, windowHours, areaFilter, load]);
 
   const regenerate = useCallback(() => {
-    AsyncStorage.removeItem(cacheKeyFor(windowHours)).catch(() => {});
-    load(windowHours, true);
-  }, [windowHours, load]);
+    AsyncStorage.removeItem(cacheKeyFor(windowHours, areaFilter)).catch(() => {});
+    load(windowHours, true, areaFilter);
+  }, [windowHours, areaFilter, load]);
 
   /** On demand only: a trend is an AI call, and generating one per category
    *  up front would spend the budget the summaries need. */
@@ -363,6 +363,14 @@ export default function BriefingScreen() {
   // A trend describes a specific window; keeping them across a change would
   // caption the new briefing with the old one's reading.
   useEffect(() => { setTrends({}); setTrendError(null); }, [windowHours]);
+
+  /** A category is its own briefing — thirty stories ranked within it — not a
+   *  filter over the mixed thirty, so changing it refetches. */
+  const pickArea = useCallback((area: string) => {
+    if (area === areaFilter) return;
+    setAreaFilter(area);
+    load(windowHours, false, area);
+  }, [areaFilter, windowHours, load]);
 
   const openArticle = useCallback((item: RankedItem) => {
     const sources = item.sources?.length
@@ -400,10 +408,9 @@ export default function BriefingScreen() {
 
   // Ranks stay global, so a filtered view can open at #7 — the number says
   // where a story sits in the whole briefing, not in the slice on screen.
-  const visibleItems = useMemo(
-    () => (snapshot?.items ?? []).filter(i => areaFilter === 'all' || i.area === areaFilter),
-    [snapshot, areaFilter],
-  );
+  // No client-side filtering: the server already returned this category's
+  // briefing.
+  const visibleItems = snapshot?.items ?? [];
   const busy = phase === 'loading' || phase === 'revalidating' || phase === 'rebuilding';
   const pendingCount = snapshot?.items.filter(i => !i.aiSummary).length ?? 0;
   const total = snapshot?.items.length ?? 0;
@@ -430,7 +437,9 @@ export default function BriefingScreen() {
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>Briefing for the day</Text>
             <Text style={styles.subtitle}>
-              {greeting()} — {total || TARGET_COUNT} stories across {AREAS.length} areas
+              {greeting()} — {areaFilter === 'all'
+                ? `${total || TARGET_COUNT} stories across ${AREAS.length} areas`
+                : `${total} ${AREA_BY_KEY[areaFilter]?.label ?? areaFilter} stories, ranked`}
             </Text>
           </View>
           <TouchableOpacity
@@ -476,15 +485,17 @@ export default function BriefingScreen() {
         {/* 2 — category filter (sticky) */}
         <View style={styles.categoryBar}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 7 }}>
+            {/* Always every category: these switch between briefings now, so
+                hiding one the CURRENT briefing lacks would make it
+                unreachable. The count is this briefing's size. */}
             {[{ key: 'all', label: 'All', accent: '#4A90D9' }, ...AREAS]
-              .filter(a => a.key === 'all' || areaCounts[a.key])
               .map(a => {
                 const active = areaFilter === a.key;
-                const count = a.key === 'all' ? total : (areaCounts[a.key] ?? 0);
+                const count = active ? total : null;
                 return (
                   <TouchableOpacity
                     key={a.key}
-                    onPress={() => setAreaFilter(a.key)}
+                    onPress={() => pickArea(a.key)}
                     activeOpacity={0.8}
                     style={[
                       styles.catChip,
@@ -493,9 +504,11 @@ export default function BriefingScreen() {
                     ]}
                   >
                     <Text style={[styles.catChipText, { color: active ? a.accent : '#8A8A8E' }]}>{a.label}</Text>
-                    <View style={[styles.catCount, { backgroundColor: active ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.05)' }]}>
-                      <Text style={[styles.catCountText, { color: active ? a.accent : '#5A5A5E' }]}>{count}</Text>
-                    </View>
+                    {count !== null ? (
+                      <View style={[styles.catCount, { backgroundColor: 'rgba(0,0,0,0.28)' }]}>
+                        <Text style={[styles.catCountText, { color: a.accent }]}>{count}</Text>
+                      </View>
+                    ) : null}
                   </TouchableOpacity>
                 );
               })}
@@ -525,21 +538,18 @@ export default function BriefingScreen() {
                 {[{ key: 'all', label: 'All areas' },
                   ...AREAS.map(a => ({ key: a.key as string, label: a.label as string }))]
                   .map(opt => {
-                    const n = opt.key === 'all' ? total : (areaCounts[opt.key] ?? 0);
                     const selected = areaFilter === opt.key;
                     // Below two stories there is no through-line to find, and
                     // the server refuses rather than inventing one.
-                    const tooFew = n < 2;
                     return (
                       <TouchableOpacity
                         key={opt.key}
-                        disabled={tooFew}
-                        onPress={() => { setAreaFilter(opt.key); setTrendPickerOpen(false); }}
-                        style={[styles.trendOpt, selected && styles.trendOptOn, tooFew && { opacity: 0.35 }]}
+                        onPress={() => { pickArea(opt.key); setTrendPickerOpen(false); }}
+                        style={[styles.trendOpt, selected && styles.trendOptOn]}
                         activeOpacity={0.8}
                       >
                         <Text style={[styles.trendOptText, selected && { color: '#BF5AF2' }]}>
-                          {opt.label} {n}
+                          {opt.label}
                         </Text>
                       </TouchableOpacity>
                     );
