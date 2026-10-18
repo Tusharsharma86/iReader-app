@@ -46,6 +46,8 @@ const WINDOW_OPTIONS = [6, 12, 24, 48, 72] as const;
 type WindowHours = (typeof WINDOW_OPTIONS)[number];
 const DEFAULT_WINDOW: WindowHours = 24;
 const TARGET_COUNT = 30;
+const COUNT_OPTIONS = [5, 10, 15, 20, 25, 30] as const;
+const COUNT_KEY = '@briefing_count';
 const WINDOW_KEY = '@briefing_window';
 const SUMMARIES_KEY = '@briefing_summaries';
 
@@ -103,8 +105,8 @@ const MEM_FRESH_MS = 10 * 60 * 1000;
 function todayKey(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
-function cacheKeyFor(h: WindowHours, area: string) {
-  return `${CACHE_PREFIX}${todayKey()}_${h}h_${area}`;
+function cacheKeyFor(h: WindowHours, area: string, count: number) {
+  return `${CACHE_PREFIX}${todayKey()}_${h}h_${area}_${count}`;
 }
 function greeting() {
   const h = new Date().getHours();
@@ -120,10 +122,11 @@ function agoLabel(hours: number): string {
 }
 
 async function fetchBriefing(
-  h: WindowHours, force: boolean, signal: AbortSignal, summaries = true, area = 'all',
+  h: WindowHours, force: boolean, signal: AbortSignal,
+  summaries = true, area = 'all', count = TARGET_COUNT,
 ): Promise<Snapshot> {
   const res = await fetch(
-    `${BRIEFING_API}?window=${h}&area=${area}${force ? '&refresh=1' : ''}${summaries ? '' : '&summaries=0'}`,
+    `${BRIEFING_API}?window=${h}&area=${area}&count=${count}${force ? '&refresh=1' : ''}${summaries ? '' : '&summaries=0'}`,
     { signal },
   );
   if (!res.ok) {
@@ -239,17 +242,20 @@ export default function BriefingScreen() {
   // Off means the server skips generation (summaries=0), not that we hide
   // text it already paid to write — otherwise the toggle saves nothing.
   const [summariesOn, setSummariesOn] = useState(true);
+  const [count, setCount] = useState<number>(TARGET_COUNT);
   const [infoOpen, setInfoOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const summariesOnRef = useRef(summariesOn);
   useEffect(() => { summariesOnRef.current = summariesOn; }, [summariesOn]);
+  const countRef = useRef(count);
+  useEffect(() => { countRef.current = count; }, [count]);
 
   const load = useCallback(async (hours: WindowHours, force: boolean, area = 'all') => {
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setError(null);
-    const key = cacheKeyFor(hours, area);
+    const key = cacheKeyFor(hours, area, countRef.current);
 
     // Returning to the tab with a recent, finished copy costs no request.
     if (!force && memSnapshot?.key === key && memSnapshot.snap.complete !== false
@@ -278,7 +284,7 @@ export default function BriefingScreen() {
     if (!painted) setSnapshot(null);
 
     try {
-      const snap = await fetchBriefing(hours, force, ctrl.signal, summariesOnRef.current, area);
+      const snap = await fetchBriefing(hours, force, ctrl.signal, summariesOnRef.current, area, countRef.current);
       if (ctrl.signal.aborted) return;
       setSnapshot(snap);
       memSnapshot = { key, snap };
@@ -293,6 +299,8 @@ export default function BriefingScreen() {
 
   useEffect(() => {
     (async () => {
+      const savedCount = Number(await AsyncStorage.getItem(COUNT_KEY));
+      if ((COUNT_OPTIONS as readonly number[]).includes(savedCount)) { setCount(savedCount); countRef.current = savedCount; }
       const savedSummaries = await AsyncStorage.getItem(SUMMARIES_KEY);
       if (savedSummaries === '0') { setSummariesOn(false); summariesOnRef.current = false; }
       const saved = Number(await AsyncStorage.getItem(WINDOW_KEY));
@@ -328,8 +336,16 @@ export default function BriefingScreen() {
     if (next) load(windowHours, false, areaFilter);
   }, [summariesOn, windowHours, areaFilter, load]);
 
+  const pickCount = useCallback((n: number) => {
+    if (n === count) return;
+    setCount(n);
+    countRef.current = n;
+    AsyncStorage.setItem(COUNT_KEY, String(n)).catch(() => {});
+    load(windowHours, false, areaFilter);
+  }, [count, windowHours, areaFilter, load]);
+
   const regenerate = useCallback(() => {
-    AsyncStorage.removeItem(cacheKeyFor(windowHours, areaFilter)).catch(() => {});
+    AsyncStorage.removeItem(cacheKeyFor(windowHours, areaFilter, count)).catch(() => {});
     load(windowHours, true, areaFilter);
   }, [windowHours, areaFilter, load]);
 
@@ -407,8 +423,8 @@ export default function BriefingScreen() {
             <Text style={styles.title}>Briefing for the day</Text>
             <Text style={styles.subtitle}>
               {greeting()} — {areaFilter === 'all'
-                ? `${total || TARGET_COUNT} stories across ${AREAS.length} areas`
-                : `${total} ${AREA_BY_KEY[areaFilter]?.label ?? areaFilter} stories, ranked`}
+                ? `top ${total || count} across ${AREAS.length} areas`
+                : `top ${total} in ${AREA_BY_KEY[areaFilter]?.label ?? areaFilter}, ranked`}
             </Text>
           </View>
           <TouchableOpacity
@@ -434,6 +450,22 @@ export default function BriefingScreen() {
                   activeOpacity={0.8}
                 >
                   <Text style={[styles.segText, active && styles.segTextOn]}>{h}h</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <View style={styles.segment}>
+            {COUNT_OPTIONS.map(n => {
+              const active = n === count;
+              return (
+                <TouchableOpacity
+                  key={n}
+                  onPress={() => pickCount(n)}
+                  style={[styles.segItem, active && styles.segItemCount]}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.segText, active && { color: '#30D158' }]}>{n}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -552,6 +584,7 @@ const styles = StyleSheet.create({
   },
   segItem: { paddingHorizontal: 11, paddingVertical: 5, borderRadius: 999 },
   segItemOn: { backgroundColor: 'rgba(74,144,217,0.22)' },
+  segItemCount: { backgroundColor: 'rgba(48,209,88,0.20)' },
   segText: { color: '#6E6E73', fontSize: 11, fontWeight: '700' },
   segTextOn: { color: '#4A90D9' },
 

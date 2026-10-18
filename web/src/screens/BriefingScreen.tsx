@@ -31,6 +31,7 @@ const WINDOW_OPTIONS = [6, 12, 24, 48, 72] as const;
 type WindowHours = typeof WINDOW_OPTIONS[number];
 const DEFAULT_WINDOW: WindowHours = 24;
 const TARGET_COUNT = 30;
+const COUNT_OPTIONS = [5, 10, 15, 20, 25, 30] as const;
 
 // Scoring weights, shown in the header so the ranking is legible. These mirror
 // the server's constants; they are display copy, not the scoring itself.
@@ -84,8 +85,8 @@ function todayKey(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function cacheKeyFor(windowHours: WindowHours, area: string) {
-  return `${CACHE_PREFIX}${todayKey()}_${windowHours}h_${area}`;
+function cacheKeyFor(windowHours: WindowHours, area: string, count: number) {
+  return `${CACHE_PREFIX}${todayKey()}_${windowHours}h_${area}_${count}`;
 }
 
 function greeting() {
@@ -129,10 +130,11 @@ let memSnapshot: { key: string; snap: Snapshot } | null = null;
 const MEM_FRESH_MS = 10 * 60 * 1000;
 
 async function fetchBriefing(
-  windowHours: WindowHours, force: boolean, signal: AbortSignal, summaries = true, area = 'all',
+  windowHours: WindowHours, force: boolean, signal: AbortSignal,
+  summaries = true, area = 'all', count = TARGET_COUNT,
 ): Promise<Snapshot> {
   const res = await fetch(
-    `${BRIEFING_API}?window=${windowHours}&area=${area}${force ? '&refresh=1' : ''}${summaries ? '' : '&summaries=0'}`,
+    `${BRIEFING_API}?window=${windowHours}&area=${area}&count=${count}${force ? '&refresh=1' : ''}${summaries ? '' : '&summaries=0'}`,
     { signal },
   );
   if (!res.ok) {
@@ -322,12 +324,18 @@ export default function BriefingScreen() {
   const [summariesOn, setSummariesOn] = useState<boolean>(() => {
     try { return localStorage.getItem('@briefing_summaries') !== '0'; } catch { return true; }
   });
+  const [count, setCount] = useState<number>(() => {
+    const saved = Number(localStorage.getItem('@briefing_count'));
+    return (COUNT_OPTIONS as readonly number[]).includes(saved) ? saved : TARGET_COUNT;
+  });
   const [infoOpen, setInfoOpen] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const summariesOnRef = useRef(summariesOn);
   useEffect(() => { summariesOnRef.current = summariesOn; }, [summariesOn]);
+  const countRef = useRef(count);
+  useEffect(() => { countRef.current = count; }, [count]);
 
   // Scroll memory — this screen unmounts when you tap into an article.
   useEffect(() => {
@@ -349,7 +357,7 @@ export default function BriefingScreen() {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setError(null);
-    const key = cacheKeyFor(hours, area);
+    const key = cacheKeyFor(hours, area, countRef.current);
 
     // Returning from an article: if the in-memory copy is recent, show it and
     // make NO request at all. This is the common path and it should be free.
@@ -381,7 +389,7 @@ export default function BriefingScreen() {
     if (!painted) setSnapshot(null);
 
     try {
-      const snap = await fetchBriefing(hours, force, ctrl.signal, summariesOnRef.current, area);
+      const snap = await fetchBriefing(hours, force, ctrl.signal, summariesOnRef.current, area, countRef.current);
       if (ctrl.signal.aborted) return;
       setSnapshot(snap);
       memSnapshot = { key, snap };
@@ -426,8 +434,16 @@ export default function BriefingScreen() {
     if (next) load(windowHours, false, areaFilter);
   }, [summariesOn, windowHours, areaFilter, load]);
 
+  const pickCount = useCallback((n: number) => {
+    if (n === count) return;
+    setCount(n);
+    countRef.current = n;
+    try { localStorage.setItem('@briefing_count', String(n)); } catch { /* ignore */ }
+    load(windowHours, false, areaFilter);
+  }, [count, windowHours, areaFilter, load]);
+
   const regenerate = useCallback(() => {
-    try { localStorage.removeItem(cacheKeyFor(windowHours, areaFilter)); } catch { /* ignore */ }
+    try { localStorage.removeItem(cacheKeyFor(windowHours, areaFilter, count)); } catch { /* ignore */ }
     load(windowHours, true, areaFilter);
   }, [windowHours, areaFilter, load]);
 
@@ -518,8 +534,8 @@ export default function BriefingScreen() {
             </div>
             <div style={{ color: '#8A8A8E', fontSize: 12, marginTop: 3 }}>
               {greeting()} — {areaFilter === 'all'
-                ? `${total || TARGET_COUNT} stories across ${AREAS.length} areas`
-                : `${total} ${AREA_BY_KEY[areaFilter]?.label ?? areaFilter} stories, ranked`}
+                ? `top ${total || count} across ${AREAS.length} areas`
+                : `top ${total} in ${AREA_BY_KEY[areaFilter]?.label ?? areaFilter}, ranked`}
             </div>
           </div>
           <button
@@ -553,6 +569,25 @@ export default function BriefingScreen() {
                     fontSize: 11, fontWeight: 700,
                   }}
                 >{h}h</button>
+              );
+            })}
+          </div>
+
+          <div style={{ display: 'flex', background: '#0E0E0E', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 999, padding: 2 }}>
+            {COUNT_OPTIONS.map(n => {
+              const active = n === count;
+              return (
+                <button
+                  key={n}
+                  onClick={() => pickCount(n)}
+                  title={`Top ${n} stories`}
+                  style={{
+                    padding: '5px 9px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                    background: active ? 'rgba(48,209,88,0.20)' : 'transparent',
+                    color: active ? '#30D158' : '#6E6E73',
+                    fontSize: 11, fontWeight: 700,
+                  }}
+                >{n}</button>
               );
             })}
           </div>
