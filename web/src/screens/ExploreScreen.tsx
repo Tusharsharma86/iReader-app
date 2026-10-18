@@ -798,7 +798,17 @@ export default function ExploreScreen() {
                 {searchResults.stories.length > 0 && (
                   <div style={{ marginBottom: 24 }}>
                     <SectionLabel text="Stories" />
-                    {searchResults.stories.map((item, i) => <SearchStoryCard key={i} item={item} onOpen={openArticle} />)}
+                    {/* The same StoryCard the main feed uses, not a compact
+                        row: tapping an entity tile is a reading destination,
+                        so it should look like one. StoryCard also brings the
+                        image treatment, bias dot, bookmark, read-dimming and
+                        every Customize toggle for free, and navigates itself. */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: cardGap }}>
+                      {searchResults.stories.map((item, i) => {
+                        const story = toStory(item);
+                        return <StoryCard key={story.id || i} story={story} allStories={item.articles} />;
+                      })}
+                    </div>
                   </div>
                 )}
                 {searchResults.companies.length > 0 && (

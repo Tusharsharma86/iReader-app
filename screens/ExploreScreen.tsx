@@ -516,22 +516,32 @@ const EmergingSection = memo(function EmergingSection({ loading, emergingTopics,
   );
 });
 
-const SearchResultsSection = memo(function SearchResultsSection({ searchQuery, searchResults, hasSearchResults, openArticle, triggerSearch }: {
+const SearchResultsSection = memo(function SearchResultsSection({ searchQuery, searchResults, hasSearchResults, openArticle, triggerSearch, cardDensity }: {
   searchQuery: string;
   searchResults: GroupedSearch;
   hasSearchResults: boolean;
   openArticle: (item: FeedItem) => void;
   triggerSearch: (term: string) => void;
+  cardDensity: string;
 }) {
+  const gap = CARD_GAP[cardDensity] ?? 28;
   if (!hasSearchResults) return <Text style={s.emptyText}>No results for "{searchQuery}"</Text>;
   return (
     <View>
       {searchResults.stories.length > 0 && (
         <View style={s.section}>
           <SectionLabel text="Stories" />
-          {searchResults.stories.map((story, i) => (
-            <SearchStoryCard key={i} item={story} onPress={() => openArticle(story)} />
-          ))}
+          {/* The same StoryCard the main feed uses, not a compact row:
+              tapping an entity tile is a reading destination, so it should
+              look like one. StoryCard navigates itself, so no onPress. */}
+          {searchResults.stories.map((item, i) => {
+            const story = toStory(item);
+            return (
+              <View key={story.id || i} style={{ marginBottom: gap, alignItems: 'center' }}>
+                <StoryCard story={story} allStories={item.articles} />
+              </View>
+            );
+          })}
         </View>
       )}
       {searchResults.companies.length > 0 && (
@@ -849,7 +859,7 @@ export default function ExploreScreen() {
       case 'topics':        return <TopicsSection openTopic={openTopic} />;
       case 'sources':       return <SourcesSection loading={loading} sources={sources} onTap={triggerSearch} />;
       case 'emerging':      return <EmergingSection loading={loading} emergingTopics={emergingTopics} onTap={triggerSearch} />;
-      case 'searchResults': return <SearchResultsSection searchQuery={searchQuery} searchResults={searchResults} hasSearchResults={hasSearchResults} openArticle={openArticle} triggerSearch={triggerSearch} />;
+      case 'searchResults': return <SearchResultsSection searchQuery={searchQuery} searchResults={searchResults} hasSearchResults={hasSearchResults} openArticle={openArticle} triggerSearch={triggerSearch} cardDensity={cardDensity} />;
       default:              return null;
     }
   }, [loading, companies, people, places, sources, emergingTopics,
