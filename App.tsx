@@ -545,6 +545,10 @@ export default function App() {
           }}
           theme={{ ...DarkTheme, colors: { ...DarkTheme.colors, background: '#080808', card: '#080808' } }}>
         <Tab.Navigator
+          // Open on the Feed, not on whichever tab is registered first.
+          // Briefing moved to position one for prominence, which silently made
+          // it the launch screen and put a ~40s cold build in front of the app.
+          initialRouteName="Feed"
           tabBar={(props) => <ParticleTabBar {...props} />}
           screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: '#080808' } }}
         >
