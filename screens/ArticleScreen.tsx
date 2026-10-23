@@ -23,10 +23,14 @@ import {
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { tabBarTranslateY } from '../utils/tabBarAnim';
 
 const AnimatedSafeAreaView = Animated.createAnimatedComponent(SafeAreaView);
+
+/** Height of the headline strip that sits above the pinned tab row. Fixed,
+ *  because the pin point is computed from it before the strip is visible. */
+const PINNED_HEADLINE_H = 46;
 import { darken, lighten, getArticleColor } from '../utils/colors';
 import { BiasDot, BIAS_CONFIG, type BiasRating } from '../components/StoryCard';
 import { RootStackParamList } from '../types/navigation';
@@ -617,31 +621,43 @@ export default function ArticleScreen() {
     });
   }, [width, articleScrollOpacity]);
 
-  // Collapsed chrome: past the hero everything except the headline and the
-  // tab row folds away into a pinned glass bar. Driven by one Animated value
-  // so the fold is a native-driver animation, not a re-render per frame.
-  const collapseAnim = useRef(new Animated.Value(0)).current;
-  const collapsedRef = useRef(false);
+  // The tab row travels with the article and freezes the moment it reaches
+  // the top — it does not jump there early. The visible row is the pinned
+  // copy, translated by (its resting offset - scrollY) and clamped at 0, so
+  // while scrolling it sits exactly where the in-flow row would be; the
+  // in-flow row keeps the space but stays invisible. Transform and opacity
+  // only, so the whole thing runs on the native driver.
+  const insets = useSafeAreaInsets();
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const [tabRowY, setTabRowY] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
+  const collapsedRef = useRef(false);
 
-  const setCollapse = useCallback((next: boolean) => {
-    if (collapsedRef.current === next) return;
-    collapsedRef.current = next;
-    setCollapsed(next);
-    Animated.timing(collapseAnim, {
-      toValue: next ? 1 : 0,
-      duration: 220,
-      useNativeDriver: true,
-    }).start();
-  }, [collapseAnim]);
+  // Scroll offset at which the tab row lands under the headline strip.
+  const pinAt = Math.max(1, tabRowY - insets.top - PINNED_HEADLINE_H);
+
+  const barTranslate = scrollY.interpolate({
+    inputRange: [0, pinAt],
+    outputRange: [pinAt, 0],
+    extrapolate: 'clamp',
+  });
+  // Headline and glass fade in over the last 60px of the approach, so the
+  // bar has arrived by the time it looks like a bar.
+  const pinProgress = scrollY.interpolate({
+    inputRange: [Math.max(0, pinAt - 60), pinAt],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
 
   function onArticleScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
     const y = e.nativeEvent.contentOffset.y;
     const dy = y - lastArticleScrollY.current;
     lastArticleScrollY.current = y;
-    // Hysteresis: fold at 200, unfold at 150. One threshold makes the bar
-    // flicker whenever a scroll settles right on it.
-    setCollapse(collapsedRef.current ? y > 150 : y > 200);
+    const nextCollapsed = y >= pinAt - 8;
+    if (nextCollapsed !== collapsedRef.current) {
+      collapsedRef.current = nextCollapsed;
+      setCollapsed(nextCollapsed);
+    }
     if (dy > 12 && stripVisibleRef.current && y > 200) {
       stripVisibleRef.current = false;
       Animated.timing(stripTransY, { toValue: STRIP_HEIGHT, duration: 230, useNativeDriver: true }).start();
@@ -1003,7 +1019,7 @@ export default function ArticleScreen() {
 
       {/* Fixed top buttons — always visible above scroll */}
       <AnimatedSafeAreaView
-        style={[styles.topBar, { opacity: collapseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }]}
+        style={[styles.topBar, { opacity: pinProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }]}
         edges={['top']}
         pointerEvents={collapsed ? 'none' : 'box-none'}
       >
@@ -1037,35 +1053,42 @@ export default function ArticleScreen() {
           the headline on one line, and the tab row. Sits above the scroll
           view rather than inside it, so no sticky-index bookkeeping. */}
       <Animated.View
-        pointerEvents={collapsed ? 'box-none' : 'none'}
+        pointerEvents="box-none"
         style={[
           styles.pinnedBar,
-          {
-            opacity: collapseAnim,
-            transform: [{ translateY: collapseAnim.interpolate({ inputRange: [0, 1], outputRange: [-10, 0] }) }],
-          },
+          { paddingTop: insets.top, opacity: tabRowY > 0 ? 1 : 0, transform: [{ translateY: barTranslate }] },
         ]}
       >
-        <BlurView
-          intensity={60}
-          tint="dark"
-          experimentalBlurMethod="dimezisBlurView"
-          style={StyleSheet.absoluteFill}
-        />
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: darken(dominant, 0.72) + 'D9' }]} />
-        <SafeAreaView edges={['top']} pointerEvents="box-none">
-          <View style={styles.pinnedHeadlineRow}>
-            <Pressable
-              onPress={() => navigation.goBack()}
-              hitSlop={10}
-              style={[styles.pinnedBackBtn, { backgroundColor: 'rgba(255,255,255,0.09)' }]}
-            >
-              <Ionicons name="chevron-back" size={16} color="#FFF" />
-            </Pressable>
-            <Text style={styles.pinnedHeadline} numberOfLines={1}>{params.headline}</Text>
-          </View>
-          {renderTabRow(true)}
-        </SafeAreaView>
+        {/* Glass only once pinned: while the row is still travelling it must
+            look like part of the article, not a bar. */}
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: pinProgress }]}>
+          <BlurView
+            intensity={60}
+            tint="dark"
+            experimentalBlurMethod="dimezisBlurView"
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: darken(dominant, 0.72) + 'E0' }]} />
+          <View style={styles.pinnedHairline} />
+        </Animated.View>
+
+        <Animated.View
+          style={[styles.pinnedHeadlineRow, { opacity: pinProgress }]}
+          pointerEvents={collapsed ? 'box-none' : 'none'}
+        >
+          <Pressable
+            onPress={() => navigation.goBack()}
+            hitSlop={12}
+            style={styles.pinnedBackBtn}
+          >
+            <Ionicons name="chevron-back" size={19} color="#FFF" />
+          </Pressable>
+          <Text style={styles.pinnedHeadline} numberOfLines={1} ellipsizeMode="tail">
+            {params.headline}
+          </Text>
+        </Animated.View>
+
+        {renderTabRow(true)}
       </Animated.View>
 
       <Animated.View style={{ flex: 1, opacity: articleScrollOpacity }}>
@@ -1073,7 +1096,10 @@ export default function ArticleScreen() {
         ref={articleScrollRef}
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
-        onScroll={onArticleScroll}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true, listener: onArticleScroll },
+        )}
         scrollEventThrottle={16}
       >
         {/* Hero — image variant OR typographic fallback for image-less articles */}
@@ -1186,12 +1212,18 @@ export default function ArticleScreen() {
           )}
         </View>
 
-        <Animated.View
-          style={{ opacity: collapseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }}
-          pointerEvents={collapsed ? 'none' : 'auto'}
+        {/* Spacer for the pinned row above: same height, never drawn. Its
+            layout y IS the pin point, so it is also the measurement. */}
+        <View
+          style={{ opacity: 0 }}
+          pointerEvents="none"
+          onLayout={e => {
+            const y = Math.round(e.nativeEvent.layout.y);
+            if (y > 0 && y !== tabRowY) setTabRowY(y);
+          }}
         >
           {renderTabRow()}
-        </Animated.View>
+        </View>
 
         <View style={[styles.tabBody, { maxWidth: columnMaxPx, alignSelf: 'center', width: '100%' }]}>
           {renderTabContent()}
@@ -1890,20 +1922,23 @@ const styles = StyleSheet.create({
   metaDot: { fontSize: 12, color: 'rgba(255,255,255,0.4)' },
   pinnedBar: {
     position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20,
-    overflow: 'hidden',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  pinnedHairline: {
+    position: 'absolute', left: 0, right: 0, bottom: 0,
+    height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.10)',
   },
   pinnedHeadlineRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 9,
-    paddingHorizontal: 14, paddingTop: 6, paddingBottom: 8,
+    height: PINNED_HEADLINE_H,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 12,
   },
   pinnedBackBtn: {
-    width: 28, height: 28, borderRadius: 14,
+    width: 32, height: 32, borderRadius: 16,
     alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.10)',
   },
   pinnedHeadline: {
-    flex: 1, color: '#FFFFFF', fontSize: 13.5, fontWeight: '700',
+    flex: 1, color: '#FFFFFF', fontSize: 17, fontWeight: '700', letterSpacing: -0.2,
   },
   tabBarPinned: { marginBottom: 9, marginTop: 0 },
   tabBar: {

@@ -265,6 +265,11 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
   // in) and lose the 320px image, byline, meta row and RSS blurb.
   const [collapsed, setCollapsed] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // A zero-height marker sitting just above the sticky shell. Its offsetTop
+  // is the scroll position at which the tab row reaches the top. The shell's
+  // own offsetTop cannot be used: once stuck, it reports where it is now,
+  // which tracks the scroll, so the comparison was always borderline.
+  const pinSentinelRef = useRef<HTMLDivElement>(null);
   const [paragraphs, setParagraphs] = useState<string[]>([]);
   const [originalParagraphs, setOriginalParagraphs] = useState<string[]>([]);
   const [dedupedFlag, setDedupedFlag] = useState(false);
@@ -608,9 +613,10 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
       ref={scrollRef}
       onScroll={e => {
         const y = (e.target as HTMLDivElement).scrollTop;
-        // Hysteresis: collapse at 200, restore at 150. A single threshold
-        // makes the bar flicker when a scroll settles right on it.
-        setCollapsed(prev => (prev ? y > 150 : y > 200));
+        const pinAt = pinSentinelRef.current ? pinSentinelRef.current.offsetTop : Infinity;
+        // 4px of hysteresis around the pin point, so a scroll that settles
+        // exactly on it does not flicker.
+        setCollapsed(prev => (prev ? y > pinAt - 4 : y >= pinAt));
       }}
       style={{ height: '100%', background: gradient, overflowY: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative' }}
     >
@@ -767,6 +773,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
 
       {/* Sticky shell: the tab row pins, and the headline slides in above it
           once the hero has scrolled past. */}
+      <div ref={pinSentinelRef} style={{ height: 0 }} aria-hidden />
       <div style={{
         position: 'sticky', top: 0, zIndex: 20,
         paddingTop: collapsed ? 'env(safe-area-inset-top, 0px)' : 0,
@@ -778,7 +785,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
       }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 10,
-          maxHeight: collapsed ? 40 : 0,
+          maxHeight: collapsed ? 46 : 0,
           opacity: collapsed ? 1 : 0,
           overflow: 'hidden',
           padding: '0 14px',
@@ -788,13 +795,13 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
             onClick={goBack}
             aria-label="Back"
             style={{
-              flexShrink: 0, width: 26, height: 26, borderRadius: 13, cursor: 'pointer',
-              background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, lineHeight: 1,
+              flexShrink: 0, width: 30, height: 30, borderRadius: 15, cursor: 'pointer',
+              background: 'rgba(255,255,255,0.10)', border: 'none', color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, lineHeight: 1,
             }}
           >‹</button>
           <span style={{
-            flex: 1, minWidth: 0, color: '#fff', fontSize: 13, fontWeight: 700,
+            flex: 1, minWidth: 0, color: '#fff', fontSize: 17, fontWeight: 700, letterSpacing: '-0.2px',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}>{params.headline}</span>
         </div>
