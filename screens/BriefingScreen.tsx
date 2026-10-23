@@ -7,6 +7,7 @@ import * as Speech from 'expo-speech';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -159,6 +160,61 @@ function FactorBars({ factors }: { factors: Factor[] }) {
 }
 
 // ───────────────────────────────────────────────────────────────── the card
+
+/** One filter pill. React Native has no <select>, so tapping the pill opens
+ *  a sheet of options; picking one closes it and only fires onChange when the
+ *  value actually changed, so a confirming tap costs no rebuild. */
+function Dropdown({ label, value, options, accent, onChange }: {
+  label: string;
+  value: string;
+  options: Array<{ value: string; label: string }>;
+  accent: string;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const current = options.find(o => o.value === value);
+  return (
+    <>
+      <TouchableOpacity
+        onPress={() => setOpen(true)}
+        activeOpacity={0.8}
+        style={[styles.ddPill, { borderColor: `${accent}59` }]}
+      >
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.ddLabel} numberOfLines={1}>{label.toUpperCase()}</Text>
+          <Text style={[styles.ddValue, { color: accent }]} numberOfLines={1}>
+            {current?.label ?? value}
+          </Text>
+        </View>
+        <Ionicons name="chevron-down" size={11} color={accent} />
+      </TouchableOpacity>
+
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable style={styles.ddBackdrop} onPress={() => setOpen(false)}>
+          <View style={styles.ddSheet}>
+            <Text style={styles.ddSheetTitle}>{label}</Text>
+            {options.map(o => {
+              const active = o.value === value;
+              return (
+                <TouchableOpacity
+                  key={o.value}
+                  activeOpacity={0.8}
+                  onPress={() => { setOpen(false); if (!active) onChange(o.value); }}
+                  style={[styles.ddRow, active && { backgroundColor: `${accent}1F` }]}
+                >
+                  <Text style={[styles.ddRowText, active && { color: accent, fontWeight: '800' }]}>
+                    {o.label}
+                  </Text>
+                  {active ? <Ionicons name="checkmark" size={14} color={accent} /> : null}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Modal>
+    </>
+  );
+}
 
 function BriefingCard({ item, onOpen, showSummary }: { item: RankedItem; onOpen: (i: RankedItem) => void; showSummary: boolean }) {
   const [showFactors, setShowFactors] = useState(false);
@@ -491,40 +547,35 @@ export default function BriefingScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* 1 — one control row: window, then the summaries switch */}
+        {/* 1 — every filter on one line: window, category, story count.
+            Two segmented strips plus a chip rail did not fit a phone, so each
+            filter is now a pill that opens a sheet. */}
+        <View style={styles.filterRow}>
+          <Dropdown
+            label="Window"
+            accent="#4A90D9"
+            value={String(windowHours)}
+            options={WINDOW_OPTIONS.map(h => ({ value: String(h), label: `${h}h` }))}
+            onChange={v => pickWindow(Number(v) as WindowHours)}
+          />
+          <Dropdown
+            label="Category"
+            accent={AREA_BY_KEY[areaFilter]?.accent ?? '#4A90D9'}
+            value={areaFilter}
+            options={[{ value: 'all', label: 'All areas' }, ...AREAS.map(a => ({ value: a.key, label: a.label }))]}
+            onChange={pickArea}
+          />
+          <Dropdown
+            label="Stories"
+            accent="#30D158"
+            value={String(count)}
+            options={COUNT_OPTIONS.map(n => ({ value: String(n), label: `Top ${n}` }))}
+            onChange={v => pickCount(Number(v))}
+          />
+        </View>
+
+        {/* 2 — summaries switch, on its own line under the filters */}
         <View style={styles.controlRow}>
-          <View style={styles.segment}>
-            {WINDOW_OPTIONS.map(h => {
-              const active = h === windowHours;
-              return (
-                <TouchableOpacity
-                  key={h}
-                  onPress={() => pickWindow(h)}
-                  style={[styles.segItem, active && styles.segItemOn]}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.segText, active && styles.segTextOn]}>{h}h</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <View style={styles.segment}>
-            {COUNT_OPTIONS.map(n => {
-              const active = n === count;
-              return (
-                <TouchableOpacity
-                  key={n}
-                  onPress={() => pickCount(n)}
-                  style={[styles.segItem, active && styles.segItemCount]}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.segText, active && { color: '#30D158' }]}>{n}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
           <TouchableOpacity
             onPress={toggleSummaries}
             style={[styles.sumToggle, summariesOn && styles.sumToggleOn]}
@@ -535,39 +586,6 @@ export default function BriefingScreen() {
             </View>
             <Text style={[styles.sumToggleText, summariesOn && { color: '#30D158' }]}>AI summaries</Text>
           </TouchableOpacity>
-        </View>
-
-        {/* 2 — category filter (sticky) */}
-        <View style={styles.categoryBar}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 7 }}>
-            {/* Always every category: these switch between briefings now, so
-                hiding one the CURRENT briefing lacks would make it
-                unreachable. The count is this briefing's size. */}
-            {[{ key: 'all', label: 'All', accent: '#4A90D9' }, ...AREAS]
-              .map(a => {
-                const active = areaFilter === a.key;
-                const count = active ? total : null;
-                return (
-                  <TouchableOpacity
-                    key={a.key}
-                    onPress={() => pickArea(a.key)}
-                    activeOpacity={0.8}
-                    style={[
-                      styles.catChip,
-                      { borderColor: active ? a.accent : 'rgba(255,255,255,0.09)',
-                        backgroundColor: active ? `${a.accent}26` : '#0E0E0E' },
-                    ]}
-                  >
-                    <Text style={[styles.catChipText, { color: active ? a.accent : '#8A8A8E' }]}>{a.label}</Text>
-                    {count !== null ? (
-                      <View style={[styles.catCount, { backgroundColor: 'rgba(0,0,0,0.28)' }]}>
-                        <Text style={[styles.catCountText, { color: a.accent }]}>{count}</Text>
-                      </View>
-                    ) : null}
-                  </TouchableOpacity>
-                );
-              })}
-          </ScrollView>
         </View>
 
         {/* 4 — one status line replaces the status, pending and meta boxes */}
@@ -633,15 +651,32 @@ const styles = StyleSheet.create({
   iconBtnSpeaking: { backgroundColor: 'rgba(48,209,88,0.14)', borderColor: 'rgba(48,209,88,0.4)' },
 
   controlRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 },
-  segment: {
-    flexDirection: 'row', backgroundColor: '#0E0E0E', borderRadius: 999, padding: 2,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)',
+
+  filterRow: { flexDirection: 'row', alignItems: 'stretch', gap: 7, marginBottom: 10 },
+  ddPill: {
+    flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: '#0E0E0E', borderWidth: 1, borderRadius: 13,
+    paddingHorizontal: 9, paddingVertical: 6,
   },
-  segItem: { paddingHorizontal: 11, paddingVertical: 5, borderRadius: 999 },
-  segItemOn: { backgroundColor: 'rgba(74,144,217,0.22)' },
-  segItemCount: { backgroundColor: 'rgba(48,209,88,0.20)' },
-  segText: { color: '#6E6E73', fontSize: 11, fontWeight: '700' },
-  segTextOn: { color: '#4A90D9' },
+  ddLabel: { color: '#5A5A5E', fontSize: 8, fontWeight: '800', letterSpacing: 0.6 },
+  ddValue: { fontSize: 12, fontWeight: '700', marginTop: 1 },
+  ddBackdrop: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 34,
+  },
+  ddSheet: {
+    width: '100%', backgroundColor: '#121214', borderRadius: 18, padding: 8,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+  },
+  ddSheetTitle: {
+    color: '#6E6E73', fontSize: 9.5, fontWeight: '800', letterSpacing: 0.7,
+    textTransform: 'uppercase', paddingHorizontal: 10, paddingTop: 6, paddingBottom: 8,
+  },
+  ddRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 12, paddingVertical: 11, borderRadius: 12,
+  },
+  ddRowText: { color: '#D8D8DC', fontSize: 14, fontWeight: '600' },
 
   sumToggle: {
     flexDirection: 'row', alignItems: 'center', gap: 7,
@@ -670,17 +705,6 @@ const styles = StyleSheet.create({
 
 
 
-  categoryBar: {
-    backgroundColor: '#080808', paddingVertical: 8, marginHorizontal: -16, paddingHorizontal: 16,
-    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', marginBottom: 12,
-  },
-  catChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 13, paddingVertical: 7, borderRadius: 999, borderWidth: 1,
-  },
-  catChipText: { fontSize: 11.5, fontWeight: '700' },
-  catCount: { borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1 },
-  catCountText: { fontSize: 9.5, fontWeight: '800' },
 
 
   errorBox: {

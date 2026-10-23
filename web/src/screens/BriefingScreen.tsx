@@ -149,6 +149,44 @@ async function fetchBriefing(
 
 // ---------------------------------------------------------------- components
 
+/** A labelled native <select>. Native rather than a custom menu so phones
+ *  show the OS picker, which is both familiar and reachable one-handed. */
+function Dropdown({ label, value, onChange, options, accent }: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: Array<{ value: string; label: string }>;
+  accent: string;
+}) {
+  return (
+    <label style={{
+      display: 'flex', alignItems: 'center', gap: 6,
+      background: '#0E0E0E', border: '1px solid rgba(255,255,255,0.09)',
+      borderRadius: 999, padding: '4px 10px 4px 11px', cursor: 'pointer',
+    }}>
+      <span style={{ color: '#5A5A5E', fontSize: 9, fontWeight: 800, letterSpacing: 0.5 }}>
+        {label.toUpperCase()}
+      </span>
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        style={{
+          background: 'transparent', color: accent, border: 'none', outline: 'none',
+          fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+          appearance: 'none', WebkitAppearance: 'none', paddingRight: 2,
+        }}
+      >
+        {options.map(o => (
+          <option key={o.value} value={o.value} style={{ background: '#121212', color: '#fff' }}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <span style={{ color: accent, fontSize: 8, pointerEvents: 'none' }}>▼</span>
+    </label>
+  );
+}
+
 function FactorBars({ factors }: { factors: Factor[] }) {
   return (
     <div style={{ marginTop: 11, display: 'grid', gap: 8 }}>
@@ -601,46 +639,36 @@ export default function BriefingScreen() {
           >{busy ? '■' : '↻'}</button>
         </div>
 
-        {/* One control row: window on the left, summaries switch on the right */}
+        {/* One filter row. Window, category and size were three separate
+            controls in two places — two segmented strips plus a sticky chip
+            rail — which is a lot of chrome for three choices. Native selects
+            also give phones the OS picker, which beats a row of tap targets
+            at this width. */}
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap',
+          display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap',
         }}>
-          <div style={{ display: 'flex', background: '#0E0E0E', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 999, padding: 2 }}>
-            {WINDOW_OPTIONS.map(h => {
-              const active = h === windowHours;
-              return (
-                <button
-                  key={h}
-                  onClick={() => pickWindow(h)}
-                  style={{
-                    padding: '5px 11px', borderRadius: 999, border: 'none', cursor: 'pointer',
-                    background: active ? 'rgba(74,144,217,0.22)' : 'transparent',
-                    color: active ? '#4A90D9' : '#6E6E73',
-                    fontSize: 11, fontWeight: 700,
-                  }}
-                >{h}h</button>
-              );
-            })}
-          </div>
-
-          <div style={{ display: 'flex', background: '#0E0E0E', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 999, padding: 2 }}>
-            {COUNT_OPTIONS.map(n => {
-              const active = n === count;
-              return (
-                <button
-                  key={n}
-                  onClick={() => pickCount(n)}
-                  title={`Top ${n} stories`}
-                  style={{
-                    padding: '5px 9px', borderRadius: 999, border: 'none', cursor: 'pointer',
-                    background: active ? 'rgba(48,209,88,0.20)' : 'transparent',
-                    color: active ? '#30D158' : '#6E6E73',
-                    fontSize: 11, fontWeight: 700,
-                  }}
-                >{n}</button>
-              );
-            })}
-          </div>
+          <Dropdown
+            label="Window"
+            value={String(windowHours)}
+            onChange={v => pickWindow(Number(v) as WindowHours)}
+            accent="#4A90D9"
+            options={WINDOW_OPTIONS.map(h => ({ value: String(h), label: `${h}h` }))}
+          />
+          <Dropdown
+            label="Category"
+            value={areaFilter}
+            onChange={pickArea}
+            accent={AREA_BY_KEY[areaFilter]?.accent ?? '#4A90D9'}
+            options={[{ value: 'all', label: 'All areas' },
+              ...AREAS.map(a => ({ value: a.key as string, label: a.label as string }))]}
+          />
+          <Dropdown
+            label="Stories"
+            value={String(count)}
+            onChange={v => pickCount(Number(v))}
+            accent="#30D158"
+            options={COUNT_OPTIONS.map(n => ({ value: String(n), label: `Top ${n}` }))}
+          />
 
           <button
             onClick={toggleSummaries}
@@ -651,7 +679,7 @@ export default function BriefingScreen() {
               display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer',
               background: summariesOn ? 'rgba(48,209,88,0.12)' : '#0E0E0E',
               border: `1px solid ${summariesOn ? 'rgba(48,209,88,0.35)' : 'rgba(255,255,255,0.09)'}`,
-              borderRadius: 999, padding: '5px 11px 5px 7px',
+              borderRadius: 999, padding: '6px 11px 6px 7px',
               color: summariesOn ? '#30D158' : '#6E6E73', fontSize: 11, fontWeight: 700,
             }}
           >
@@ -669,51 +697,6 @@ export default function BriefingScreen() {
             AI summaries
           </button>
         </div>
-
-        {/* Sticky category filter */}
-        {snapshot && (
-          <div style={{
-            position: 'sticky', top: 0, zIndex: 5,
-            margin: '0 -16px 12px', padding: '8px 16px',
-            background: 'rgba(8,8,8,0.82)',
-            backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)',
-            borderBottom: '1px solid rgba(255,255,255,0.05)',
-          }}>
-            <div style={{ display: 'flex', gap: 7, overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: 2 }}>
-              {/* Always every category: these now switch between briefings, so
-                  hiding one because the CURRENT briefing has none of it would
-                  make it unreachable. The count shown is this briefing's size. */}
-              {([{ key: 'all', label: 'All', accent: '#4A90D9' }, ...AREAS] as Array<{ key: string; label: string; accent: string }>)
-                .map(a => {
-                  const active = areaFilter === a.key;
-                  const count = active ? total : null;
-                  return (
-                    <button
-                      key={a.key}
-                      onClick={() => pickArea(a.key)}
-                      style={{
-                        flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6,
-                        padding: '7px 13px', borderRadius: 999,
-                        border: `1px solid ${active ? a.accent : 'rgba(255,255,255,0.09)'}`,
-                        background: active ? `${a.accent}26` : '#0E0E0E',
-                        color: active ? a.accent : '#8A8A8E',
-                        fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
-                      }}
-                    >
-                      {a.label}
-                      {count !== null && (
-                        <span style={{
-                          fontSize: 9.5, fontWeight: 800,
-                          color: a.accent, background: 'rgba(0,0,0,0.28)',
-                          borderRadius: 999, padding: '1px 6px',
-                        }}>{count}</span>
-                      )}
-                    </button>
-                  );
-                })}
-            </div>
-          </div>
-        )}
 
         {/* One status line replaces the status, pending and meta boxes */}
         <div style={{

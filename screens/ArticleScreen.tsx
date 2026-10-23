@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
@@ -24,6 +25,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { tabBarTranslateY } from '../utils/tabBarAnim';
+
+const AnimatedSafeAreaView = Animated.createAnimatedComponent(SafeAreaView);
 import { darken, lighten, getArticleColor } from '../utils/colors';
 import { BiasDot, BIAS_CONFIG, type BiasRating } from '../components/StoryCard';
 import { RootStackParamList } from '../types/navigation';
@@ -614,10 +617,31 @@ export default function ArticleScreen() {
     });
   }, [width, articleScrollOpacity]);
 
+  // Collapsed chrome: past the hero everything except the headline and the
+  // tab row folds away into a pinned glass bar. Driven by one Animated value
+  // so the fold is a native-driver animation, not a re-render per frame.
+  const collapseAnim = useRef(new Animated.Value(0)).current;
+  const collapsedRef = useRef(false);
+  const [collapsed, setCollapsed] = useState(false);
+
+  const setCollapse = useCallback((next: boolean) => {
+    if (collapsedRef.current === next) return;
+    collapsedRef.current = next;
+    setCollapsed(next);
+    Animated.timing(collapseAnim, {
+      toValue: next ? 1 : 0,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  }, [collapseAnim]);
+
   function onArticleScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
     const y = e.nativeEvent.contentOffset.y;
     const dy = y - lastArticleScrollY.current;
     lastArticleScrollY.current = y;
+    // Hysteresis: fold at 200, unfold at 150. One threshold makes the bar
+    // flicker whenever a scroll settles right on it.
+    setCollapse(collapsedRef.current ? y > 150 : y > 200);
     if (dy > 12 && stripVisibleRef.current && y > 200) {
       stripVisibleRef.current = false;
       Animated.timing(stripTransY, { toValue: STRIP_HEIGHT, duration: 230, useNativeDriver: true }).start();
@@ -929,6 +953,43 @@ export default function ArticleScreen() {
     );
   }
 
+  /** One definition, rendered twice: in the article flow, and again in the
+   *  pinned bar once the page scrolls past the hero. Both read the same
+   *  activeTab state, so whichever the reader taps is the same control. */
+  function renderTabRow(pinned = false) {
+    return (
+      <View style={[
+        styles.tabBar,
+        { backgroundColor: tabBg, borderColor: borderColor + '55' },
+        pinned && styles.tabBarPinned,
+      ]}>
+        {(blockLongform ? TABS.filter(t => t !== 'Long Form') : TABS).map(tab => {
+          const active = activeTab === tab;
+          const iconName: React.ComponentProps<typeof Ionicons>['name'] =
+            tab === 'Long Form' ? 'reader-outline' :
+            tab === 'Summary'   ? 'document-text-outline' :
+            tab === '5 Ws'      ? 'list-outline' :
+                                  'happy-outline';
+          return (
+            <ArticleTabBtn
+              key={tab}
+              active={active}
+              bg={lighten(dominant, 0.05)}
+              onPress={() => setActiveTab(tab)}
+            >
+              <Ionicons
+                name={iconName}
+                size={15}
+                color={active ? '#FFFFFF' : 'rgba(255,255,255,0.4)'}
+              />
+              <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{tab}</Text>
+            </ArticleTabBtn>
+          );
+        })}
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* Full-screen gradient background */}
@@ -941,7 +1002,11 @@ export default function ArticleScreen() {
       />
 
       {/* Fixed top buttons — always visible above scroll */}
-      <SafeAreaView style={styles.topBar} edges={['top']} pointerEvents="box-none">
+      <AnimatedSafeAreaView
+        style={[styles.topBar, { opacity: collapseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }]}
+        edges={['top']}
+        pointerEvents={collapsed ? 'none' : 'box-none'}
+      >
         <Pressable style={[styles.glassBtn, { backgroundColor: dominant + '59' }]} onPress={() => navigation.goBack()}>
           <Ionicons name="chevron-back" size={22} color="#FFF" />
         </Pressable>
@@ -966,7 +1031,42 @@ export default function ArticleScreen() {
             <Ionicons name="share-outline" size={20} color="#FFF" />
           </Pressable>
         </View>
-      </SafeAreaView>
+      </AnimatedSafeAreaView>
+
+      {/* Pinned bar — the only chrome left once the article scrolls: back,
+          the headline on one line, and the tab row. Sits above the scroll
+          view rather than inside it, so no sticky-index bookkeeping. */}
+      <Animated.View
+        pointerEvents={collapsed ? 'box-none' : 'none'}
+        style={[
+          styles.pinnedBar,
+          {
+            opacity: collapseAnim,
+            transform: [{ translateY: collapseAnim.interpolate({ inputRange: [0, 1], outputRange: [-10, 0] }) }],
+          },
+        ]}
+      >
+        <BlurView
+          intensity={60}
+          tint="dark"
+          experimentalBlurMethod="dimezisBlurView"
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: darken(dominant, 0.72) + 'D9' }]} />
+        <SafeAreaView edges={['top']} pointerEvents="box-none">
+          <View style={styles.pinnedHeadlineRow}>
+            <Pressable
+              onPress={() => navigation.goBack()}
+              hitSlop={10}
+              style={[styles.pinnedBackBtn, { backgroundColor: 'rgba(255,255,255,0.09)' }]}
+            >
+              <Ionicons name="chevron-back" size={16} color="#FFF" />
+            </Pressable>
+            <Text style={styles.pinnedHeadline} numberOfLines={1}>{params.headline}</Text>
+          </View>
+          {renderTabRow(true)}
+        </SafeAreaView>
+      </Animated.View>
 
       <Animated.View style={{ flex: 1, opacity: articleScrollOpacity }}>
       <ScrollView
@@ -1086,31 +1186,12 @@ export default function ArticleScreen() {
           )}
         </View>
 
-        <View style={[styles.tabBar, { backgroundColor: tabBg, borderColor: borderColor + '55' }]}>
-          {(blockLongform ? TABS.filter(t => t !== 'Long Form') : TABS).map(tab => {
-            const active = activeTab === tab;
-            const iconName: React.ComponentProps<typeof Ionicons>['name'] =
-              tab === 'Long Form' ? 'reader-outline' :
-              tab === 'Summary'   ? 'document-text-outline' :
-              tab === '5 Ws'      ? 'list-outline' :
-                                    'happy-outline';
-            return (
-              <ArticleTabBtn
-                key={tab}
-                active={active}
-                bg={lighten(dominant, 0.05)}
-                onPress={() => setActiveTab(tab)}
-              >
-                <Ionicons
-                  name={iconName}
-                  size={15}
-                  color={active ? '#FFFFFF' : 'rgba(255,255,255,0.4)'}
-                />
-                <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{tab}</Text>
-              </ArticleTabBtn>
-            );
-          })}
-        </View>
+        <Animated.View
+          style={{ opacity: collapseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }}
+          pointerEvents={collapsed ? 'none' : 'auto'}
+        >
+          {renderTabRow()}
+        </Animated.View>
 
         <View style={[styles.tabBody, { maxWidth: columnMaxPx, alignSelf: 'center', width: '100%' }]}>
           {renderTabContent()}
@@ -1807,6 +1888,24 @@ const styles = StyleSheet.create({
   readingMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, marginBottom: 4, paddingHorizontal: 16 },
   readingMetaText: { fontSize: 12, color: 'rgba(255,255,255,0.6)' },
   metaDot: { fontSize: 12, color: 'rgba(255,255,255,0.4)' },
+  pinnedBar: {
+    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20,
+    overflow: 'hidden',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  pinnedHeadlineRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 9,
+    paddingHorizontal: 14, paddingTop: 6, paddingBottom: 8,
+  },
+  pinnedBackBtn: {
+    width: 28, height: 28, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  pinnedHeadline: {
+    flex: 1, color: '#FFFFFF', fontSize: 13.5, fontWeight: '700',
+  },
+  tabBarPinned: { marginBottom: 9, marginTop: 0 },
   tabBar: {
     flexDirection: 'row', marginHorizontal: 16,
     borderRadius: 999, padding: 4, marginBottom: 16,

@@ -259,6 +259,12 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
     ? (userDefaultTab === 'Long Form' ? 'Summary' : userDefaultTab)
     : userDefaultTab;
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
+  // Past the hero, everything above the tabs is gone from view anyway, so the
+  // tabs pin to the top and the headline slides in beside them — you keep the
+  // two things you need while reading (what this is, and which view you are
+  // in) and lose the 320px image, byline, meta row and RSS blurb.
+  const [collapsed, setCollapsed] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [paragraphs, setParagraphs] = useState<string[]>([]);
   const [originalParagraphs, setOriginalParagraphs] = useState<string[]>([]);
   const [dedupedFlag, setDedupedFlag] = useState(false);
@@ -598,7 +604,16 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
   }
 
   return (
-    <div style={{ height: '100%', background: gradient, overflowY: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative' }}>
+    <div
+      ref={scrollRef}
+      onScroll={e => {
+        const y = (e.target as HTMLDivElement).scrollTop;
+        // Hysteresis: collapse at 200, restore at 150. A single threshold
+        // makes the bar flicker when a scroll settles right on it.
+        setCollapsed(prev => (prev ? y > 150 : y > 200));
+      }}
+      style={{ height: '100%', background: gradient, overflowY: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative' }}
+    >
       {/* Back + share — float over hero, scroll away naturally */}
       <div style={{ position: 'absolute', top: 'calc(env(safe-area-inset-top, 0px) + 20px)', left: 12, right: 12, zIndex: 10, display: 'flex', justifyContent: 'space-between', pointerEvents: 'none' }}>
         <button onClick={goBack} style={{ pointerEvents: 'auto', background: `${dominant}90`, border: '1px solid rgba(255,255,255,0.15)', borderRadius: 22, padding: 9, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -750,12 +765,46 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
         })()}
       </div>
 
-      {/* Tab bar — icon + label in outlined pill */}
+      {/* Sticky shell: the tab row pins, and the headline slides in above it
+          once the hero has scrolled past. */}
       <div style={{
-        display: 'flex', margin: '0 16px 16px',
-        background: tabBg, borderRadius: 999, padding: 4,
-        border: `1px solid ${borderColor}55`,
+        position: 'sticky', top: 0, zIndex: 20,
+        paddingTop: collapsed ? 'env(safe-area-inset-top, 0px)' : 0,
+        background: collapsed ? 'rgba(8,8,10,0.86)' : 'transparent',
+        backdropFilter: collapsed ? 'blur(20px) saturate(180%)' : 'none',
+        WebkitBackdropFilter: collapsed ? 'blur(20px) saturate(180%)' : 'none',
+        borderBottom: `1px solid ${collapsed ? 'rgba(255,255,255,0.07)' : 'transparent'}`,
+        transition: 'background 0.22s ease, border-color 0.22s ease, padding-top 0.22s ease',
       }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          maxHeight: collapsed ? 40 : 0,
+          opacity: collapsed ? 1 : 0,
+          overflow: 'hidden',
+          padding: '0 14px',
+          transition: 'max-height 0.22s ease, opacity 0.16s ease',
+        }}>
+          <button
+            onClick={goBack}
+            aria-label="Back"
+            style={{
+              flexShrink: 0, width: 26, height: 26, borderRadius: 13, cursor: 'pointer',
+              background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, lineHeight: 1,
+            }}
+          >‹</button>
+          <span style={{
+            flex: 1, minWidth: 0, color: '#fff', fontSize: 13, fontWeight: 700,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>{params.headline}</span>
+        </div>
+
+        <div style={{
+          display: 'flex', margin: collapsed ? '6px 16px 10px' : '0 16px 16px',
+          background: tabBg, borderRadius: 999, padding: 4,
+          border: `1px solid ${borderColor}55`,
+          transition: 'margin 0.22s ease',
+        }}>
         {(blockLongform ? TABS.filter(t => t !== 'Long Form') : TABS).map(tab => {
           const active = activeTab === tab;
           const color = active ? '#fff' : 'rgba(255,255,255,0.4)';
@@ -776,6 +825,7 @@ export default function ArticleScreen({ params }: { params: ArticleParams }) {
             </button>
           );
         })}
+        </div>
       </div>
 
       {/* Dedup validation modal */}
