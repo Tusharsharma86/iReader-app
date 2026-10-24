@@ -626,7 +626,14 @@ export default function ArticleScreen() {
   // copy, translated by (its resting offset - scrollY) and clamped at 0, so
   // while scrolling it sits exactly where the in-flow row would be; the
   // in-flow row keeps the space but stays invisible. Transform and opacity
-  // only, so the whole thing runs on the native driver.
+  // only.
+  //
+  // scrollY is fed by plain setValue from the scroll handler, NOT by
+  // Animated.event with useNativeDriver. A native-driven event has to be
+  // attached to an Animated.ScrollView; attaching one to a plain ScrollView
+  // corrupts the native animation graph, which then takes down every other
+  // native-driver animation in the app — including the tab-bar auto-hide
+  // that runs when you scroll any other screen.
   const insets = useSafeAreaInsets();
   const scrollY = useRef(new Animated.Value(0)).current;
   const [tabRowY, setTabRowY] = useState(0);
@@ -651,6 +658,7 @@ export default function ArticleScreen() {
 
   function onArticleScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
     const y = e.nativeEvent.contentOffset.y;
+    scrollY.setValue(y);
     const dy = y - lastArticleScrollY.current;
     lastArticleScrollY.current = y;
     const nextCollapsed = y >= pinAt - 8;
@@ -1096,10 +1104,7 @@ export default function ArticleScreen() {
         ref={articleScrollRef}
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true, listener: onArticleScroll },
-        )}
+        onScroll={onArticleScroll}
         scrollEventThrottle={16}
       >
         {/* Hero — image variant OR typographic fallback for image-less articles */}
